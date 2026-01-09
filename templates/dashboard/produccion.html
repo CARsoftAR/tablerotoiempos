@@ -1,0 +1,382 @@
+{% extends 'base.html' %}
+
+{% block title %}Tablero de Producción - OEE{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- MODELO INDUSTRIAL DARK (Inspirado en Referencia) -->
+    <div class="mb-10 space-y-6">
+        
+        <!-- 1. DATE NAVIGATION CONTROLS -->
+        <div class="flex flex-wrap gap-2 mb-4 justify-end">
+            <a href="?date={% now 'Y-m-d' %}" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded shadow transition-colors font-medium text-sm">
+                Hoy
+            </a>
+            <a href="?date=yesterday" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded shadow transition-colors font-medium text-sm">
+                Ayer
+            </a>
+        </div>
+
+        <!-- 1. OVERALL OEE PANEL -->
+        <div class="bg-slate-800 rounded-lg shadow-2xl overflow-hidden border border-slate-700">
+            <!-- Header Azul -->
+            <div class="bg-blue-600 px-6 py-3 flex justify-between items-center">
+                <h2 class="text-white font-bold text-lg tracking-wide">OEE Global ({{ resumen.promedio_oee }}%)</h2>
+                <div class="flex gap-4 items-center">
+                   <a href="{% url 'gestion_maquinas' %}" class="flex gap-2 text-white bg-blue-500 hover:bg-blue-400 px-3 py-1 rounded text-xs font-semibold uppercase tracking-wider transition-colors items-center">
+                        <i class="fas fa-cogs"></i> <span>Configurar Máquinas</span>
+                    </a>
+                    <div class="flex gap-2 text-blue-200 text-sm border-l border-blue-500 pl-4">
+                        <i class="fas fa-calendar-alt"></i> <span>{{ fecha_inicio|date:"d M Y" }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gauges Row -->
+            <div class="p-8 grid grid-cols-1 md:grid-cols-3 gap-8 text-center text-white">
+                
+                <!-- Availability Gauge -->
+                <div class="flex flex-col items-center">
+                    <div class="relative w-48 h-24 overflow-hidden mb-2"> <!-- Half Circle Container -->
+                        <div class="absolute w-48 h-48 rounded-full border-[15px] border-slate-700 box-border"></div>
+                        <div class="absolute w-48 h-48 rounded-full border-[15px] border-teal-400 box-border origin-center rotate-[{{ resumen.avg_availability|add:"-180" }}deg]" style="clip-path: polygon(0 0, 100% 0, 100% 50%, 0 50%); transform: rotate(calc(1.8deg * {{ resumen.avg_availability }} - 180deg));"></div> 
+                        <div class="absolute bottom-0 w-full text-center mb-1">
+                            <span class="text-3xl font-bold text-white">{{ resumen.avg_availability }}%</span>
+                        </div>
+                    </div>
+                    <span class="text-teal-400 font-bold uppercase tracking-wider text-sm">Disponibilidad</span>
+                    <div class="flex justify-between w-40 text-xs text-slate-400 mt-1 px-2">
+                        <span>0</span>
+                        <span>100</span>
+                    </div>
+                </div>
+
+                <!-- Performance Gauge -->
+                <div class="flex flex-col items-center">
+                     <div class="relative w-48 h-24 overflow-hidden mb-2">
+                        <div class="absolute w-48 h-48 rounded-full border-[15px] border-slate-700 box-border"></div>
+                        <div class="absolute w-48 h-48 rounded-full border-[15px] border-lime-400 box-border" style="clip-path: polygon(0 0, 100% 0, 100% 50%, 0 50%); transform: rotate(calc(1.8deg * {{ resumen.avg_performance }} - 180deg));"></div>
+                        <div class="absolute bottom-0 w-full text-center mb-1">
+                            <span class="text-3xl font-bold text-white">{{ resumen.avg_performance }}%</span>
+                        </div>
+                    </div>
+                    <span class="text-lime-400 font-bold uppercase tracking-wider text-sm">Rendimiento</span>
+                    <div class="flex justify-between w-40 text-xs text-slate-400 mt-1 px-2">
+                        <span>0</span>
+                        <span>100</span>
+                    </div>
+                </div>
+
+                <!-- Quality Gauge -->
+                 <div class="flex flex-col items-center">
+                     <div class="relative w-48 h-24 overflow-hidden mb-2">
+                        <div class="absolute w-48 h-48 rounded-full border-[15px] border-slate-700 box-border"></div>
+                        <div class="absolute w-48 h-48 rounded-full border-[15px] border-amber-500 box-border" style="clip-path: polygon(0 0, 100% 0, 100% 50%, 0 50%); transform: rotate(calc(1.8deg * {{ resumen.avg_quality }} - 180deg));"></div>
+                        <div class="absolute bottom-0 w-full text-center mb-1">
+                            <span class="text-3xl font-bold text-white">{{ resumen.avg_quality }}%</span>
+                        </div>
+                    </div>
+                    <span class="text-amber-500 font-bold uppercase tracking-wider text-sm">Calidad</span>
+                    <div class="flex justify-between w-40 text-xs text-slate-400 mt-1 px-2">
+                        <span>0</span>
+                        <span>100</span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- 2. DETAILED METRICS CARDS -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            
+            <!-- Availability Card -->
+            <div class="bg-slate-800 rounded-lg overflow-hidden border border-slate-700 shadow-xl">
+                <div class="bg-teal-600 px-4 py-2 font-bold text-white tracking-wide">Disponibilidad</div>
+                <div class="p-6">
+                    <div class="space-y-4 mb-6">
+                        <div class="flex justify-between items-end">
+                            <span class="text-slate-400 text-sm font-medium">Tiempo Planificado</span>
+                            <span class="text-white font-bold text-lg">{{ resumen.global_planned_formatted }}</span>
+                        </div>
+                        <div class="flex justify-between items-end">
+                            <span class="text-slate-400 text-sm font-medium">Tiempo Real</span>
+                            <span class="text-white font-bold text-lg">{{ resumen.global_actual_formatted }}</span>
+                        </div>
+                        <div class="flex justify-between items-end">
+                            <span class="text-slate-400 text-sm font-medium">Tiempo Perdido</span>
+                            <span class="text-rose-400 font-bold text-lg">{{ resumen.global_downtime_formatted }}</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Simples Bars Chart -->
+                    <div class="relative h-24 border-b border-l border-slate-600 flex items-end justify-around pb-0 px-2 gap-4">
+                        <div class="w-1/3 bg-teal-500/80 hover:bg-teal-500 transition-all rounded-t-sm relative group" style="height: 100%"></div>
+                         <!-- Nota: Las alturas son relativas visualmente para no complicar el CSS inline con calculos complejos aquí -->
+                        <div class="w-1/3 bg-teal-500/60 hover:bg-teal-500 transition-all rounded-t-sm relative group" style="height: 80%"></div>
+                        <div class="w-1/3 bg-rose-500/80 hover:bg-rose-500 transition-all rounded-t-sm relative group" style="height: 15%"></div>
+                    </div>
+                     <div class="flex justify-around text-[10px] text-slate-400 mt-2 text-center uppercase">
+                        <span class="w-1/3">Planif.</span>
+                        <span class="w-1/3">Real</span>
+                        <span class="w-1/3">Paradas</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Performance Card -->
+            <div class="bg-slate-800 rounded-lg overflow-hidden border border-slate-700 shadow-xl">
+                 <div class="bg-lime-600 px-4 py-2 font-bold text-white tracking-wide">Rendimiento</div>
+                <div class="p-6">
+                    <div class="space-y-4 mb-6">
+                        <div class="flex justify-between items-end">
+                            <span class="text-slate-400 text-sm font-medium">Cantidad Planificada</span>
+                            <span class="text-white font-bold text-lg">{{ resumen.global_planned_qty }}</span>
+                        </div>
+                        <div class="flex justify-between items-end">
+                            <span class="text-slate-400 text-sm font-medium">Cantidad Real</span>
+                            <span class="text-white font-bold text-lg">{{ resumen.global_actual_qty }}</span>
+                        </div>
+                         <!-- Spacer to align -->
+                        <div class="h-[28px]"></div> 
+                    </div>
+
+                    <!-- Simples Bars Chart -->
+                     <div class="relative h-24 border-b border-l border-slate-600 flex items-end justify-around pb-0 px-8 gap-8">
+                         <div class="w-1/2 bg-lime-500/80 hover:bg-lime-500 transition-all rounded-t-sm" style="height: 85%"></div>
+                         <div class="w-1/2 bg-lime-500/60 hover:bg-lime-500 transition-all rounded-t-sm" style="height: 80%"></div>
+                    </div>
+                    <div class="flex justify-around text-[10px] text-slate-400 mt-2 text-center uppercase">
+                        <span class="w-1/2">Cant Planif</span>
+                        <span class="w-1/2">Cant Real</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quality Card -->
+            <div class="bg-slate-800 rounded-lg overflow-hidden border border-slate-700 shadow-xl">
+                 <div class="bg-amber-500 px-4 py-2 font-bold text-white tracking-wide">Calidad</div>
+                <div class="p-6">
+                    <div class="space-y-4 mb-6">
+                        <div class="flex justify-between items-end">
+                            <span class="text-slate-400 text-sm font-medium">Cantidad Real</span>
+                            <span class="text-white font-bold text-lg">{{ resumen.global_actual_qty }}</span>
+                        </div>
+                        <div class="flex justify-between items-end">
+                            <span class="text-slate-400 text-sm font-medium">Cantidad Rechazada</span>
+                             <span class="text-rose-400 font-bold text-lg">{{ resumen.global_rejected_qty }}</span>
+                        </div>
+                         <div class="h-[28px]"></div>
+                    </div>
+
+                    <!-- Simples Bars Chart -->
+                     <div class="relative h-24 border-b border-l border-slate-600 flex items-end justify-around pb-0 px-8 gap-8">
+                         <div class="w-1/2 bg-amber-500/80 hover:bg-amber-500 transition-all rounded-t-sm" style="height: 80%"></div>
+                         <div class="w-1/2 bg-rose-500/80 hover:bg-rose-500 transition-all rounded-t-sm" style="height: 2%"></div>
+                    </div>
+                     <div class="flex justify-around text-[10px] text-slate-400 mt-2 text-center uppercase">
+                        <span class="w-1/2">Aceptadas</span>
+                        <span class="w-1/2">Rechazadas</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="border-t-2 border-slate-200 mt-10 mb-6 w-full"></div>
+        <h3 class="text-slate-800 font-bold text-lg mb-4">Detalle por Máquina</h3>
+
+    </div>
+
+    <div class="space-y-8">
+        <!-- SECCIÓN: MÁQUINAS ACTIVAS -->
+        <div>
+            <h3 class="flex items-center gap-2 text-sm font-bold text-emerald-600 uppercase tracking-wider mb-4 pl-1">
+                <i class="fas fa-check-circle"></i> Máquinas con Producción
+                <span class="w-full h-px bg-emerald-100 ml-2"></span>
+            </h3>
+
+            <div class="flex flex-col gap-3">
+                {% for maquina in kpis %}
+                {% if maquina.is_active_production %}
+                <div class="group bg-white border border-slate-200 rounded-lg p-4 shadow-sm hover:shadow-md hover:border-emerald-300 transition-all flex flex-col md:flex-row items-center gap-6 relative overflow-hidden">
+                    <div class="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500"></div>
+                    
+                    <!-- Icon & Name -->
+                    <div class="flex items-center gap-4 w-full md:w-1/4">
+                        <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+                            <i class="fas fa-industry text-xl"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <h4 class="font-bold text-slate-800 truncate" title="{{ maquina.nombre_maquina }}">{{ maquina.nombre_maquina }}</h4>
+                            <div class="flex items-center gap-2 text-xs mt-0.5">
+                                <span class="text-slate-500 font-mono">{{ maquina.id_maquina }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Metrics Columns -->
+                    <div class="grid grid-cols-5 gap-2 w-full md:w-3/5 border-l border-r border-slate-100 px-4">
+                        <!-- Avail -->
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-slate-400">Disp</span>
+                                <span class="font-bold text-slate-700">{{ maquina.availability|floatformat:0 }}%</span>
+                            </div>
+                            <div class="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                                <div class="h-full bg-blue-500 rounded-full" style="width: {{ maquina.availability }}%"></div>
+                            </div>
+                        </div>
+                        <!-- Perf -->
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-slate-400">Rend</span>
+                                <span class="font-bold text-slate-700">{{ maquina.performance|floatformat:0 }}%</span>
+                            </div>
+                            <div class="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                                <div class="h-full bg-purple-500 rounded-full" style="width: {{ maquina.performance }}%"></div>
+                            </div>
+                        </div>
+                        <!-- Qual -->
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-slate-400">Cal</span>
+                                <span class="font-bold text-slate-700">{{ maquina.quality|floatformat:0 }}%</span>
+                            </div>
+                            <div class="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                                <div class="h-full bg-emerald-500 rounded-full" style="width: {{ maquina.quality }}%"></div>
+                            </div>
+                        </div>
+                         <!-- Std Time -->
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="bg-blue-500 text-white px-2 py-0.5 rounded text-[10px] font-bold tracking-wide" title="Tiempo Estándar">T.Std</span>
+                                <span class="text-xs font-bold text-slate-800">{{ maquina.std_formatted }}</span>
+                            </div>
+                             <div class="h-1 w-full bg-slate-100 rounded-full"></div>
+                        </div>
+                        <!-- Prod Time -->
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="bg-blue-500 text-white px-2 py-0.5 rounded text-[10px] font-bold tracking-wide" title="Tiempo Producción">T.Prod</span>
+                                <span class="text-xs font-bold text-slate-800">{{ maquina.prod_formatted }}</span>
+                            </div>
+                             <div class="h-1 w-full bg-slate-100 rounded-full"></div>
+                        </div>
+                    </div>
+
+                    <!-- OEE Big -->
+                    <div class="w-full md:w-1/4 flex justify-between items-center pl-2">
+                        <div class="text-right">
+                             <div class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">OEE Global</div>
+                             <div class="text-3xl font-black text-slate-800">{{ maquina.oee }}%</div>
+                        </div>
+                        <button class="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 transition-colors">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- SECCIÓN: MÁQUINAS DETENIDAS -->
+        <div>
+            <h3 class="flex items-center gap-2 text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 pl-1">
+                <i class="fas fa-pause-circle"></i> Sin Producción / Offline
+                <span class="w-full h-px bg-slate-200 ml-2"></span>
+            </h3>
+
+             <div class="flex flex-col gap-3">
+                {% for maquina in kpis %}
+                {% if not maquina.is_active_production %}
+                <div class="group bg-slate-50 border border-slate-200 rounded-lg p-4 shadow-sm hover:border-slate-300 transition-all flex flex-col md:flex-row items-center gap-6 relative overflow-hidden opacity-75 hover:opacity-100">
+                    <div class="absolute left-0 top-0 bottom-0 w-1 bg-slate-400"></div>
+                     
+                     <!-- Icon & Name -->
+                    <div class="flex items-center gap-4 w-full md:w-1/4">
+                        <div class="w-12 h-12 rounded-xl bg-slate-200 text-slate-500 flex items-center justify-center flex-shrink-0">
+                            <i class="fas fa-power-off text-xl"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <h4 class="font-bold text-slate-700 truncate">{{ maquina.nombre_maquina }}</h4>
+                            <div class="flex items-center gap-2 text-xs mt-0.5">
+                                <span class="text-slate-400 font-mono">{{ maquina.id_maquina }}</span>
+                                {% if maquina.latest_date %}
+                                    <span class="px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 font-bold text-[10px] uppercase">Fin Turno</span>
+                                {% else %}
+                                    <span class="px-1.5 py-0.5 rounded bg-slate-200 text-slate-400 font-bold text-[10px] uppercase">Sin Datos</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                     <!-- Metrics Columns (Disabled/Muted) -->
+                    <div class="grid grid-cols-5 gap-2 w-full md:w-3/5 border-l border-r border-slate-200 px-4 grayscale opacity-80">
+                        <!-- Avail -->
+                        <div>
+                            <div class="flex justify-between text-xs mb-1 text-slate-500">
+                                <span>Disp</span>
+                                <span class="font-bold">{{ maquina.availability|floatformat:0 }}%</span>
+                            </div>
+                            <div class="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                                <div class="h-full bg-slate-400 rounded-full" style="width: {{ maquina.availability }}%"></div>
+                            </div>
+                        </div>
+                        <!-- Perf -->
+                        <div>
+                            <div class="flex justify-between text-xs mb-1 text-slate-500">
+                                <span>Rend</span>
+                                <span class="font-bold">{{ maquina.performance|floatformat:0 }}%</span>
+                            </div>
+                            <div class="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                                <div class="h-full bg-slate-400 rounded-full" style="width: {{ maquina.performance }}%"></div>
+                            </div>
+                        </div>
+                        <!-- Qual -->
+                        <div>
+                            <div class="flex justify-between text-xs mb-1 text-slate-500">
+                                <span>Cal</span>
+                                <span class="font-bold">{{ maquina.quality|floatformat:0 }}%</span>
+                            </div>
+                            <div class="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                                <div class="h-full bg-slate-400 rounded-full" style="width: {{ maquina.quality }}%"></div>
+                            </div>
+                        </div>
+                         <!-- Std Time -->
+                        <div>
+                             <div class="flex justify-between items-center mb-1">
+                                <span class="bg-blue-500 text-white px-2 py-0.5 rounded text-[10px] font-bold tracking-wide" title="Tiempo Estándar">T.Std</span>
+                                <span class="text-xs font-bold text-slate-600">{{ maquina.std_formatted }}</span>
+                            </div>
+                            <div class="h-1 w-full bg-slate-100 rounded-full"></div>
+                        </div>
+                        <!-- Prod Time -->
+                        <div>
+                             <div class="flex justify-between items-center mb-1">
+                                <span class="bg-blue-500 text-white px-2 py-0.5 rounded text-[10px] font-bold tracking-wide" title="Tiempo Producción">T.Prod</span>
+                                <span class="text-xs font-bold text-slate-600">{{ maquina.prod_formatted }}</span>
+                            </div>
+                            <div class="h-1 w-full bg-slate-100 rounded-full"></div>
+                        </div>
+                    </div>
+
+                    <!-- OEE Big -->
+                    <div class="w-full md:w-1/4 flex justify-between items-center pl-2 text-slate-500">
+                        <div class="text-right">
+                             <div class="text-[10px] uppercase font-bold tracking-wider opacity-70">OEE Global</div>
+                             <div class="text-3xl font-black">{{ maquina.oee }}%</div>
+                        </div>
+                        <button class="w-8 h-8 rounded-full hover:bg-slate-200 flex items-center justify-center text-slate-400 transition-colors">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+
+                </div>
+                {% endif %}
+                {% endfor %}
+             </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

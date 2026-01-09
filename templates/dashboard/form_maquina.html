@@ -1,0 +1,207 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if maquina %}Editar{% else %}Nueva{% endif %} Máquina{% endblock %}
+
+{% block content %}
+<div class="min-h-[calc(100vh-100px)] flex items-center justify-center py-6 px-4 bg-slate-50">
+    <div class="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-5xl overflow-hidden">
+        
+        <!-- Header -->
+        <div class="px-8 py-6 border-b border-slate-100 flex items-center gap-4 bg-white">
+            <div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl shadow-sm">
+                <i class="fas fa-robot"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold text-slate-800">
+                    {% if maquina %}Editar Máquina{% else %}Nueva Máquina{% endif %}
+                </h1>
+                <p class="text-sm text-slate-500">Configura los detalles y disponibilidad operativa.</p>
+            </div>
+        </div>
+
+        <form method="POST">
+            {% csrf_token %}
+            <input type="hidden" name="page" value="{{ page }}">
+            
+            <div class="p-8 grid grid-cols-1 lg:grid-cols-2 gap-12">
+                
+                <!-- COLUMNA 1: Información Principal -->
+                <div class="space-y-8">
+                    <div>
+                        <h3 class="flex items-center gap-2 text-sm font-bold text-slate-400 uppercase tracking-wider mb-6">
+                            <i class="fas fa-info-circle"></i> Información General
+                        </h3>
+                        
+                        <div class="space-y-5">
+                            <!-- ID -->
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 mb-1.5">ID de Máquina (Código)</label>
+                                <div class="relative">
+                                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                                        <i class="fas fa-fingerprint"></i>
+                                    </span>
+                                    <input type="text" name="id_maquina" value="{{ maquina.id_maquina|default:'' }}" 
+                                           class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-mono text-sm" 
+                                           placeholder="Ej: MAC05" required>
+                                </div>
+                                <p class="text-xs text-slate-400 mt-1.5 ml-1">Debe coincidir con el ID del sistema ERP.</p>
+                            </div>
+
+                            <!-- Nombre -->
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 mb-1.5">Nombre Descriptivo</label>
+                                <div class="relative">
+                                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                                        <i class="fas fa-tag"></i>
+                                    </span>
+                                    <input type="text" name="nombre" value="{{ maquina.nombre|default:'' }}" 
+                                           class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" 
+                                           placeholder="Ej: TORNO CNC 1" required>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card Activa -->
+                    <div class="bg-indigo-50/50 border border-indigo-100 rounded-xl p-5 flex items-start gap-4 transition-all hover:bg-indigo-50">
+                        <div class="flex-1">
+                            <label for="activa" class="block text-base font-bold text-indigo-900 cursor-pointer select-none">Máquina Activa</label>
+                            <p class="text-sm text-indigo-600/80 mt-1 leading-relaxed">
+                                Habilita esta opción para mostrar la máquina en el tablero de producción y calcular sus métricas.
+                            </p>
+                        </div>
+                        <div class="relative inline-block w-14 mt-1 align-middle select-none transition duration-200 ease-in">
+                            <input type="checkbox" name="activa" id="activa" class="toggle-checkbox absolute block w-7 h-7 rounded-full bg-white border-4 appearance-none cursor-pointer border-indigo-200 checked:right-0 checked:border-indigo-600 transition-all duration-300 shadow-sm" {% if not maquina or maquina.activa %}checked{% endif %}/>
+                            <label for="activa" class="toggle-label block overflow-hidden h-7 rounded-full bg-indigo-200 cursor-pointer checked:bg-indigo-600 transition-colors"></label>
+                        </div>
+                        <style>
+                            #activa:checked { right: 0; border-color: #4f46e5; }
+                            #activa:checked + .toggle-label { background-color: #4f46e5; }
+                        </style>
+                    </div>
+                </div>
+
+                <!-- COLUMNA 2: Horarios -->
+                <div>
+                     <h3 class="flex items-center gap-2 text-sm font-bold text-slate-400 uppercase tracking-wider mb-6">
+                        <i class="fas fa-clock"></i> Configuración de Turnos
+                    </h3>
+
+                    <div class="space-y-4">
+                        
+                        <!-- Lun-Vie -->
+                        <div class="group bg-white border border-slate-200 hover:border-slate-300 rounded-xl p-5 shadow-sm transition-all relative overflow-hidden">
+                            <div class="absolute top-0 left-0 w-1 h-full bg-slate-400 group-hover:bg-blue-500 transition-colors"></div>
+                            <div class="mb-3">
+                                <span class="text-sm font-bold text-slate-700 block">Lunes a Viernes</span>
+                                <span class="text-xs text-slate-400">Jornada estándar obligatoria</span>
+                            </div>
+                            <div class="flex items-center gap-4">
+                                <div class="w-1/2">
+                                    <label class="text-xs font-semibold text-slate-500 uppercase mb-1 block">Entrada</label>
+                                    <input type="time" name="horario_inicio_sem" value="{{ maquina.horario_inicio_sem|time:'H:i'|default:'07:00' }}" class="w-full border-slate-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm">
+                                </div>
+                                <span class="text-slate-300 mt-5"><i class="fas fa-arrow-right"></i></span>
+                                <div class="w-1/2">
+                                    <label class="text-xs font-semibold text-slate-500 uppercase mb-1 block">Salida</label>
+                                    <input type="time" name="horario_fin_sem" value="{{ maquina.horario_fin_sem|time:'H:i'|default:'16:00' }}" class="w-full border-slate-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sabado -->
+                        <div class="group bg-white border border-slate-200 hover:border-indigo-300 rounded-xl p-5 shadow-sm transition-all relative overflow-hidden">
+                            <div class="absolute top-0 left-0 w-1 h-full bg-indigo-100 group-hover:bg-indigo-500 transition-colors"></div>
+                            <div class="flex justify-between items-start mb-4">
+                                <div>
+                                    <span class="text-sm font-bold text-slate-700 block group-hover:text-indigo-700 transition-colors">Sábado</span>
+                                    <span class="text-xs text-slate-400">Jornada fin de semana</span>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="trabaja_sabado" name="trabaja_sabado" {% if maquina.trabaja_sabado %}checked{% endif %} class="sr-only peer">
+                                    <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                                </label>
+                            </div>
+                            
+                            <div id="sabado_inputs" class="flex items-center gap-4 transition-all duration-300 origin-top">
+                                <div class="w-1/2">
+                                    <label class="text-xs font-semibold text-slate-500 uppercase mb-1 block">Entrada</label>
+                                    <input type="time" name="horario_inicio_sab" value="{{ maquina.horario_inicio_sab|time:'H:i'|default:'07:00' }}" class="w-full border-slate-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm">
+                                </div>
+                                <span class="text-slate-300 mt-5"><i class="fas fa-arrow-right"></i></span>
+                                <div class="w-1/2">
+                                    <label class="text-xs font-semibold text-slate-500 uppercase mb-1 block">Salida</label>
+                                    <input type="time" name="horario_fin_sab" value="{{ maquina.horario_fin_sab|time:'H:i'|default:'12:00' }}" class="w-full border-slate-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Domingo -->
+                        <div class="group bg-white border border-slate-200 hover:border-purple-300 rounded-xl p-5 shadow-sm transition-all relative overflow-hidden">
+                             <div class="absolute top-0 left-0 w-1 h-full bg-purple-100 group-hover:bg-purple-500 transition-colors"></div>
+                            <div class="flex justify-between items-start mb-4">
+                                <div>
+                                    <span class="text-sm font-bold text-slate-700 block group-hover:text-purple-700 transition-colors">Domingo</span>
+                                    <span class="text-xs text-slate-400">Jornada especial</span>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="trabaja_domingo" name="trabaja_domingo" {% if maquina.trabaja_domingo %}checked{% endif %} class="sr-only peer">
+                                    <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
+                                </label>
+                            </div>
+                            
+                            <div id="domingo_inputs" class="flex items-center gap-4 transition-all duration-300 origin-top">
+                                <div class="w-1/2">
+                                    <label class="text-xs font-semibold text-slate-500 uppercase mb-1 block">Entrada</label>
+                                    <input type="time" name="horario_inicio_dom" value="{{ maquina.horario_inicio_dom|time:'H:i'|default:'07:00' }}" class="w-full border-slate-300 rounded-lg shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500 text-sm">
+                                </div>
+                                <span class="text-slate-300 mt-5"><i class="fas fa-arrow-right"></i></span>
+                                <div class="w-1/2">
+                                    <label class="text-xs font-semibold text-slate-500 uppercase mb-1 block">Salida</label>
+                                    <input type="time" name="horario_fin_dom" value="{{ maquina.horario_fin_dom|time:'H:i'|default:'12:00' }}" class="w-full border-slate-300 rounded-lg shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500 text-sm">
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Footer Buttons -->
+            <div class="px-8 py-6 bg-slate-50/80 border-t border-slate-100 flex justify-end gap-4 rounded-b-2xl">
+                <a href="{% url 'gestion_maquinas' %}" class="px-6 py-2.5 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 hover:text-slate-900 transition-all text-sm font-semibold shadow-sm">
+                    Cancelar
+                </a>
+                <button type="submit" class="px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg transition-all text-sm font-bold shadow-md shadow-blue-500/20 transform hover:-translate-y-0.5">
+                    Guardar Cambios
+                </button>
+            </div>
+
+        </form>
+    </div>
+</div>
+
+<script>
+    function toggleInputs(checkboxId, containerId) {
+        const checkbox = document.getElementById(checkboxId);
+        const container = document.getElementById(containerId);
+        
+        function update() {
+            if (checkbox.checked) {
+                container.classList.remove('opacity-40', 'pointer-events-none', 'grayscale');
+                container.querySelectorAll('input').forEach(input => input.disabled = false);
+            } else {
+                container.classList.add('opacity-40', 'pointer-events-none', 'grayscale');
+                container.querySelectorAll('input').forEach(input => input.disabled = true);
+            }
+        }
+        
+        checkbox.addEventListener('change', update);
+        update(); // Init
+    }
+
+    toggleInputs('trabaja_sabado', 'sabado_inputs');
+    toggleInputs('trabaja_domingo', 'domingo_inputs');
+</script>
+{% endblock %}
