@@ -63,4 +63,35 @@ Este documento detalla la lógica de cálculo de todos los indicadores (KPIs) y 
 
 ---
 
+## 4. Guía Visual del Layout (Tarjetas)
+
+El Dashboard principal está organizado en bloques lógicos para facilitar la lectura:
+
+### 🔵 Panel Superior: OEE Global
+*   Es el resumen ejecutivo. Muestra el promedio de toda la planta mediante velocímetros (Gauges).
+*   **OEE Global**: El porcentaje grande en el título es la eficiencia combinada. Si está arriba del 85%, la planta está en niveles de "Clase Mundial".
+
+### 🟢 Tarjeta: Disponibilidad (Tiempos)
+*   **Enfoque**: ¿Cuánto tiempo estuvieron las máquinas ocupadas respecto al turno?
+*   **Gráfico**: Compara la barra de **Planificado** (100%) contra lo que realmente se trabajó (**Real**) y el tiempo que las máquinas estuvieron paradas (**Paradas**).
+*   **Uso**: Si la barra de "Paradas" es alta, hay un problema de falta de carga de trabajo o muchas máquinas rotas.
+
+### 🌿 Tarjeta: Rendimiento (Cantidades)
+*   **Enfoque**: ¿Qué tan rápido se produjo mientras la máquina estaba andando?
+*   **Cant. Planificada**: Es la cantidad teórica que "debería" haberse hecho en las horas de producción real.
+*   **Gráfico**: Compara lo que se esperaba producir (**Cant Planif**) contra lo que realmente se reportó (**Cant Real**).
+*   **Uso**: Si la barra de "Cant Real" es más alta que la "Cant Planif", tus operarios están superando los tiempos estándar de cotización.
+
+### 🟠 Tarjeta: Calidad
+*   **Enfoque**: ¿Cuántas piezas salieron bien?
+*   **Gráfico**: Compara piezas **Aceptadas** contra **Rechazadas**.
+*   **Interpretación**: Una barra de "Rechazadas" visible es una alerta roja de desperdicio de material.
+
+### 🔘 Tarjeta: Sin Asignar (Gris)
+*   **Enfoque**: Transparencia de datos.
+*   **Contenido**: Muestra el total de producción que llegó del ERP pero no tiene un ID de máquina válido o pertenece a una máquina que marcaste como "Inactiva".
+*   **Importante**: Estos valores ya están sumados en las tarjetas de arriba para que el total de planta sea real. Esta tarjeta está solo para que sepas por qué a veces la suma de "máquina por máquina" no da el total general (porque falta este remanente).
+
+---
+
 *Este manual se actualizará a medida que se incorporen nuevas funcionalidades.*

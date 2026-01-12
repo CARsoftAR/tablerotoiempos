@@ -3,8 +3,9 @@ from django.db import models
 class VTMan(models.Model):
     use_db = 'sql_server'
     
-    # Clave primaria ficticia para Django (usamos IDORDEN, aunque podría no ser único en la vista)
-    id_orden = models.BigIntegerField(db_column='IDORDEN', primary_key=True)
+    # Clave primaria Real de la vista (HAP_ROW_ID) para evitar que Django agrupe registros por IDORDEN
+    row_id = models.CharField(db_column='HAP_ROW_ID', primary_key=True, max_length=255)
+    id_orden = models.BigIntegerField(db_column='IDORDEN')
     
     id_concepto = models.CharField(db_column='IDCONCEPTO', max_length=50)
     hora_inicio = models.DateTimeField(db_column='HORA_D', null=True, blank=True)
@@ -14,6 +15,7 @@ class VTMan(models.Model):
     id_maquina = models.CharField(db_column='IDMAQUINA', max_length=50, null=True, blank=True)
     observaciones = models.CharField(db_column='OBS', max_length=255, null=True, blank=True)
     id_operacion = models.CharField(db_column='IDOPERACION', max_length=50, null=True, blank=True)
+    operacion = models.CharField(db_column='OPERACION', max_length=100, null=True, blank=True)
     
     tiempo_cotizado_individual = models.FloatField(db_column='Tiempo_cotizado_individual', null=True, blank=True)
     cantidad_producida = models.FloatField(db_column='Cantidad_producida', null=True, blank=True)
@@ -27,6 +29,7 @@ class VTMan(models.Model):
     
     formula = models.CharField(db_column='Formula', max_length=100, null=True, blank=True)
     articulo = models.CharField(db_column='Articulo', max_length=100, null=True, blank=True)
+    articulod = models.CharField(db_column='Articulod', max_length=255, null=True, blank=True)
 
     class Meta:
         managed = False

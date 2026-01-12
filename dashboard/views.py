@@ -91,21 +91,26 @@ def dashboard_produccion(request):
             if not conf.activa: maquinas_inactivas_ids.add(conf.id_maquina)
     except: pass 
 
-    # 2. Consultar registros de producción
-    registros_data = VTMan.objects.filter(
-        fecha__range=(fecha_inicio_utc, fecha_fin_utc)
+    fecha_str = fecha_target_start.strftime('%Y-%m-%d')
+
+    # Forzar comparación de FECHA como cadena o usando extra() para evitar el desplazamiento de zona horaria de Django
+    # que estaba causando que el día 08/01 muestre registros del 09/01 (y pierda los del 08/01 temprano)
+    registros_data = VTMan.objects.extra(
+        where=["CONVERT(date, FECHA) = %s"],
+        params=[fecha_str]
     ).order_by('id_maquina', '-fecha', '-hora_fin').values(
         'id_maquina', 'tiempo_minutos', 'tiempo_cotizado', 'cantidad_producida',
-        'es_proceso', 'es_interrupcion', 'observaciones', 'fecha', 'id_orden'
+        'es_proceso', 'es_interrupcion', 'observaciones', 'fecha', 'id_orden', 'operacion',
+        'articulod', 'id_operacion'
     )
 
     kpi_por_maquina = {}
     actual_online_ids = set()
     if is_viewing_today:
-        online_qs = VTMan.objects.filter(
-            fecha__range=(fecha_inicio_utc, fecha_fin_utc),
-            observaciones='ONLINE'
-        ).values_list('id_maquina', flat=True).distinct()
+        online_qs = VTMan.objects.extra(
+            where=["CONVERT(date, FECHA) = %s"],
+            params=[fecha_str]
+        ).filter(observaciones='ONLINE').values_list('id_maquina', flat=True)
         actual_online_ids = set(online_qs)
 
     # Pre-inicializar TODAS las máquinas configuradas y activas
@@ -118,6 +123,7 @@ def dashboard_produccion(request):
                 'tiempo_paradas': 0.0,
                 'tiempo_cotizado': 0.0,
                 'cantidad_producida': 0.0,
+                'cantidad_rechazada': 0.0,
                 'latest_obs': None,
                 'latest_date': None,
                 'current_order': '---',
@@ -132,25 +138,43 @@ def dashboard_produccion(request):
     global_planned_time = 0.0 
     global_actual_time = 0.0 
     global_downtime = 0.0
-    global_actual_qty = 0.0
+    global_actual_qty = 0.0 # Piezas Buenas
+    global_rejected_qty = 0.0 # Reprocesos/Scrap
+    global_repro_time = 0.0 # Horas de reproceso
 
     machine_orders = {} 
 
     for reg in registros_data:
         mid = reg['id_maquina']
+        duracion = reg['tiempo_minutos'] or 0.0
+        qty = reg['cantidad_producida'] or 0.0
+        std_mins = (reg['tiempo_cotizado'] or 0.0) * 60.0
         
-        # Si no tiene máquina, lo sumamos a la bolsa de "Sin Asignar" y seguimos
-        if not mid:
-            dur = reg['tiempo_minutos'] or 0
-            unassigned_time += dur
-            unassigned_qty += reg['cantidad_producida'] or 0
-            unassigned_std += (reg['tiempo_cotizado'] or 0) * 60
-            continue
-            
-        if mid in maquinas_inactivas_ids: continue
+        # Identificar Reproceso
+        raw_id_op = str(reg.get('id_operacion') or "").strip().upper()
+        raw_art_d = str(reg.get('articulod') or "").upper()
+        raw_op_d = str(reg.get('operacion') or "").strip().upper()
 
-        oid = reg['id_orden']
-        
+        is_repro = (
+            raw_id_op == 'REPROCESO' or 
+            raw_op_d == 'REPROCESO' or
+            'REPROCESO' in raw_art_d or 
+            'RETRABAJO' in raw_art_d
+        )
+
+        # 1. Caso: Sin Asignar (Máquina vacía o inactiva)
+        if not mid or mid in maquinas_inactivas_ids:
+            unassigned_time += duracion
+            unassigned_std += std_mins
+            if is_repro:
+                global_rejected_qty += qty
+                global_repro_time += duracion
+            else:
+                unassigned_qty += qty
+                global_actual_qty += qty
+            continue
+
+        # 2. Caso: Máquina Asignada
         if mid not in kpi_por_maquina:
              kpi_por_maquina[mid] = {
                 'id_maquina': mid,
@@ -159,6 +183,7 @@ def dashboard_produccion(request):
                 'tiempo_paradas': 0.0,
                 'tiempo_cotizado': 0.0, 
                 'cantidad_producida': 0.0,
+                'cantidad_rechazada': 0.0,
                 'latest_obs': None,
                 'latest_date': None,
                 'current_order': '---',
@@ -167,47 +192,29 @@ def dashboard_produccion(request):
 
         data = kpi_por_maquina[mid]
         
-        # El primer registro encontrado para la máquina es el ÚLTIMO (por el order_by)
         if data['latest_obs'] is None:
             data['latest_obs'] = str(reg['observaciones']).strip().upper() if reg['observaciones'] else ""
             data['latest_date'] = reg['fecha']
-            data['current_order'] = oid
+            data['current_order'] = reg['id_orden']
 
-        # Agregación por Orden
-        if mid not in machine_orders: machine_orders[mid] = {}
-        if oid not in machine_orders[mid]:
-            machine_orders[mid][oid] = {'total_std_hrs': 0.0, 'qty': 0.0, 'prod_min': 0.0, 'stop_min': 0.0}
-            
-        order_stats = machine_orders[mid][oid]
-        
-        val_std_hrs = float(reg['tiempo_cotizado']) if reg['tiempo_cotizado'] else 0.0
-        val_qty = float(reg['cantidad_producida']) if reg['cantidad_producida'] else 0.0
-        
-        order_stats['total_std_hrs'] += val_std_hrs
-        order_stats['qty'] += val_qty
-            
-        duracion = reg['tiempo_minutos'] if reg['tiempo_minutos'] else 0.0
+        if is_repro:
+            data['cantidad_rechazada'] += qty
+            global_rejected_qty += qty
+            global_repro_time += duracion
+            # El tiempo de reproceso cuenta como tiempo real de la máquina
+        else:
+            data['cantidad_producida'] += qty
+            global_actual_qty += qty
         
         if reg['es_proceso']:
-            order_stats['prod_min'] += duracion
+            data['tiempo_operativo'] += duracion
+            global_actual_time += duracion
         elif reg['es_interrupcion']:
-            order_stats['stop_min'] += duracion
+            data['tiempo_paradas'] += duracion
+            global_downtime += duracion
 
-    # 2da Pasada: Sumarizar totales
-    for mid, orders in machine_orders.items():
-        data = kpi_por_maquina[mid]
-        for oid, stats in orders.items():
-            data['tiempo_operativo'] += stats['prod_min']
-            data['tiempo_paradas'] += stats['stop_min']
-            total_std_orden = stats['total_std_hrs'] * 60 
-            
-            data['tiempo_cotizado'] += total_std_orden
-            data['cantidad_producida'] += stats['qty']
-            
-            global_actual_time += stats['prod_min']
-            global_downtime += stats['stop_min']
-            global_planned_time += total_std_orden 
-            global_actual_qty += stats['qty']
+        data['tiempo_cotizado'] += std_mins
+        global_planned_time += std_mins 
 
     # 3. Calcular KPIs finales
     lista_kpis = []
@@ -271,7 +278,8 @@ def dashboard_produccion(request):
         # KPIs
         availability = (t_op_hrs / t_disp_periodo) * 100.0
         performance = (t_std_hrs / t_op_hrs) * 100.0 if t_op_hrs > 0 else 0.0
-        quality = 100.0
+        total_p = qty + data['cantidad_rechazada']
+        quality = (qty / total_p * 100.0) if total_p > 0 else 100.0
         oee = (availability * performance * quality) / 10000.0
         
         # Estado
@@ -299,6 +307,8 @@ def dashboard_produccion(request):
             'id_orden': data['current_order'],
             'horas_std': t_std_hrs,
             'horas_prod': t_op_hrs,
+            'qty': data['cantidad_producida'],
+            'rejected_qty': data['cantidad_rechazada'],
             'std_formatted': format_time_display(t_std_hrs),
             'prod_formatted': format_time_display(t_op_hrs),
         })
@@ -327,7 +337,10 @@ def dashboard_produccion(request):
         promedio_oee = avg_availability = 0.0
         
     avg_performance = (total_horas_std / total_horas_prod) * 100.0 if total_horas_prod > 0 else 0.0
-    avg_quality = 100.0
+    
+    # CALIDAD: (Aceptadas / Totales) * 100
+    total_piezas_real = global_actual_qty + global_rejected_qty
+    avg_quality = (global_actual_qty / total_piezas_real * 100.0) if total_piezas_real > 0 else 100.0
     
     # avg_downtime para gráfico: porcentaje de tiempo perdido respecto al disponible
     res_avg_downtime = (global_downtime / (total_horas_disp * 60) * 100.0) if total_horas_disp > 0 else 0.0
@@ -363,6 +376,7 @@ def dashboard_produccion(request):
             'avg_availability': round(avg_availability, 2),
             'avg_performance': round(avg_performance, 2),
             'avg_quality': round(avg_quality, 2),
+            'avg_rejected': round(100.0 - avg_quality, 2) if total_piezas_real > 0 else 0.0,
             'avg_downtime': round(res_avg_downtime, 2),
             'maquinas_activas': maquinas_activas,
             'total_maquinas': total_maquinas,
@@ -371,8 +385,9 @@ def dashboard_produccion(request):
             'global_standard_formatted': fmt_mins_global(total_horas_std * 60),
             'global_downtime_formatted': fmt_mins_global(global_downtime),
             'global_planned_qty': round(global_actual_qty / (avg_performance/100)) if avg_performance > 0 else 0,
-            'global_actual_qty': round(global_actual_qty, 0),
-            'global_rejected_qty': 0,
+            'global_actual_qty': round(global_actual_qty, 1),
+            'global_rejected_qty': round(global_rejected_qty, 1),
+            'global_repro_time_formatted': fmt_mins_global(global_repro_time),
             # Tiempos Sin Asignar (para la tarjeta aparte)
             'unassigned_time_formatted': fmt_mins_global(unassigned_time),
             'unassigned_qty': round(unassigned_qty, 1),
