@@ -58,8 +58,8 @@ def dashboard_produccion(request):
                 except:
                     found_date = today_date - datetime.timedelta(days=1)
         else:
-            # BÚSQUEDA AUTOMÁTICA
-            check_date = today_date - datetime.timedelta(days=2 if today_date.weekday() == 0 else 1)
+            # BÚSQUEDA AUTOMÁTICA: Empezar desde HOY, si no hay datos ir hacia atrás.
+            check_date = today_date
             for _ in range(15): 
                 if check_date.weekday() == 6: check_date -= datetime.timedelta(days=1)
                 c_start = timezone.make_aware(datetime.datetime.combine(check_date, datetime.time.min), datetime.timezone.utc)
@@ -150,28 +150,34 @@ def dashboard_produccion(request):
         qty = reg['cantidad_producida'] or 0.0
         std_mins = (reg['tiempo_cotizado'] or 0.0) * 60.0
         
-        # Identificar Reproceso
+        # Identificar Reproceso o tareas que no deben sumar a Cantidad Real
         raw_id_op = str(reg.get('id_operacion') or "").strip().upper()
         raw_art_d = str(reg.get('articulod') or "").upper()
         raw_op_d = str(reg.get('operacion') or "").strip().upper()
+        raw_obs = str(reg.get('observaciones') or "").strip().upper()
 
+        non_prod_keywords = ['REPROCESO', 'RETRABAJO']
+        
         is_repro = (
-            raw_id_op == 'REPROCESO' or 
-            raw_op_d == 'REPROCESO' or
-            'REPROCESO' in raw_art_d or 
-            'RETRABAJO' in raw_art_d
+            raw_id_op in non_prod_keywords or 
+            raw_op_d in non_prod_keywords or
+            any(k in raw_art_d for k in non_prod_keywords) or
+            any(k in raw_obs for k in non_prod_keywords)
         )
+        
+        # El 'ONLINE' a veces trae cantidad 1 para marcar actividad, pero no es producción real terminada
+        is_online_record = (raw_obs == 'ONLINE')
 
         # 1. Caso: Sin Asignar (Máquina vacía o inactiva)
         if not mid or mid in maquinas_inactivas_ids:
             unassigned_time += duracion
-            unassigned_std += std_mins
             if is_repro:
                 global_rejected_qty += qty
                 global_repro_time += duracion
             else:
                 unassigned_qty += qty
                 global_actual_qty += qty
+                unassigned_std += std_mins
             continue
 
         # 2. Caso: Máquina Asignada
@@ -205,6 +211,9 @@ def dashboard_produccion(request):
         else:
             data['cantidad_producida'] += qty
             global_actual_qty += qty
+            # El tiempo estándar solo suma para piezas de producción real
+            data['tiempo_cotizado'] += std_mins
+            global_planned_time += std_mins 
         
         if reg['es_proceso']:
             data['tiempo_operativo'] += duracion
@@ -212,9 +221,6 @@ def dashboard_produccion(request):
         elif reg['es_interrupcion']:
             data['tiempo_paradas'] += duracion
             global_downtime += duracion
-
-        data['tiempo_cotizado'] += std_mins
-        global_planned_time += std_mins 
 
     # 3. Calcular KPIs finales
     lista_kpis = []
