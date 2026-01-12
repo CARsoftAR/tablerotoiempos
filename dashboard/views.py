@@ -16,94 +16,101 @@ def dashboard_produccion(request):
     import datetime
     from dateutil import parser
     
-    fecha_param = request.GET.get('date') or request.GET.get('fecha')
-    
-    found_date = None
-
-    if fecha_param:
-        if fecha_param == 'yesterday':
-             found_date = timezone.now().date() - datetime.timedelta(days=1)
-        elif fecha_param == 'today':
-             found_date = timezone.now().date()
-        else:
-            try:
-                found_date = parser.parse(fecha_param).date()
-            except:
-                found_date = timezone.now().date() - datetime.timedelta(days=1)
+    # Manejo de Formato de Tiempo (Decimal vs Reloj)
+    time_format = request.GET.get('format')
+    if time_format:
+        request.session['time_format'] = time_format
     else:
-        # Buscar día activo hacia atrás
-        check_date = timezone.now().date() - datetime.timedelta(days=1)
-        for _ in range(15): # Buscar hasta 15 días atrás
-            # Rango UTC para el chequeo
-            c_start = datetime.datetime.combine(check_date, datetime.time.min).replace(tzinfo=datetime.timezone.utc)
-            c_end = datetime.datetime.combine(check_date, datetime.time.max).replace(tzinfo=datetime.timezone.utc)
-            
-            # Verificar si hay datos (usando count para light query o exists)
-            # Usamos filter directo. count() es rapido.
-            if VTMan.objects.filter(fecha__range=(c_start, c_end)).exists():
-                found_date = check_date
-                break
-            
-            check_date -= datetime.timedelta(days=1)
-        
-        # Si no encontramos nada en 15 días, nos quedamos con AYER (aunque esté vacío)
-        if not found_date:
-            found_date = timezone.now().date() - datetime.timedelta(days=1)
+        time_format = request.session.get('time_format', 'clock')
 
-    fecha_target = found_date
+    fecha_param = request.GET.get('date') or request.GET.get('fecha')
+    start_param = request.GET.get('start_date')
+    end_param = request.GET.get('end_date')
+
+    now_local = timezone.localtime(timezone.now())
+    today_date = now_local.date()
     
-    # Construir rango definitivo
-    start_utc = datetime.datetime.combine(fecha_target, datetime.time.min).replace(tzinfo=datetime.timezone.utc)
-    end_utc = datetime.datetime.combine(fecha_target, datetime.time.max).replace(tzinfo=datetime.timezone.utc)
+    fecha_target_start = None
+    fecha_target_end = None
+    is_viewing_today = False
+
+    if start_param and end_param:
+        try:
+            fecha_target_start = parser.parse(start_param).date()
+            fecha_target_end = parser.parse(end_param).date()
+            is_viewing_today = (fecha_target_start == fecha_target_end == today_date)
+        except:
+            fecha_param = 'today' # Fallback
+
+    if not fecha_target_start:
+        found_date = None
+        if fecha_param:
+            if fecha_param == 'yesterday':
+                if today_date.weekday() == 0:
+                    found_date = today_date - datetime.timedelta(days=2)
+                else:
+                    found_date = today_date - datetime.timedelta(days=1)
+            elif fecha_param == 'today':
+                found_date = today_date
+            else:
+                try:
+                    found_date = parser.parse(fecha_param).date()
+                except:
+                    found_date = today_date - datetime.timedelta(days=1)
+        else:
+            # BÚSQUEDA AUTOMÁTICA
+            check_date = today_date - datetime.timedelta(days=2 if today_date.weekday() == 0 else 1)
+            for _ in range(15): 
+                if check_date.weekday() == 6: check_date -= datetime.timedelta(days=1)
+                c_start = timezone.make_aware(datetime.datetime.combine(check_date, datetime.time.min), datetime.timezone.utc)
+                c_end = timezone.make_aware(datetime.datetime.combine(check_date, datetime.time.max), datetime.timezone.utc)
+                if VTMan.objects.filter(fecha__range=(c_start, c_end)).exists():
+                    found_date = check_date
+                    break
+                check_date -= datetime.timedelta(days=1)
+            if not found_date: found_date = today_date - datetime.timedelta(days=1)
+        
+        fecha_target_start = found_date
+        fecha_target_end = found_date
+        is_viewing_today = (fecha_target_start == today_date)
+
+    # RANGO DE CONSULTA UTC
+    fecha_inicio_utc = timezone.make_aware(datetime.datetime.combine(fecha_target_start, datetime.time.min), datetime.timezone.utc)
+    fecha_fin_utc = timezone.make_aware(datetime.datetime.combine(fecha_target_end, datetime.time.max), datetime.timezone.utc)
     
-    fecha_inicio = start_utc
-    fecha_fin = end_utc
-    
-    # 1. Obtener nombres reales de máquinas
+    # 1. Obtener nombres y configs
     maquinas_db = Maquina.objects.all()
     nombres_maquinas = {m.id_maquina: m.descripcion for m in maquinas_db}
-    
-    # Intenta obtener configuraciones locales si existen para enriquecer nombres
-    # Y filtrar las NO activas
     maquinas_inactivas_ids = set()
-    maquinas_configs = {} # Guardar config para horarios
+    maquinas_configs = {} 
     try:
         configs_locales = MaquinaConfig.objects.all()
         for conf in configs_locales:
             nombres_maquinas[conf.id_maquina] = conf.nombre
             maquinas_configs[conf.id_maquina] = conf
-            if not conf.activa:
-                maquinas_inactivas_ids.add(conf.id_maquina)
-    except Exception:
-        pass # Si falla la tabla local, seguimos con los del ERP
+            if not conf.activa: maquinas_inactivas_ids.add(conf.id_maquina)
+    except: pass 
 
-    # 2. Consultar registros de producción (READ-ONLY SQL Server)
-    # Usamos .values() para evitar problemas de duplicidad de PK si IDORDEN no es único en la vista
+    # 2. Consultar registros de producción
     registros_data = VTMan.objects.filter(
-        fecha__range=(fecha_inicio, fecha_fin)
+        fecha__range=(fecha_inicio_utc, fecha_fin_utc)
     ).order_by('id_maquina', '-fecha', '-hora_fin').values(
         'id_maquina', 'tiempo_minutos', 'tiempo_cotizado', 'cantidad_producida',
         'es_proceso', 'es_interrupcion', 'observaciones', 'fecha', 'id_orden'
     )
 
     kpi_por_maquina = {}
+    actual_online_ids = set()
+    if is_viewing_today:
+        online_qs = VTMan.objects.filter(
+            fecha__range=(fecha_inicio_utc, fecha_fin_utc),
+            observaciones='ONLINE'
+        ).values_list('id_maquina', flat=True).distinct()
+        actual_online_ids = set(online_qs)
 
-    kpi_por_maquina = {}
-
-    # CONSULTA ESPECÍFICA PARA MAQUINAS ONLINE (Segun SQL usuario)
-    # Obtenemos ID de Maquina y su OP (IDORDEN)
-    online_qs = VTMan.objects.filter(observaciones='ONLINE').values('id_maquina', 'id_orden')
-    # Creamos un mapa {id_maquina: id_orden}
-    # Si hay duplicados, tomará el último procesado. Idealmente el orden de la query importa, 
-    # pero para 'ONLINE' asumimos que es el estado actual.
-    online_map = {item['id_maquina']: item['id_orden'] for item in online_qs}
-
-    # Pre-inicializar TODAS las máquinas configuradas y activas (para que aparezcan aunque no tengan datos)
+    # Pre-inicializar TODAS las máquinas configuradas y activas
     for mid, conf in maquinas_configs.items():
         if conf.activa:
-            is_in_online_map = mid in online_map
-            initial_order = online_map[mid] if is_in_online_map else '---'
-            
             kpi_por_maquina[mid] = {
                 'id_maquina': mid,
                 'nombre_maquina': conf.nombre,
@@ -113,26 +120,37 @@ def dashboard_produccion(request):
                 'cantidad_producida': 0.0,
                 'latest_obs': None,
                 'latest_date': None,
-                'current_order': initial_order,
-                'is_found_online': is_in_online_map
+                'current_order': '---',
+                'is_found_online': False # Se decidirá abajo
             }
 
-    # Acumuladores Globales para el Panel Superior
-    global_planned_time = 0.0 # Cotizado / Std
-    global_actual_time = 0.0 # Operativo / Prod
+    # Acumuladores Globales
+    unassigned_time = 0.0
+    unassigned_qty = 0.0
+    unassigned_std = 0.0
+
+    global_planned_time = 0.0 
+    global_actual_time = 0.0 
     global_downtime = 0.0
     global_actual_qty = 0.0
 
-    # Estructura auxiliar para procesar datos por Orden {mid: {oid: data}}
     machine_orders = {} 
 
     for reg in registros_data:
         mid = reg['id_maquina']
-        if not mid or mid in maquinas_inactivas_ids: continue
+        
+        # Si no tiene máquina, lo sumamos a la bolsa de "Sin Asignar" y seguimos
+        if not mid:
+            dur = reg['tiempo_minutos'] or 0
+            unassigned_time += dur
+            unassigned_qty += reg['cantidad_producida'] or 0
+            unassigned_std += (reg['tiempo_cotizado'] or 0) * 60
+            continue
+            
+        if mid in maquinas_inactivas_ids: continue
 
         oid = reg['id_orden']
         
-        # Inicializar estructura de máquina si no existe
         if mid not in kpi_por_maquina:
              kpi_por_maquina[mid] = {
                 'id_maquina': mid,
@@ -144,23 +162,16 @@ def dashboard_produccion(request):
                 'latest_obs': None,
                 'latest_date': None,
                 'current_order': '---',
-                'latest_is_process': False, # Status flag based on last record
                 'is_found_online': False
             }
-             machine_orders[mid] = {}
 
         data = kpi_por_maquina[mid]
         
-        # Estado y Observaciones
+        # El primer registro encontrado para la máquina es el ÚLTIMO (por el order_by)
         if data['latest_obs'] is None:
-            data['latest_obs'] = reg['observaciones']
+            data['latest_obs'] = str(reg['observaciones']).strip().upper() if reg['observaciones'] else ""
             data['latest_date'] = reg['fecha']
-            if not data['is_found_online']:
-                data['current_order'] = oid
-
-        if reg['observaciones'] and str(reg['observaciones']).strip().upper() == 'ONLINE':
-            data['is_found_online'] = True
-            data['latest_obs'] = 'ONLINE'
+            data['current_order'] = oid
 
         # Agregación por Orden
         if mid not in machine_orders: machine_orders[mid] = {}
@@ -169,8 +180,6 @@ def dashboard_produccion(request):
             
         order_stats = machine_orders[mid][oid]
         
-        # Std y Qty son totales de la orden (repetidos en la vista), tomamos el valor (sobrescribimos)
-        # CAMBIO LOGICA (09/01/2026): 'tiempo_cotizado' ES TOTAL HORAS ESTANDAR DEL REPORTE
         val_std_hrs = float(reg['tiempo_cotizado']) if reg['tiempo_cotizado'] else 0.0
         val_qty = float(reg['cantidad_producida']) if reg['cantidad_producida'] else 0.0
         
@@ -184,266 +193,192 @@ def dashboard_produccion(request):
         elif reg['es_interrupcion']:
             order_stats['stop_min'] += duracion
 
-    # 2da Pasada: Sumarizar totales por máquina desde los agregados por orden
+    # 2da Pasada: Sumarizar totales
     for mid, orders in machine_orders.items():
         data = kpi_por_maquina[mid]
         for oid, stats in orders.items():
             data['tiempo_operativo'] += stats['prod_min']
             data['tiempo_paradas'] += stats['stop_min']
-            
-            # CÁLCULO DE TIEMPO ESTÁNDAR TOTAL
-            # RETORNO A LÓGICA USUARIO: 
-            # 1. Valor DB es Standard TOTAL del registro en HORAS.
-            # 2. Sumamos directo (ya viene multiplicado por qty y en horas)
-            total_std_orden = stats['total_std_hrs'] * 60 # Convertir a minutos para sumar a tiempo_cotizado (que esperamos en minutos en data)
+            total_std_orden = stats['total_std_hrs'] * 60 
             
             data['tiempo_cotizado'] += total_std_orden
             data['cantidad_producida'] += stats['qty']
             
-            # Sumar a globales
             global_actual_time += stats['prod_min']
             global_downtime += stats['stop_min']
-            global_planned_time += total_std_orden # Sumar total calculado
+            global_planned_time += total_std_orden 
             global_actual_qty += stats['qty']
 
     # 3. Calcular KPIs finales
     lista_kpis = []
-    
-    # --- CÁLCULO DE TIEMPO TRANSCURRIDO DE TURNO (SHIFT TIME) ---
-    # --- CÁLCULO DE TIEMPO TRANSCURRIDO (DYNAMICO POR MAQUINA) ---
-    weekday = fecha_target.weekday() # 0=Monday, 6=Sunday
-    now = timezone.now() # Aware datetime
-
-    # Acumuladores Globales (en Horas)
+    now = timezone.now()
     total_horas_std = 0.0
     total_horas_prod = 0.0
     total_horas_disp = 0.0
 
-    for mid, data in kpi_por_maquina.items():
-        # Valores base en MINUTOS desde DB
-        t_op_min = data['tiempo_operativo']
-        t_std_min = data['tiempo_cotizado']
-        qty = data['cantidad_producida']
+    # Determinar los días del periodo
+    delta = fecha_target_end - fecha_target_start
+    dias_periodo = [fecha_target_start + datetime.timedelta(days=i) for i in range(delta.days + 1)]
 
-        # Convertir a HORAS para igualar formato imagen (ej "4,10")
-        t_op_hrs = t_op_min / 60.0
+    for mid, data in kpi_por_maquina.items():
+        t_op_hrs = data['tiempo_operativo'] / 60.0
+        t_std_hrs = data['tiempo_cotizado'] / 60.0
+        qty = data['cantidad_producida']
         
-        # Tiempo Cotizado ahora son MINUTOS Totales (Std Unit * Qty). Convertir a horas.
-        t_std_hrs = t_std_min / 60.0
-        
-        # Tiempo Disponible de esta máquina (Calculado según CONFIGURACIÓN de horario)
-        
-        # 1. Obtener Config y Horarios
         config = maquinas_configs.get(mid)
-        
-        # Defaults
-        start_time = datetime.time(7, 0)
-        end_time = datetime.time(16, 0)
-        works_today = True
-        
-        if config:
-            if weekday < 5: # Lun-Vie
-                start_time = config.horario_inicio_sem
-                end_time = config.horario_fin_sem
-            elif weekday == 5: # Sabado
-                if config.trabaja_sabado:
+        t_disp_periodo = 0.0
+
+        for d in dias_periodo:
+            weekday = d.weekday()
+            start_time = datetime.time(7, 0)
+            end_time = datetime.time(16, 0)
+            works_today = True
+            
+            if config:
+                if weekday < 5: 
+                    start_time = config.horario_inicio_sem
+                    end_time = config.horario_fin_sem
+                elif weekday == 5: # Sabado
+                    works_today = config.trabaja_sabado
                     start_time = config.horario_inicio_sab or datetime.time(7,0)
                     end_time = config.horario_fin_sab or datetime.time(13,0)
-                else:
-                    works_today = False
-            elif weekday == 6: # Domingo
-                if config.trabaja_domingo:
+                else: # Domingo
+                    works_today = config.trabaja_domingo
                     start_time = config.horario_inicio_dom or datetime.time(7,0)
                     end_time = config.horario_fin_dom or datetime.time(13,0)
+            
+            if works_today:
+                def time_to_decimal(t): return t.hour + t.minute/60.0
+                start_dec = time_to_decimal(start_time)
+                end_dec = time_to_decimal(end_time)
+                if end_dec < start_dec: end_dec += 24.0 
+                full_shift_hrs = end_dec - start_dec
+                
+                if is_viewing_today and d == today_date:
+                    now_local = timezone.localtime(now)
+                    now_dec_local = now_local.hour + now_local.minute/60.0
+                    if now_dec_local < start_dec: t_disp_periodo += 0.0
+                    elif now_dec_local > end_dec: t_disp_periodo += full_shift_hrs
+                    else: t_disp_periodo += (now_dec_local - start_dec)
                 else:
-                    works_today = False
-        
-        # 2. Calcular Disponibilidad (Horas)
-        t_disp_hrs = 0.0
-        
-        if works_today:
-            # Combinar fecha target con horarios para tener datetimes
-            # OJO: fecha_target es date. asumo local timezone o naive.
-            # Para comparar con 'now' (que es aware UTC o local), mejor hacemos todo aware si es posible
-            # O todo naive y comparamos.
-            
-            # Convertimos 'now' a local date si es necesario para comparar horas
-            # Simplemente usaremos horas decimales para simplificar y evitar lios de timezone hoy
-            
-            def time_to_decimal(t):
-                 return t.hour + t.minute/60.0
-            
-            start_dec = time_to_decimal(start_time)
-            end_dec = time_to_decimal(end_time)
-            
-            if end_dec < start_dec: end_dec += 24.0 # Turno cruza medianoche
-            
-            full_shift_hrs = end_dec - start_dec
-            
-            if now.date() == fecha_target:
-                # Calcular hora actual decimal
-                now_dec = now.hour + now.minute/60.0  # Ojo: esto es hora del servidor (UTC o Local configurado)
-                # Asumiendo TIME_ZONE 'America/Argentina/Buenos_Aires' en settings, now.hour será correcto localmente.
-                # Si 'now' es UTC pura, podría fallar.
-                # USAR 'timezone.localtime(now)' es más seguro
-                now_local = timezone.localtime(now)
-                now_dec_local = now_local.hour + now_local.minute/60.0
+                    t_disp_periodo += full_shift_hrs
 
-                if now_dec_local < start_dec:
-                   t_disp_hrs = 0.0
-                elif now_dec_local > end_dec:
-                   t_disp_hrs = full_shift_hrs
-                else:
-                   t_disp_hrs = now_dec_local - start_dec
-            else:
-                # Dia pasado completo
-                t_disp_hrs = full_shift_hrs
-        
-        # Fallback: Si no trabaja hoy pero hay produccion (horas extra), usar Tiempo Operativo como base
-        # o poner minima disponibilidad
-        if t_disp_hrs < 0.01:
-             if t_op_hrs > 0: t_disp_hrs = t_op_hrs
-             else: t_disp_hrs = 0.01
-             
-        # Fin Calculo Disponibilidad Personalizado
-        
-        # A. OCUPACION (Availability)
-        # Ocupacion = Horas Producidas / Horas Disponibles
-        ocupacion = (t_op_hrs / t_disp_hrs) * 100.0
-        
-        # B. EFICIENCIA (Performance)
-        # Eficiencia = Horas STD / Horas Producidas
-        # Si no hubo tiempo operativo, eficiencia es 0
-        if t_op_hrs > 0:
-            eficiencia = (t_std_hrs / t_op_hrs) * 100.0
-        else:
-            eficiencia = 0.0
+        if t_disp_periodo < t_op_hrs:
+            t_disp_periodo = t_op_hrs
+        if t_disp_periodo < 0.01:
+            t_disp_periodo = 0.01
 
-        # C. CALIDAD
-        # Si produjo algo, asumimos calidad 100%
-        quality = 100.0 if qty > 0 else 0.0
-
-        # D. OEE
-        # OEE = Ocupacion * Eficiencia * Calidad
-        oee = (ocupacion * eficiencia * quality) / 10000.0
+        # KPIs
+        availability = (t_op_hrs / t_disp_periodo) * 100.0
+        performance = (t_std_hrs / t_op_hrs) * 100.0 if t_op_hrs > 0 else 0.0
+        quality = 100.0
+        oee = (availability * performance * quality) / 10000.0
         
-        # E. ESTADO
-        is_online = data['is_found_online']
+        # Estado
+        is_online = (mid in actual_online_ids) if is_viewing_today else False
 
-        # Formateo de Tiempos (Minutos / Horas)
+        # Modificamos la función de formato para que use decimal si así se pide
         def format_time_display(hours_val):
+            if time_format == 'decimal':
+                return f"{hours_val:.2f}"
+            
             total_minutes = hours_val * 60
             h = int(total_minutes // 60)
-            m = int(total_minutes % 60)
-            if h > 0:
-                return f"{h} hs {m} min"
-            return f"{m} min"
-
-        t_std_str = format_time_display(t_std_hrs)
-        t_op_str = format_time_display(t_op_hrs)
+            m = int(round(total_minutes % 60))
+            if m == 60: h += 1; m = 0
+            return f"{h} hs {m} min" if h > 0 else f"{m} min"
 
         lista_kpis.append({
             'id_maquina': mid,
             'nombre_maquina': data['nombre_maquina'],
             'is_online': is_online,
             'oee': round(oee, 2),
-            'availability': round(ocupacion, 2),
-            'performance': round(eficiencia, 2),
+            'availability': round(availability, 2),
+            'performance': round(performance, 2),
             'quality': round(quality, 2),
             'id_orden': data['current_order'],
             'horas_std': t_std_hrs,
             'horas_prod': t_op_hrs,
-            'std_formatted': t_std_str,
-            'prod_formatted': t_op_str,
+            'std_formatted': format_time_display(t_std_hrs),
+            'prod_formatted': format_time_display(t_op_hrs),
         })
         
-        # Sumar a Globales
         total_horas_std += t_std_hrs
         total_horas_prod += t_op_hrs
-        total_horas_disp += t_disp_hrs 
+        total_horas_disp += t_disp_periodo 
+        global_downtime += max(0, (t_disp_periodo - t_op_hrs) * 60)
 
-    # 4. Calcular KPIs Globales (Promedios Ponderados / Totales)
+    # 4. Globales
+    # Sumar el tiempo sin asignar a los acumuladores de tiempo real/std para que coincida con ERP
+    # Ya lo sumamos arriba en el loop previo? No, arriba solo sumamos unassigned_time/std/qty
     
-    # OEE General = (Horas STD Globales / Horas Disponibles Globales) * 100 
+    # Convertir a horas para los KPIs globales
+    h_unassigned_std = unassigned_std / 60.0
+    h_unassigned_prod = unassigned_time / 60.0
+
+    total_horas_std += h_unassigned_std
+    total_horas_prod += h_unassigned_prod
+    # total_horas_disp no se toca por unassigned porque no tienen turno
+
     if total_horas_disp > 0:
         promedio_oee = (total_horas_std / total_horas_disp) * 100.0
-        # Tasa Ocupacion Global
         avg_availability = (total_horas_prod / total_horas_disp) * 100.0 
     else:
-        promedio_oee = 0.0
-        avg_availability = 0.0
+        promedio_oee = avg_availability = 0.0
         
-    # Eficiencia Global
-    if total_horas_prod > 0:
-        avg_performance = (total_horas_std / total_horas_prod) * 100.0
-    else:
-        avg_performance = 0.0
-        
-    # Calidad Global (Fijo 100 según imagen)
+    avg_performance = (total_horas_std / total_horas_prod) * 100.0 if total_horas_prod > 0 else 0.0
     avg_quality = 100.0
-    # Ordenar: Online primero, luego por ID
-    # NUEVA LÓGICA (09/01/2026):
-    # Clasificar como "Activa" si tiene Tiempo de Producción > 0
-    # Ignoramos la etiqueta 'ONLINE' de la DB por ahora.
+    
+    # avg_downtime para gráfico: porcentaje de tiempo perdido respecto al disponible
+    res_avg_downtime = (global_downtime / (total_horas_disp * 60) * 100.0) if total_horas_disp > 0 else 0.0
+    
+    # Nuevo: Tiempo Estándar Total (Yellow ERP)
+    global_standard_time = total_horas_std
+
     for kpi in lista_kpis:
         kpi['is_active_production'] = kpi['horas_prod'] > 0.001
     
-    # Ordenar: Primero las que tienen Producción, luego por ID
-    lista_kpis.sort(key=lambda x: (not x['is_active_production'], x['id_maquina']))
+    lista_kpis.sort(key=lambda x: (not x['is_online'], not x['is_active_production'], x['id_maquina']))
 
     maquinas_activas = sum(1 for m in lista_kpis if m['is_online'])
     total_maquinas = len(lista_kpis)
 
-    # Formateo de Minutos Globales
-    def fmt_mins_global(m):
-        h = int(m // 60)
-        mins = int(m % 60)
-        if h > 0:
-            return f"{h} hs {mins} min"
-        return f"{mins} min"
-
-    # Preparar valores formateados
-    # global_planned_time viene en HORAS -> Convertir a min
-    g_planned_str = fmt_mins_global(global_planned_time * 60)
-    # global_actual_time viene en MINUTOS
-    g_actual_str = fmt_mins_global(global_actual_time)
-    # global_downtime viene en MINUTOS
-    g_downtime_str = fmt_mins_global(global_downtime)
+    def fmt_mins_global(m_raw):
+        # m_raw está en minutos
+        if time_format == 'decimal':
+            return f"{m_raw/60.0:.2f}"
+        
+        h, mins = divmod(int(round(m_raw)), 60)
+        return f"{h} hs {mins} min" if h > 0 else f"{mins} min"
 
     context = {
         'kpis': lista_kpis,
-        'fecha_inicio': fecha_inicio,
-        'fecha_fin': fecha_fin,
+        'fecha_target': fecha_target_start,
+        'fecha_fin_target': fecha_target_end,
+        'is_today': is_viewing_today,
+        'is_range': (fecha_target_start != fecha_target_end),
+        'time_format': time_format,
         'resumen': {
             'promedio_oee': round(promedio_oee, 2),
-            
-            'avg_availability': round(avg_availability, 2), # OCUPACION
-            'avg_performance': round(avg_performance, 2),   # EFICIENCIA
-            'avg_quality': round(avg_quality, 2),           # CALIDAD
-            
-            # Datos absolutos panel inferior
-            'global_available_time': round(total_horas_disp, 2), # Horas Disponibles (Calculadas como turno transcurrido * maquinas)
-            
+            'avg_availability': round(avg_availability, 2),
+            'avg_performance': round(avg_performance, 2),
+            'avg_quality': round(avg_quality, 2),
+            'avg_downtime': round(res_avg_downtime, 2),
             'maquinas_activas': maquinas_activas,
             'total_maquinas': total_maquinas,
-            
-            # Totales Globales para Tarjetas
-            'global_planned_time': round(global_planned_time * 60, 0),
-            'global_actual_time': round(global_actual_time, 0),
-            'global_downtime': round(global_downtime, 0),
-            
-            # Valores Formateados
-            'global_planned_formatted': g_planned_str,
-            'global_actual_formatted': g_actual_str,
-            'global_downtime_formatted': g_downtime_str,
-
-            # Estimación de Cantidad Planificada basándonos en rendimiento promedio
+            'global_planned_formatted': fmt_mins_global(total_horas_disp * 60),
+            'global_actual_formatted': fmt_mins_global(total_horas_prod * 60),
+            'global_standard_formatted': fmt_mins_global(total_horas_std * 60),
+            'global_downtime_formatted': fmt_mins_global(global_downtime),
             'global_planned_qty': round(global_actual_qty / (avg_performance/100)) if avg_performance > 0 else 0,
             'global_actual_qty': round(global_actual_qty, 0),
-            'global_rejected_qty': 0, # Placeholder
+            'global_rejected_qty': 0,
+            # Tiempos Sin Asignar (para la tarjeta aparte)
+            'unassigned_time_formatted': fmt_mins_global(unassigned_time),
+            'unassigned_qty': round(unassigned_qty, 1),
+            'unassigned_std_formatted': fmt_mins_global(unassigned_std),
         }
     }
-    
     return render(request, 'dashboard/produccion.html', context)
 
 
@@ -454,8 +389,8 @@ from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 def gestion_maquinas(request):
     maquinas_list = MaquinaConfig.objects.all().order_by('id_maquina')
     
-    # Paginación: 7 máquinas por página
-    paginator = Paginator(maquinas_list, 7) 
+    # Paginación: 6 máquinas por página
+    paginator = Paginator(maquinas_list, 6) 
     page = request.GET.get('page')
     
     try:
@@ -535,4 +470,7 @@ def eliminar_maquina(request, pk):
     maquina = get_object_or_404(MaquinaConfig, pk=pk)
     maquina.delete()
     messages.success(request, 'Máquina eliminada.')
-    return redirect('gestion_maquinas')
+    
+    # Mantener en la misma pagina
+    page = request.GET.get('page', 1)
+    return redirect(f"{reverse('gestion_maquinas')}?page={page}")
