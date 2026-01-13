@@ -30,6 +30,7 @@ class VTMan(models.Model):
     formula = models.CharField(db_column='Formula', max_length=100, null=True, blank=True)
     articulo = models.CharField(db_column='Articulo', max_length=100, null=True, blank=True)
     articulod = models.CharField(db_column='Articulod', max_length=255, null=True, blank=True)
+    op_usuario = models.CharField(db_column='Op_usuario', max_length=100, null=True, blank=True)
 
     class Meta:
         managed = False

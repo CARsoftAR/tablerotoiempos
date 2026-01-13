@@ -32,6 +32,7 @@ def dashboard_produccion(request):
     
     fecha_target_start = None
     fecha_target_end = None
+    view_type = request.GET.get('view', 'machines')
     is_viewing_today = False
 
     if start_param and end_param:
@@ -101,7 +102,7 @@ def dashboard_produccion(request):
     ).order_by('id_maquina', '-fecha', '-hora_fin').values(
         'id_maquina', 'tiempo_minutos', 'tiempo_cotizado', 'cantidad_producida',
         'es_proceso', 'es_interrupcion', 'observaciones', 'fecha', 'id_orden', 'operacion',
-        'articulod', 'id_operacion'
+        'articulod', 'id_operacion', 'op_usuario'
     )
 
     kpi_por_maquina = {}
@@ -143,6 +144,7 @@ def dashboard_produccion(request):
     global_repro_time = 0.0 # Horas de reproceso
 
     machine_orders = {} 
+    kpi_por_personal = {}
 
     for reg in registros_data:
         mid = reg['id_maquina']
@@ -221,6 +223,31 @@ def dashboard_produccion(request):
         elif reg['es_interrupcion']:
             data['tiempo_paradas'] += duracion
             global_downtime += duracion
+
+        # --- Lógica por Personal ---
+        uid = reg.get('op_usuario') or 'SIN IDENTIFICAR'
+        if uid not in kpi_por_personal:
+            kpi_por_personal[uid] = {
+                'id_personal': uid,
+                'nombre_personal': uid,
+                'tiempo_operativo': 0.0,
+                'tiempo_paradas': 0.0,
+                'tiempo_cotizado': 0.0,
+                'cantidad_producida': 0.0,
+                'cantidad_rechazada': 0.0,
+            }
+        
+        upers = kpi_por_personal[uid]
+        if is_repro:
+            upers['cantidad_rechazada'] += qty
+        else:
+            upers['cantidad_producida'] += qty
+            upers['tiempo_cotizado'] += std_mins
+        
+        if reg['es_proceso']:
+            upers['tiempo_operativo'] += duracion
+        elif reg['es_interrupcion']:
+            upers['tiempo_paradas'] += duracion
 
     # 3. Calcular KPIs finales
     lista_kpis = []
@@ -324,7 +351,59 @@ def dashboard_produccion(request):
         total_horas_disp += t_disp_periodo 
         global_downtime += max(0, (t_disp_periodo - t_op_hrs) * 60)
 
-    # 4. Globales
+    # 4. Calcular KPIs finales por Personal
+    lista_kpis_personal = []
+    total_hrs_std_p = 0.0
+    total_hrs_prod_p = 0.0
+    total_hrs_disp_p = 0.0
+
+    count_p = len(dias_periodo)
+    for uid, data in kpi_por_personal.items():
+        t_op_hrs = data['tiempo_operativo'] / 60.0
+        t_std_hrs = data['tiempo_cotizado'] / 60.0
+        qty = data['cantidad_producida']
+        
+        # Turno promedio para personal (9hs por día trabajado o del periodo)
+        # Aquí asumimos 9hs por cada día que el personal registró algo
+        t_disp_p = 9.0 * count_p 
+        if t_disp_p < t_op_hrs: t_disp_p = t_op_hrs
+        
+        availability = (t_op_hrs / t_disp_p) * 100.0 if t_disp_p > 0 else 0.0
+        performance = (t_std_hrs / t_op_hrs) * 100.0 if t_op_hrs > 0 else 0.0
+        total_p = qty + data['cantidad_rechazada']
+        quality = (qty / total_p * 100.0) if total_p > 0 else 100.0
+        oee = (availability * performance * quality) / 10000.0
+
+        def format_time_display(hours_val):
+            if time_format == 'decimal': return f"{hours_val:.2f}"
+            total_minutes = hours_val * 60
+            h = int(total_minutes // 60)
+            m = int(round(total_minutes % 60))
+            if m == 60: h += 1; m = 0
+            return f"{h} hs {m} min" if h > 0 else f"{m} min"
+
+        lista_kpis_personal.append({
+            'id_personal': uid,
+            'nombre_personal': uid,
+            'oee': round(oee, 2),
+            'availability': round(availability, 2),
+            'performance': round(performance, 2),
+            'quality': round(quality, 2),
+            'horas_std': t_std_hrs,
+            'horas_prod': t_op_hrs,
+            'qty': qty,
+            'rejected_qty': data['cantidad_rechazada'],
+            'std_formatted': format_time_display(t_std_hrs),
+            'prod_formatted': format_time_display(t_op_hrs),
+            'is_active_production': t_op_hrs > 0.001
+        })
+        total_hrs_std_p += t_std_hrs
+        total_hrs_prod_p += t_op_hrs
+        total_hrs_disp_p += t_disp_p
+
+    lista_kpis_personal.sort(key=lambda x: x['oee'], reverse=True)
+
+    # 5. Globales Máquinas
     # Sumar el tiempo sin asignar a los acumuladores de tiempo real/std para que coincida con ERP
     # Ya lo sumamos arriba en el loop previo? No, arriba solo sumamos unassigned_time/std/qty
     
@@ -354,6 +433,16 @@ def dashboard_produccion(request):
     # Nuevo: Tiempo Estándar Total (Yellow ERP)
     global_standard_time = total_horas_std
 
+    # Globales Personal
+    if total_hrs_disp_p > 0:
+        oee_p = (total_hrs_std_p / total_hrs_disp_p) * 100.0
+        avail_p = (total_hrs_prod_p / total_hrs_disp_p) * 100.0
+    else:
+        oee_p = avail_p = 0.0
+    
+    perf_p = (total_hrs_std_p / total_hrs_prod_p) * 100.0 if total_hrs_prod_p > 0 else 0.0
+    qual_p = avg_quality # Usamos la misma global de calidad por ahora
+
     for kpi in lista_kpis:
         kpi['is_active_production'] = kpi['horas_prod'] > 0.001
     
@@ -370,6 +459,38 @@ def dashboard_produccion(request):
         h, mins = divmod(int(round(m_raw)), 60)
         return f"{h} hs {mins} min" if h > 0 else f"{mins} min"
 
+    resumen_maquinas = {
+        'promedio_oee': round(promedio_oee, 2),
+        'avg_availability': round(avg_availability, 2),
+        'avg_performance': round(avg_performance, 2),
+        'avg_quality': round(avg_quality, 2),
+        'avg_rejected': round(100.0 - avg_quality, 2) if total_piezas_real > 0 else 0.0,
+        'avg_downtime': round(res_avg_downtime, 2),
+        'maquinas_activas': maquinas_activas,
+        'total_maquinas': total_maquinas,
+        'global_planned_formatted': fmt_mins_global(total_horas_disp * 60),
+        'global_actual_formatted': fmt_mins_global(total_horas_prod * 60),
+        'global_standard_formatted': fmt_mins_global(total_horas_std * 60),
+        'global_downtime_formatted': fmt_mins_global(global_downtime),
+        'global_planned_qty': round(global_actual_qty / (avg_performance/100)) if avg_performance > 0 else 0,
+        'global_actual_qty': round(global_actual_qty, 1),
+        'global_rejected_qty': round(global_rejected_qty, 1),
+        'global_repro_time_formatted': fmt_mins_global(global_repro_time),
+        'unassigned_std_formatted': fmt_mins_global(unassigned_std),
+    }
+
+    resumen_personal_dict = {
+        'promedio_oee': round(oee_p, 2),
+        'avg_availability': round(avail_p, 2),
+        'avg_performance': round(perf_p, 2),
+        'avg_quality': round(qual_p, 2),
+        'global_planned_formatted': fmt_mins_global(total_hrs_disp_p * 60),
+        'global_actual_formatted': fmt_mins_global(total_hrs_prod_p * 60),
+        'global_standard_formatted': fmt_mins_global(total_hrs_std_p * 60),
+        'global_actual_qty': round(global_actual_qty, 1),
+        'global_rejected_qty': round(global_rejected_qty, 1),
+    }
+
     context = {
         'kpis': lista_kpis,
         'fecha_target': fecha_target_start,
@@ -377,28 +498,11 @@ def dashboard_produccion(request):
         'is_today': is_viewing_today,
         'is_range': (fecha_target_start != fecha_target_end),
         'time_format': time_format,
-        'resumen': {
-            'promedio_oee': round(promedio_oee, 2),
-            'avg_availability': round(avg_availability, 2),
-            'avg_performance': round(avg_performance, 2),
-            'avg_quality': round(avg_quality, 2),
-            'avg_rejected': round(100.0 - avg_quality, 2) if total_piezas_real > 0 else 0.0,
-            'avg_downtime': round(res_avg_downtime, 2),
-            'maquinas_activas': maquinas_activas,
-            'total_maquinas': total_maquinas,
-            'global_planned_formatted': fmt_mins_global(total_horas_disp * 60),
-            'global_actual_formatted': fmt_mins_global(total_horas_prod * 60),
-            'global_standard_formatted': fmt_mins_global(total_horas_std * 60),
-            'global_downtime_formatted': fmt_mins_global(global_downtime),
-            'global_planned_qty': round(global_actual_qty / (avg_performance/100)) if avg_performance > 0 else 0,
-            'global_actual_qty': round(global_actual_qty, 1),
-            'global_rejected_qty': round(global_rejected_qty, 1),
-            'global_repro_time_formatted': fmt_mins_global(global_repro_time),
-            # Tiempos Sin Asignar (para la tarjeta aparte)
-            'unassigned_time_formatted': fmt_mins_global(unassigned_time),
-            'unassigned_qty': round(unassigned_qty, 1),
-            'unassigned_std_formatted': fmt_mins_global(unassigned_std),
-        }
+        'resumen': resumen_maquinas,
+        'view_type': view_type,
+        'resumen_activo': resumen_personal_dict if view_type == 'personnel' else resumen_maquinas,
+        'kpis_personal': lista_kpis_personal,
+        'resumen_personal': resumen_personal_dict
     }
     return render(request, 'dashboard/produccion.html', context)
 
