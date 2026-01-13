@@ -35,7 +35,7 @@
         <nav class="flex-1 overflow-y-auto py-6 px-3 space-y-2">
             <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 mb-2">Principal</div>
             
-            <a href="#" class="flex items-center gap-3 px-3 py-3 rounded-lg bg-indigo-600 shadow-lg shadow-indigo-900/50 text-white font-medium group">
+            <a href="{% url 'dashboard_produccion' %}" class="flex items-center gap-3 px-3 py-3 rounded-lg {% if request.resolver_match.url_name == 'dashboard_produccion' or request.resolver_match.url_name == 'home' %}bg-indigo-600 shadow-lg shadow-indigo-900/50 text-white{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %} font-medium group transition-all">
                 <i class="fas fa-chart-line w-6 text-center"></i>
                 Producción
             </a>
@@ -50,11 +50,11 @@
 
             <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 mt-8 mb-2">Administración</div>
             
-            <a href="#" class="flex items-center gap-3 px-3 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors group">
+            <a href="{% url 'gestion_personal' %}" class="flex items-center gap-3 px-3 py-3 rounded-lg {% if 'gestion_personal' in request.resolver_match.url_name or 'operario' in request.resolver_match.url_name %}bg-blue-600 shadow-lg shadow-blue-900/40 text-white{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %} transition-all group">
                 <i class="fas fa-users w-6 text-center group-hover:text-blue-400 transition-colors"></i>
                 Personal
             </a>
-            <a href="#" class="flex items-center gap-3 px-3 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors group">
+            <a href="{% url 'gestion_maquinas' %}" class="flex items-center gap-3 px-3 py-3 rounded-lg {% if 'maquina' in request.resolver_match.url_name %}bg-slate-700 text-white{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %} transition-all group">
                 <i class="fas fa-cog w-6 text-center group-hover:text-slate-200 transition-colors"></i>
                 Configuración
             </a>

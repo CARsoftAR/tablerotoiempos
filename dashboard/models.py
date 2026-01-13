@@ -81,3 +81,19 @@ class MaquinaConfig(models.Model):
 
     def __str__(self):
         return f"{self.nombre} ({self.id_maquina})"
+
+class OperarioConfig(models.Model):
+    # Sin 'use_db', irá a 'default' que es MySQL
+    legajo = models.CharField(max_length=50, unique=True, verbose_name="Legajo")
+    nombre = models.CharField(max_length=150, verbose_name="Nombre Completo")
+    sector = models.CharField(max_length=100, default="PRODUCCION", verbose_name="Sector")
+    activo = models.BooleanField(default=True, verbose_name="Activo")
+
+    class Meta:
+        managed = True
+        db_table = 'operario_config'
+        verbose_name = 'Configuración de Operario'
+        verbose_name_plural = 'Configuraciones de Operarios'
+
+    def __str__(self):
+        return f"{self.nombre} ({self.legajo})"

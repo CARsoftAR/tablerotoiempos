@@ -1,8 +1,9 @@
+import json
 from django.shortcuts import render, redirect, get_object_or_404
 from django.db.models import Sum, Q, F
 from django.utils import timezone
 from datetime import timedelta
-from .models import VTMan, Maquina, MaquinaConfig
+from .models import VTMan, Maquina, MaquinaConfig, OperarioConfig
 from django.contrib import messages
 
 def dashboard_produccion(request):
@@ -92,6 +93,17 @@ def dashboard_produccion(request):
             if not conf.activa: maquinas_inactivas_ids.add(conf.id_maquina)
     except: pass 
 
+    # 1.5 Obtener nombres y configuración de operarios
+    nombres_operarios = {}
+    operarios_activos_ids = set()
+    try:
+        operarios_db = OperarioConfig.objects.all()
+        for o in operarios_db:
+            nombres_operarios[o.legajo] = o.nombre
+            if o.activo and o.sector == 'PRODUCCION':
+                operarios_activos_ids.add(o.legajo)
+    except: pass
+
     fecha_str = fecha_target_start.strftime('%Y-%m-%d')
 
     # Forzar comparación de FECHA como cadena o usando extra() para evitar el desplazamiento de zona horaria de Django
@@ -99,10 +111,10 @@ def dashboard_produccion(request):
     registros_data = VTMan.objects.extra(
         where=["CONVERT(date, FECHA) = %s"],
         params=[fecha_str]
-    ).order_by('id_maquina', '-fecha', '-hora_fin').values(
+    ).order_by('hora_inicio').values(
         'id_maquina', 'tiempo_minutos', 'tiempo_cotizado', 'cantidad_producida',
         'es_proceso', 'es_interrupcion', 'observaciones', 'fecha', 'id_orden', 'operacion',
-        'articulod', 'id_operacion', 'op_usuario'
+        'articulod', 'id_operacion', 'op_usuario', 'id_concepto', 'hora_inicio', 'hora_fin'
     )
 
     kpi_por_maquina = {}
@@ -125,10 +137,11 @@ def dashboard_produccion(request):
                 'tiempo_cotizado': 0.0,
                 'cantidad_producida': 0.0,
                 'cantidad_rechazada': 0.0,
-                'latest_obs': None,
+                'latest_obs': '',
                 'latest_date': None,
                 'current_order': '---',
-                'is_found_online': False # Se decidirá abajo
+                'is_found_online': False,
+                'audit_log': []
             }
 
     # Acumuladores Globales
@@ -161,6 +174,7 @@ def dashboard_produccion(request):
         raw_obs = str(reg.get('observaciones') or "").strip().upper()
 
         non_prod_keywords = ['REPROCESO', 'RETRABAJO']
+        descanso_keywords = ['DESCANSO', 'ALMUERZO', 'PAUSA']
         
         is_repro = (
             raw_id_op in non_prod_keywords or 
@@ -168,12 +182,20 @@ def dashboard_produccion(request):
             any(k in raw_art_d for k in non_prod_keywords) or
             any(k in raw_obs for k in non_prod_keywords)
         )
+
+        is_descanso = (
+            raw_op_d in descanso_keywords or
+            any(k in raw_art_d for k in descanso_keywords) or
+            any(k in raw_obs for k in descanso_keywords)
+        )
         
         # El 'ONLINE' a veces trae cantidad 1 para marcar actividad, pero no es producción real terminada
         is_online_record = (raw_obs == 'ONLINE')
 
         # 1. Caso: Sin Asignar (Máquina vacía o inactiva)
-        if not mid or mid in maquinas_inactivas_ids:
+        is_unassigned = (not mid or mid in maquinas_inactivas_ids)
+        
+        if is_unassigned:
             unassigned_time += duracion
             if reg['es_proceso']:
                 unassigned_process_time += duracion
@@ -187,72 +209,159 @@ def dashboard_produccion(request):
                 unassigned_qty += qty
                 global_actual_qty += qty
                 unassigned_std += std_mins
-            continue
-
-        # 2. Caso: Máquina Asignada
-        if mid not in kpi_por_maquina:
-             kpi_por_maquina[mid] = {
-                'id_maquina': mid,
-                'nombre_maquina': nombres_maquinas.get(mid, mid),
-                'tiempo_operativo': 0.0, 
-                'tiempo_paradas': 0.0,
-                'tiempo_cotizado': 0.0, 
-                'cantidad_producida': 0.0,
-                'cantidad_rechazada': 0.0,
-                'latest_obs': None,
-                'latest_date': None,
-                'current_order': '---',
-                'is_found_online': False
-            }
-
-        data = kpi_por_maquina[mid]
         
-        if data['latest_obs'] is None:
-            data['latest_obs'] = str(reg['observaciones']).strip().upper() if reg['observaciones'] else ""
-            data['latest_date'] = reg['fecha']
-            data['current_order'] = reg['id_orden']
+        # 2. Caso: Máquina Asignada (Solo si no es unassigned)
+        data = None
+        if not is_unassigned:
+            if mid not in kpi_por_maquina:
+                kpi_por_maquina[mid] = {
+                    'id_maquina': mid,
+                    'nombre_maquina': nombres_maquinas.get(mid, mid),
+                    'tiempo_operativo': 0.0, 
+                    'tiempo_paradas': 0.0,
+                    'tiempo_cotizado': 0.0, 
+                    'cantidad_producida': 0.0,
+                    'cantidad_rechazada': 0.0,
+                    'latest_obs': '',
+                    'latest_date': None,
+                    'current_order': '---',
+                    'is_found_online': False,
+                    'audit_log': []
+                }
 
-        if is_repro:
-            data['cantidad_rechazada'] += qty
-            global_rejected_qty += qty
-            global_repro_time += duracion
-            # El tiempo de reproceso cuenta como tiempo real de la máquina
-        else:
-            data['cantidad_producida'] += qty
-            global_actual_qty += qty
-            # El tiempo estándar solo suma para piezas de producción real
-            data['tiempo_cotizado'] += std_mins
-            global_planned_time += std_mins 
-        
-        if reg['es_proceso']:
-            data['tiempo_operativo'] += duracion
-            global_actual_time += duracion
-        elif reg['es_interrupcion']:
-            data['tiempo_paradas'] += duracion
-            global_downtime += duracion
+            data = kpi_por_maquina[mid]
+            
+            if not data['latest_obs'] and reg['observaciones']:
+                data['latest_obs'] = str(reg['observaciones']).strip().upper()
+                data['latest_date'] = reg['fecha']
+                data['current_order'] = reg['id_orden']
+            elif not data['current_order'] or data['current_order'] == '---':
+                data['current_order'] = reg['id_orden']
+                data['latest_date'] = reg['fecha']
+
+            if is_repro:
+                data['cantidad_rechazada'] += qty
+                global_rejected_qty += qty
+                global_repro_time += duracion
+            elif is_descanso:
+                # El descanso NO suma cantidad ni tiempo cotizado
+                pass
+            else:
+                data['cantidad_producida'] += qty
+                global_actual_qty += qty
+                data['tiempo_cotizado'] += std_mins
+                global_planned_time += std_mins 
+            
+            # Cálculo de Tiempos
+            if is_descanso:
+                # El descanso se cuenta como Parada (Interrupción) para no matar el rendimiento
+                data['tiempo_paradas'] += duracion
+                global_downtime += duracion
+            elif reg['es_proceso']:
+                data['tiempo_operativo'] += duracion
+                global_actual_time += duracion
+            elif reg['es_interrupcion']:
+                data['tiempo_paradas'] += duracion
+                global_downtime += duracion
 
         # --- Lógica por Personal ---
-        uid = reg.get('op_usuario') or 'SIN IDENTIFICAR'
+        # ATENCIÓN: En este ERP, el ID de la persona (legajo) viene en 'id_concepto',
+        # mientras que 'op_usuario' es la persona que cargó la orden (supervisor/administración).
+        uid = str(reg.get('id_concepto') or '').strip()
+        if not uid or uid == 'None':
+            uid = 'SIN IDENTIFICAR'
+            
         if uid not in kpi_por_personal:
             kpi_por_personal[uid] = {
                 'id_personal': uid,
-                'nombre_personal': uid,
+                'nombre_personal': nombres_operarios.get(uid, f"Operario {uid}"),
                 'tiempo_operativo': 0.0,
                 'tiempo_paradas': 0.0,
                 'tiempo_cotizado': 0.0,
                 'cantidad_producida': 0.0,
                 'cantidad_rechazada': 0.0,
+                'latest_obs': '',
+                'latest_machine': '',
+                'current_order': '',
+                'articulos': {}, # { nombre: {qty, std} }
+                'descanso_mins': 0.0,
+                'descanso_qty': 0.0,
+                'has_any_obs': False,
+                'audit_log': []
             }
+        
+        per = kpi_por_personal[uid]
+        obs_val = str(reg.get('observaciones') or "").strip()
+        reg_time = reg.get('hora_inicio') or reg.get('fecha')
+
+        # Actualizar lo más reciente (que no sea descanso)
+        if not is_descanso:
+            if not per.get('max_time') or (reg_time and per['max_time'] and reg_time > per['max_time']):
+                per['max_time'] = reg_time
+                per['latest_obs'] = (obs_val or str(reg['articulod'] or "")).strip().upper()
+                per['latest_machine'] = mid
+                per['current_order'] = reg['id_orden']
+            elif not per.get('max_time'): # Si es el primero que vemos
+                per['max_time'] = reg_time
+                per['latest_obs'] = (obs_val or str(reg['articulod'] or "")).strip().upper()
+                per['latest_machine'] = mid
+                per['current_order'] = reg['id_orden']
+        elif not per.get('latest_obs'):
+            # Si solo hay descansos por ahora, guardamos uno como fallback pero seguimos buscando
+            per['latest_obs'] = (obs_val or str(reg['articulod'] or "")).strip().upper()
+            per['latest_machine'] = mid
+            per['current_order'] = reg['id_orden']
+        
+        if obs_val:
+            per['has_any_obs'] = True
+
+        h_inicio = reg.get('hora_inicio')
+        h_fin = reg.get('hora_fin')
+        intervalo = "--:--"
+        if h_inicio:
+            intervalo = h_inicio.strftime('%H:%M')
+            if h_fin:
+                intervalo += f" - {h_fin.strftime('%H:%M')}"
+
+        # Guardar en log (con fecha real para ordenar luego)
+        log_entry = {
+            'fecha_dt': reg_time,
+            'fecha': intervalo,
+            'maquina': mid or 'S/A',
+            'orden': reg['id_orden'] or '---',
+            'articulo': reg['articulod'][:30] if reg['articulod'] else 'Sin Artículo',
+            'tiempo': round(duracion, 1),
+            'std': round(std_mins, 1),
+            'cant': round(qty, 1),
+            'es_interrupcion': reg['es_interrupcion'] or is_descanso,
+            'obs': reg['observaciones'] or ''
+        }
+        if data:
+            data['audit_log'].append(log_entry)
+        per['audit_log'].append(log_entry)
         
         upers = kpi_por_personal[uid]
         if is_repro:
             upers['cantidad_rechazada'] += qty
+        elif is_descanso:
+            # No suma cantidad
+            pass
         else:
             upers['cantidad_producida'] += qty
             upers['tiempo_cotizado'] += std_mins
         
-        if reg['es_proceso']:
+        if is_descanso:
+            upers['tiempo_paradas'] += duracion
+            upers['descanso_mins'] += duracion
+            upers['descanso_qty'] += qty
+        elif reg['es_proceso']:
             upers['tiempo_operativo'] += duracion
+            # Sumar al detalle de artículos
+            art_name = str(reg.get('articulod') or "Sin Artículo").strip().upper()
+            if art_name not in upers['articulos']:
+                upers['articulos'][art_name] = {'qty': 0.0, 'std': 0.0}
+            upers['articulos'][art_name]['qty'] += qty
+            upers['articulos'][art_name]['std'] += std_mins
         elif reg['es_interrupcion']:
             upers['tiempo_paradas'] += duracion
 
@@ -336,6 +445,24 @@ def dashboard_produccion(request):
             if m == 60: h += 1; m = 0
             return f"{h} hs {m} min" if h > 0 else f"{m} min"
 
+        # Preparar log para serializar SIN modificar el original (porque se comparte con personal)
+        serializable_log = []
+        for entry in data['audit_log']:
+            copy_entry = entry.copy()
+            copy_entry.pop('fecha_dt', None)
+            serializable_log.append(copy_entry)
+
+        # Ordenar log por fecha (usando los originales que si tienen fecha_dt)
+        sorted_log = sorted(serializable_log, key=lambda x: data['audit_log'][serializable_log.index(x)]['fecha_dt'] if data['audit_log'][serializable_log.index(x)]['fecha_dt'] else datetime.datetime.min)
+        
+        # Simplificamos: Ordenamos el original y sacamos copia limpia
+        temp_sorted = sorted(data['audit_log'], key=lambda x: x['fecha_dt'] if x['fecha_dt'] else datetime.datetime.min)
+        clean_log = []
+        for entry in temp_sorted:
+            c = entry.copy()
+            c.pop('fecha_dt', None)
+            clean_log.append(c)
+
         lista_kpis.append({
             'id_maquina': mid,
             'nombre_maquina': data['nombre_maquina'],
@@ -349,8 +476,13 @@ def dashboard_produccion(request):
             'horas_prod': t_op_hrs,
             'qty': data['cantidad_producida'],
             'rejected_qty': data['cantidad_rechazada'],
-            'std_formatted': format_time_display(t_std_hrs),
             'prod_formatted': format_time_display(t_op_hrs),
+            'std_formatted': format_time_display(t_std_hrs),
+            'latest_obs': data['latest_obs'],
+            'latest_date': data['latest_date'],
+            'current_order': data['current_order'],
+            'is_active_production': t_op_hrs > 0.001,
+            'audit_log': json.dumps(clean_log)
         })
         
         total_horas_std += t_std_hrs
@@ -389,9 +521,60 @@ def dashboard_produccion(request):
             if m == 60: h += 1; m = 0
             return f"{h} hs {m} min" if h > 0 else f"{m} min"
 
+        # FILTRADO: Solo mostrar personal activo y de producción
+        if uid not in operarios_activos_ids:
+            continue
+
+        # Ordenar log por fecha y sacar copia limpia (para no romper logs compartidos ni dar KeyError)
+        temp_sorted_p = sorted(data['audit_log'], key=lambda x: x['fecha_dt'] if x.get('fecha_dt') else datetime.datetime.min)
+        clean_log_p = []
+        for entry in temp_sorted_p:
+            c = entry.copy()
+            c.pop('fecha_dt', None)
+            clean_log_p.append(c)
+
+        # Cálculo de desviaciones
+        factor_velocidad = (t_op_hrs / t_std_hrs) if t_std_hrs > 0.001 else 0
+
+        # Generar Resumen de Análisis
+        art_summary = []
+        for a_name, a_data in data['articulos'].items():
+            std_per_unit_mins = (a_data['std'] / a_data['qty']) if a_data['qty'] > 0 else 0
+            art_summary.append(f"• {a_data['qty']:.1f} unidades de '{a_name}' (Estándar: {std_per_unit_mins:.2f} min/pz)")
+
+        analysis_text = f"<span class='report-main-title'>DIAGNÓSTICO DETALLADO: {data['nombre_personal']}</span>\n\n"
+        
+        analysis_text += f"<span class='text-indigo-400 font-bold'>1. VERIFICACIÓN DE TIEMPOS (TABLERO VS ERP):</span>\n"
+        analysis_text += f"    • <span class='text-slate-200'>Tiempo Estándar:</span> <span class='text-white font-bold'>{t_std_hrs:.2f} hs</span> (Total acumulado por piezas).\n"
+        analysis_text += f"    • <span class='text-slate-200'>Tiempo Real (Operativo):</span> <span class='text-white font-bold'>{t_op_hrs:.2f} hs</span> (Tiempo frente a máquina).\n"
+        analysis_text += f"    • <span class='text-slate-200'>Tiempo Fichado (Turno):</span> <span class='text-white font-bold'>{t_disp_p:.2f} hs</span> (Base de cálculo de disponibilidad).\n\n"
+
+        analysis_text += f"<span class='text-indigo-400 font-bold'>2. CÁLCULO DE LA EFICIENCIA ({oee:.1f}%):</span>\n"
+        analysis_text += f"    El sistema cruza la Disponibilidad y el Rendimiento:\n"
+        analysis_text += f"    • <span class='text-emerald-400 font-bold'>Disponibilidad ({availability:.1f}%):</span> Resulta de {t_op_hrs:.2f} hrs trabajadas / {t_disp_p:.2f} hrs de turno.\n"
+        analysis_text += f"    • <span class='text-emerald-400 font-bold'>Rendimiento ({performance:.1f}%):</span> Resulta de {t_std_hrs:.2f} hrs estándar / {t_op_hrs:.2f} hrs reales.\n"
+        analysis_text += f"    • <span class='text-emerald-400 font-bold'>Eficiencia Final (OEE):</span> {availability:.1f}% x {performance:.1f}% = <span class='text-emerald-400 font-bold'>{oee:.1f}%</span>.\n\n"
+
+        analysis_text += f"<span class='text-indigo-400 font-bold'>3. DESGLOSE TÉCNICO DE PRODUCCIÓN:</span>\n"
+        art_indented = [f"    {a}" for a in art_summary]
+        analysis_text += "\n".join(art_indented) + "\n\n"
+
+        analysis_text += f"<span class='text-indigo-400 font-bold'>4. CONCLUSIÓN Y ANÁLISIS DE DESVÍO:</span>\n"
+        if factor_velocidad > 1.1:
+            analysis_text += f"    <i class='fas fa-exclamation-triangle text-amber-400 mr-2'></i>El operario trabajó a una velocidad <span class='text-amber-400 font-bold'>{factor_velocidad:.1f} veces menor</span> que la del tiempo estándar cargado en el sistema.\n"
+        elif 0 < factor_velocidad <= 0.9:
+            analysis_text += f"    <i class='fas fa-rocket text-emerald-400 mr-2'></i>El operario superó el estándar, trabajando un <span class='text-emerald-400 font-bold'>{((1-factor_velocidad)*100):.1f}% más rápido</span> de lo previsto.\n"
+        elif factor_velocidad == 0:
+            analysis_text += f"    No se registran tiempos estándar para los artículos producidos, lo que impide calcular el rendimiento real.\n"
+        else:
+            analysis_text += f"    El ritmo de trabajo se mantiene dentro de los parámetros estándar (Desvío menor al 10%).\n"
+
+        if not data['has_any_obs']:
+            analysis_text += f"\n    <span class='text-sky-300 italic'>Nota: No se detectaron observaciones manuales en los registros para este periodo.</span>"
+
         lista_kpis_personal.append({
             'id_personal': uid,
-            'nombre_personal': uid,
+            'nombre_personal': f"{data['nombre_personal']} ({uid})",
             'oee': round(oee, 2),
             'availability': round(availability, 2),
             'performance': round(performance, 2),
@@ -402,7 +585,12 @@ def dashboard_produccion(request):
             'rejected_qty': data['cantidad_rechazada'],
             'std_formatted': format_time_display(t_std_hrs),
             'prod_formatted': format_time_display(t_op_hrs),
-            'is_active_production': t_op_hrs > 0.001
+            'is_active_production': t_op_hrs > 0.001,
+            'latest_obs': data['latest_obs'],
+            'latest_machine': data['latest_machine'],
+            'current_order': data['current_order'],
+            'audit_log': json.dumps(clean_log_p),
+            'analysis_summary': analysis_text
         })
         total_hrs_std_p += t_std_hrs
         total_hrs_prod_p += t_op_hrs
@@ -600,7 +788,7 @@ def editar_maquina(request, pk):
             messages.success(request, 'Máquina actualizada.')
             
             # Redirigir a la misma página del listado
-            return redirect(f"{reverse('gestion_maquinas')}?page={page}")
+            return redirect(reverse('gestion_maquinas') + f'?page={page}')
             
         except Exception as e:
             messages.error(request, f'Error al actualizar: {e}')
@@ -611,7 +799,70 @@ def eliminar_maquina(request, pk):
     maquina = get_object_or_404(MaquinaConfig, pk=pk)
     maquina.delete()
     messages.success(request, 'Máquina eliminada.')
+    return redirect('gestion_maquinas')
+
+# --- GESTIÓN DE PERSONAL (MySQL) ---
+
+def gestion_personal(request):
+    operarios_list = OperarioConfig.objects.all().order_by('nombre')
     
-    # Mantener en la misma pagina
-    page = request.GET.get('page', 1)
-    return redirect(f"{reverse('gestion_maquinas')}?page={page}")
+    # Paginación: 6 operarios por página
+    paginator = Paginator(operarios_list, 6) 
+    page = request.GET.get('page')
+    
+    try:
+        operarios = paginator.page(page)
+    except PageNotAnInteger:
+        operarios = paginator.page(1)
+    except EmptyPage:
+        operarios = paginator.page(paginator.num_pages)
+
+    return render(request, 'dashboard/gestion_personal.html', {'operarios': operarios})
+
+def crear_operario(request):
+    if request.method == 'POST':
+        try:
+            legajo = request.POST.get('legajo').strip()
+            nombre = request.POST.get('nombre').strip()
+            sector = request.POST.get('sector').strip() or "PRODUCCION"
+            
+            if not legajo or not nombre:
+                messages.error(request, 'El Legajo y Nombre son obligatorios.')
+                return render(request, 'dashboard/form_operario.html')
+
+            OperarioConfig.objects.create(
+                legajo=legajo,
+                nombre=nombre,
+                sector=sector,
+                activo=request.POST.get('activo') == 'on'
+            )
+            messages.success(request, 'Operario creado correctamente.')
+            return redirect('gestion_personal')
+        except Exception as e:
+             messages.error(request, f'Error al crear operario: {e}')
+             
+    return render(request, 'dashboard/form_operario.html')
+
+def editar_operario(request, pk):
+    operario = get_object_or_404(OperarioConfig, pk=pk)
+    page = request.GET.get('page') or request.POST.get('page') or 1
+    
+    if request.method == 'POST':
+        try:
+            operario.legajo = request.POST.get('legajo').strip()
+            operario.nombre = request.POST.get('nombre').strip()
+            operario.sector = request.POST.get('sector').strip() or "PRODUCCION"
+            operario.activo = request.POST.get('activo') == 'on'
+            operario.save()
+            messages.success(request, 'Operario actualizado.')
+            return redirect(reverse('gestion_personal') + f'?page={page}')
+        except Exception as e:
+             messages.error(request, f'Error al actualizar: {e}')
+    
+    return render(request, 'dashboard/form_operario.html', {'operario': operario, 'page': page})
+
+def eliminar_operario(request, pk):
+    operario = get_object_or_404(OperarioConfig, pk=pk)
+    operario.delete()
+    messages.success(request, 'Operario eliminado.')
+    return redirect('gestion_personal')
