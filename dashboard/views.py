@@ -464,8 +464,8 @@ def dashboard_produccion(request):
             clean_log.append(c)
 
         lista_kpis.append({
-            'id_maquina': mid,
-            'nombre_maquina': data['nombre_maquina'],
+            'id': mid,
+            'name': data['nombre_maquina'],
             'is_online': is_online,
             'oee': round(oee, 2),
             'availability': round(availability, 2),
@@ -474,11 +474,12 @@ def dashboard_produccion(request):
             'id_orden': data['current_order'],
             'horas_std': t_std_hrs,
             'horas_prod': t_op_hrs,
-            'qty': data['cantidad_producida'],
+            'actual_qty': data['cantidad_producida'],
             'rejected_qty': data['cantidad_rechazada'],
-            'prod_formatted': format_time_display(t_op_hrs),
-            'std_formatted': format_time_display(t_std_hrs),
-            'latest_obs': data['latest_obs'],
+            'actual_time_formatted': format_time_display(t_op_hrs),
+            'standard_time_formatted': format_time_display(t_std_hrs),
+            'last_reason': data['latest_obs'],
+            'last_machine': None,
             'latest_date': data['latest_date'],
             'current_order': data['current_order'],
             'is_active_production': t_op_hrs > 0.001,
@@ -573,21 +574,21 @@ def dashboard_produccion(request):
             analysis_text += f"\n    <span class='text-sky-300 italic'>Nota: No se detectaron observaciones manuales en los registros para este periodo.</span>"
 
         lista_kpis_personal.append({
-            'id_personal': uid,
-            'nombre_personal': f"{data['nombre_personal']} ({uid})",
+            'id': uid,
+            'name': f"{data['nombre_personal']} ({uid})",
             'oee': round(oee, 2),
             'availability': round(availability, 2),
             'performance': round(performance, 2),
             'quality': round(quality, 2),
             'horas_std': t_std_hrs,
             'horas_prod': t_op_hrs,
-            'qty': qty,
+            'actual_qty': qty,
             'rejected_qty': data['cantidad_rechazada'],
-            'std_formatted': format_time_display(t_std_hrs),
-            'prod_formatted': format_time_display(t_op_hrs),
+            'standard_time_formatted': format_time_display(t_std_hrs),
+            'actual_time_formatted': format_time_display(t_op_hrs),
             'is_active_production': t_op_hrs > 0.001,
-            'latest_obs': data['latest_obs'],
-            'latest_machine': data['latest_machine'],
+            'last_reason': data['latest_obs'],
+            'last_machine': data['latest_machine'],
             'current_order': data['current_order'],
             'audit_log': json.dumps(clean_log_p),
             'analysis_summary': analysis_text
@@ -641,7 +642,7 @@ def dashboard_produccion(request):
     for kpi in lista_kpis:
         kpi['is_active_production'] = kpi['horas_prod'] > 0.001
     
-    lista_kpis.sort(key=lambda x: (not x['is_online'], not x['is_active_production'], x['id_maquina']))
+    lista_kpis.sort(key=lambda x: (not x['is_online'], not x['is_active_production'], x['id']))
 
     maquinas_activas = sum(1 for m in lista_kpis if m['is_online'])
     total_maquinas = len(lista_kpis)
@@ -662,7 +663,7 @@ def dashboard_produccion(request):
         'avg_rejected': round(100.0 - avg_quality, 2) if total_piezas_real > 0 else 0.0,
         'avg_downtime': round(res_avg_downtime, 2),
         'perf_multiplier': round(avg_performance / 100.0, 1) if avg_performance > 0 else 0.0,
-        'maquinas_activas': maquinas_activas,
+        'active_count': maquinas_activas,
         'total_maquinas': total_maquinas,
         'global_planned_formatted': fmt_mins_global(total_horas_disp * 60),
         'global_actual_formatted': fmt_mins_global(total_horas_prod * 60),
@@ -693,6 +694,7 @@ def dashboard_produccion(request):
         'global_actual_qty': round(global_actual_qty, 1),
         'global_rejected_qty': round(global_rejected_qty, 1),
         'global_total_qty': round(global_actual_qty + global_rejected_qty, 1),
+        'active_count': len(lista_kpis_personal),
     }
 
     context = {
@@ -705,6 +707,7 @@ def dashboard_produccion(request):
         'resumen': resumen_maquinas,
         'view_type': view_type,
         'resumen_activo': resumen_personal_dict if view_type == 'personnel' else resumen_maquinas,
+        'cards_data': lista_kpis_personal if view_type == 'personnel' else lista_kpis,
         'kpis_personal': lista_kpis_personal,
         'resumen_personal': resumen_personal_dict
     }
@@ -866,3 +869,185 @@ def eliminar_operario(request, pk):
     operario.delete()
     messages.success(request, 'Operario eliminado.')
     return redirect('gestion_personal')
+
+def obtener_auditoria(request):
+    """ API para el modal de auditoría individual """
+    import datetime
+    from django.http import JsonResponse
+    from dateutil import parser
+    from django.utils import timezone
+    from django.db.models import Q
+    
+    uid = request.GET.get('id')
+    view_type = request.GET.get('view', 'machines')
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date') or start_date
+    
+    if not uid or not start_date:
+        return JsonResponse({'status': 'error', 'message': 'Faltan parámetros'})
+    
+    try:
+        d1 = parser.parse(start_date).date()
+        d2 = parser.parse(end_date).date()
+    except:
+        return JsonResponse({'status': 'error', 'message': 'Fechas inválidas'})
+        
+    start_utc = timezone.make_aware(datetime.datetime.combine(d1, datetime.time.min))
+    end_utc = timezone.make_aware(datetime.datetime.combine(d2, datetime.time.max))
+    
+    # Sincronizamos con la lógica de fecha del dashboard principal
+    # para evitar desplazamientos de zona horaria (CONVERT(date, FECHA))
+    start_str = d1.strftime('%Y-%m-%d')
+    end_str = d2.strftime('%Y-%m-%d')
+    
+    # Extraemos registros igual que en el dashboard para paridad total
+    registros_raw = VTMan.objects.extra(
+        where=["CONVERT(date, FECHA) >= %s AND CONVERT(date, FECHA) <= %s"],
+        params=[start_str, end_str]
+    ).order_by('fecha')
+
+    if view_type == 'personnel':
+        # Buscamos registros que contengan el legajo (uid)
+        registros_raw = registros_raw.filter(id_concepto__contains=uid)
+    else:
+        registros_raw = registros_raw.filter(id_maquina=uid)
+        
+    audit_log = []
+    total_std_mins = 0.0
+    total_prod_mins = 0.0
+    total_qty = 0.0
+    total_rejected_qty = 0.0
+    articulos_resumen = {} # { name: {qty, std_sum} }
+    
+    for reg_obj in registros_raw:
+        # Replicamos el strip() del dashboard para asegurar paridad total
+        reg_uid = str(reg_obj.id_concepto or '').strip()
+        if view_type == 'personnel' and reg_uid != uid:
+            continue
+            
+        duracion = reg_obj.tiempo_minutos or 0.0
+        qty = reg_obj.cantidad_producida or 0.0
+        std_hrs = reg_obj.tiempo_cotizado or 0.0
+        std_mins = std_hrs * 60.0
+        
+        raw_id_op = str(reg_obj.id_operacion or "").strip().upper()
+        raw_art_d = str(reg_obj.articulod or "").upper()
+        raw_op_d = str(reg_obj.operacion or "").strip().upper()
+        raw_obs = str(reg_obj.observaciones or "").strip().upper()
+
+        non_prod_keywords = ['REPROCESO', 'RETRABAJO']
+        descanso_keywords = ['DESCANSO', 'ALMUERZO', 'PAUSA']
+        
+        is_repro = (
+            raw_id_op in non_prod_keywords or 
+            raw_op_d in non_prod_keywords or
+            any(k in raw_art_d for k in non_prod_keywords) or
+            any(k in raw_obs for k in non_prod_keywords)
+        )
+        is_descanso = (
+            raw_op_d in descanso_keywords or
+            any(k in raw_art_d for k in descanso_keywords) or
+            any(k in raw_obs for k in descanso_keywords)
+        )
+
+        h_inicio = reg_obj.hora_inicio
+        if not h_inicio: h_inicio = reg_obj.fecha
+        
+        audit_log.append({
+            'hora': h_inicio.strftime('%H:%M:%S') if h_inicio else '--:--:--',
+            'maquina': reg_obj.id_maquina or 'S/A',
+            'orden': reg_obj.id_orden or '---',
+            'articulo': reg_obj.articulod[:40] if reg_obj.articulod else 'Sin Artículo',
+            'cliente': '-',
+            'cantidad': round(qty, 1),
+            'tiempo': f"{round(duracion, 1)} min",
+            'estandar': f"{round(std_mins, 1)} min",
+            'observacion': reg_obj.observaciones or ''
+        })
+        
+        if is_repro:
+            total_rejected_qty += qty
+        elif not is_descanso:
+            total_qty += qty
+            total_std_mins += std_mins
+            if reg_obj.es_proceso:
+                total_prod_mins += duracion
+                art_name = reg_obj.articulod or "Sin Nombre"
+                if art_name not in articulos_resumen:
+                    articulos_resumen[art_name] = {'qty': 0, 'std_sum': 0}
+                articulos_resumen[art_name]['qty'] += qty
+                articulos_resumen[art_name]['std_sum'] += std_mins
+
+    # Planned Time (Shift) - Match dashboard logic
+    now_arg = timezone.localtime(timezone.now())
+    is_viewing_today = (d1 == now_arg.date())
+    if is_viewing_today:
+        start_shift = now_arg.replace(hour=6, minute=1, second=0, microsecond=0)
+        total_disp_mins = max(0, (now_arg - start_shift).total_seconds() / 60.0) if now_arg > start_shift else 0.01
+    else:
+        total_disp_mins = 9 * 60.0 # 9hs standard
+
+    if total_disp_mins < total_prod_mins: total_disp_mins = total_prod_mins
+
+    # RICH DIAGNOSIS
+    availability = (total_prod_mins / total_disp_mins * 100) if total_disp_mins > 0 else 0
+    performance = (total_std_mins / total_prod_mins * 100) if total_prod_mins > 0 else 0
+    oee = (availability * performance / 100)
+    
+    analysis = f"<span class='text-indigo-400 font-bold'>DIAGNÓSTICO DETALLADO: {request.GET.get('id')}</span>\n\n"
+    
+    analysis += "<span class='text-sky-400 font-bold'>1. VERIFICACIÓN DE TIEMPOS (TABLERO VS ERP):</span>\n"
+    analysis += f"    • Tiempo Estándar: <span class='text-white font-bold'>{total_std_mins/60.0:.2f} hs</span> (Total acumulado por piezas).\n"
+    analysis += f"    • Tiempo Real (Operativo): <span class='text-white font-bold'>{total_prod_mins/60.0:.2f} hs</span> (Tiempo frente a máquina).\n"
+    analysis += f"    • Tiempo Fichado (Turno): <span class='text-white font-bold'>{total_disp_mins/60.0:.2f} hs</span> (Base de cálculo de disponibilidad).\n\n"
+    
+    analysis += f"<span class='text-sky-400 font-bold'>2. CÁLCULO DE LA EFICIENCIA ({oee:.1f}%):</span>\n"
+    analysis += "    El sistema cruza la Disponibilidad y el Rendimiento:\n"
+    analysis += f"    • Disponibilidad (<span class='text-emerald-400 font-bold'>{availability:.1f}%</span>): Resulta de {total_prod_mins/60.0:.2f} hrs trabajadas / {total_disp_mins/60.0:.2f} hrs de turno.\n"
+    analysis += f"    • Rendimiento (<span class='text-emerald-400 font-bold'>{performance:.1f}%</span>): Resulta de {total_std_mins/60.0:.2f} hrs estándar / {total_prod_mins/60.0:.2f} hrs reales.\n"
+    analysis += f"    • Eficiencia Final (OEE): {availability:.1f}% x {performance:.1f}% = <span class='text-emerald-400 font-bold'>{oee:.1f}%</span>.\n\n"
+    
+    analysis += "<span class='text-sky-400 font-bold'>3. DESGLOSE TÉCNICO DE PRODUCCIÓN:</span>\n"
+    if not articulos_resumen:
+        analysis += "    • No se detectó producción computable en este periodo.\n"
+    else:
+        for name, data in articulos_resumen.items():
+            std_pz = (data['std_sum'] / data['qty']) if data['qty'] > 0 else 0
+            analysis += f"    • <span class='text-white'>{data['qty']:.1f}</span> unidades de <span class='text-indigo-300'>'{name}'</span> (Estándar: {std_pz:.2f} min/pz)\n"
+    
+    analysis += "\n<span class='text-sky-400 font-bold'>4. CONCLUSIÓN Y ANÁLISIS DE DESVÍO:</span>\n"
+    
+    # Puntaje basado en OEE (más representativo de lo que ve el usuario)
+    rating = ""
+    rating_color = ""
+    if oee >= 85:
+        rating = "MUY BUENO"
+        rating_color = "text-emerald-400"
+    elif oee >= 70:
+        rating = "BUENO"
+        rating_color = "text-sky-400"
+    elif oee >= 50:
+        rating = "REGULAR"
+        rating_color = "text-amber-400"
+    else:
+        rating = "MALO"
+        rating_color = "text-red-400"
+
+    analysis += f"    Puntaje General (OEE): <span class='{rating_color} font-black underline'>{rating}</span>\n"
+
+    if performance > 110:
+        analysis += f"    <i class='fas fa-rocket text-emerald-400 mr-2'></i>El recurso superó el estándar teórico en un <span class='text-emerald-400 font-bold'>{(performance-100):.1f}%</span>.\n"
+    elif performance < 90 and performance > 0:
+         desvio_val = 100 - performance
+         analysis += f"    <i class='fas fa-exclamation-triangle text-amber-400 mr-2'></i>Se detectó un desvío del <span class='text-amber-400 font-bold'>{desvio_val:.1f}%</span> (Ritmo inferior al estándar).\n"
+         analysis += f"    <span class='text-slate-400 text-[10px]'>    * El desvío indica que se produjo un {desvio_val:.1f}% menos de lo esperado en el tiempo trabajado.</span>\n"
+    elif performance == 0:
+        analysis += "    Puntaje: <span class='text-slate-500 font-bold italic'>SIN TIEMPOS RECARGADOS</span>\n"
+    else:
+        analysis += "    El ritmo de trabajo se mantiene dentro de los parámetros estándar.\n"
+
+    return JsonResponse({
+        'status': 'success',
+        'audit_log': audit_log,
+        'analysis': analysis
+    })

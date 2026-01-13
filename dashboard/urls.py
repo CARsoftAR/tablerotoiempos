@@ -13,4 +13,7 @@ urlpatterns = [
     path('gestion-personal/crear/', views.crear_operario, name='crear_operario'),
     path('gestion-personal/editar/<int:pk>/', views.editar_operario, name='editar_operario'),
     path('gestion-personal/eliminar/<int:pk>/', views.eliminar_operario, name='eliminar_operario'),
+
+    # API Auditoría
+    path('obtener-auditoria/', views.obtener_auditoria, name='obtener_auditoria'),
 ]
