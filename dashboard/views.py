@@ -135,6 +135,8 @@ def dashboard_produccion(request):
     unassigned_time = 0.0
     unassigned_qty = 0.0
     unassigned_std = 0.0
+    unassigned_interruption_time = 0.0
+    unassigned_process_time = 0.0
 
     global_planned_time = 0.0 
     global_actual_time = 0.0 
@@ -173,6 +175,11 @@ def dashboard_produccion(request):
         # 1. Caso: Sin Asignar (Máquina vacía o inactiva)
         if not mid or mid in maquinas_inactivas_ids:
             unassigned_time += duracion
+            if reg['es_proceso']:
+                unassigned_process_time += duracion
+            elif reg['es_interrupcion']:
+                unassigned_interruption_time += duracion
+
             if is_repro:
                 global_rejected_qty += qty
                 global_repro_time += duracion
@@ -466,6 +473,7 @@ def dashboard_produccion(request):
         'avg_quality': round(avg_quality, 2),
         'avg_rejected': round(100.0 - avg_quality, 2) if total_piezas_real > 0 else 0.0,
         'avg_downtime': round(res_avg_downtime, 2),
+        'perf_multiplier': round(avg_performance / 100.0, 1) if avg_performance > 0 else 0.0,
         'maquinas_activas': maquinas_activas,
         'total_maquinas': total_maquinas,
         'global_planned_formatted': fmt_mins_global(total_horas_disp * 60),
@@ -475,7 +483,13 @@ def dashboard_produccion(request):
         'global_planned_qty': round(global_actual_qty / (avg_performance/100)) if avg_performance > 0 else 0,
         'global_actual_qty': round(global_actual_qty, 1),
         'global_rejected_qty': round(global_rejected_qty, 1),
+        'global_total_qty': round(global_actual_qty + global_rejected_qty, 1),
         'global_repro_time_formatted': fmt_mins_global(global_repro_time),
+        'unassigned_qty': round(unassigned_qty, 1),
+        'unassigned_time_formatted': fmt_mins_global(unassigned_time),
+        'unassigned_time_decimal': round(unassigned_time / 60.0, 2),
+        'unassigned_process_formatted': fmt_mins_global(unassigned_process_time),
+        'unassigned_interruption_formatted': fmt_mins_global(unassigned_interruption_time),
         'unassigned_std_formatted': fmt_mins_global(unassigned_std),
     }
 
@@ -484,11 +498,13 @@ def dashboard_produccion(request):
         'avg_availability': round(avail_p, 2),
         'avg_performance': round(perf_p, 2),
         'avg_quality': round(qual_p, 2),
+        'perf_multiplier': round(perf_p / 100.0, 1) if perf_p > 0 else 0.0,
         'global_planned_formatted': fmt_mins_global(total_hrs_disp_p * 60),
         'global_actual_formatted': fmt_mins_global(total_hrs_prod_p * 60),
         'global_standard_formatted': fmt_mins_global(total_hrs_std_p * 60),
         'global_actual_qty': round(global_actual_qty, 1),
         'global_rejected_qty': round(global_rejected_qty, 1),
+        'global_total_qty': round(global_actual_qty + global_rejected_qty, 1),
     }
 
     context = {

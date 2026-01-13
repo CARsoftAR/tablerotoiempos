@@ -44,7 +44,7 @@
     </div>
     <p id="popover-text" class="text-slate-300 text-[13px] leading-relaxed"></p>
     <div class="mt-3 pt-2 border-t border-slate-700/50 text-[10px] text-slate-500 font-bold uppercase flex justify-between">
-        <span>Fuente: ERP Logbook</span>
+        <span>FUENTE: ERP EQUAL</span>
         <span id="popover-calc-type">Cálculo Automático</span>
     </div>
 </div>
@@ -117,24 +117,10 @@
         </div>
         
         <!-- Tab Navigation -->
-        <div class="flex border-b border-slate-200 gap-2">
-            <button onclick="switchTab('tab-global')" id="btn-tab-global" 
-                class="px-6 py-3 font-bold text-sm uppercase tracking-wider transition-all border-b-2 border-blue-600 text-blue-600">
-                <i class="fas fa-chart-pie mr-2"></i>Resumen Global
-            </button>
-            <button onclick="switchTab('tab-detalle')" id="btn-tab-detalle" 
-                class="px-6 py-3 font-bold text-sm uppercase tracking-wider transition-all border-b-2 border-transparent text-slate-400 hover:text-slate-600">
-                <i class="fas fa-list mr-2"></i>Detalle por Máquina
-            </button>
-        </div>
-    </div>
-
-        <div id="tab-global" class="tab-content space-y-6">
-
-        <!-- 1. OVERALL OEE PANEL -->
-        
-        <div class="bg-slate-800 rounded-lg shadow-2xl overflow-hidden border border-slate-700 animate-in fade-in zoom-in duration-500">
-            <!-- Header Azul -->
+        <!-- 1. OVERALL OEE PANEL (ALWAYS VISIBLE) -->
+        {% localize off %}
+        <div class="bg-slate-800 rounded-lg shadow-2xl overflow-hidden border border-slate-700 mb-6 animate-in fade-in zoom-in duration-500">
+            <!-- Header Azul/Indigo -->
             <div class="bg-gradient-to-r {% if view_type == 'personnel' %}from-indigo-600 to-blue-700{% else %}from-blue-600 to-indigo-700{% endif %} px-6 py-3 flex justify-between items-center group">
                 <h2 class="text-white font-bold text-lg tracking-wide explain-trigger"
                     data-title="OEE Global {% if view_type == 'personnel' %}(Personal){% else %}(Máquinas){% endif %}"
@@ -163,7 +149,6 @@
             </div>
 
             <!-- Gauges Row -->
-            {% localize off %}
             <div class="p-8 grid grid-cols-1 md:grid-cols-3 gap-8 text-center text-white">
                 
                 <!-- Availability Gauge -->
@@ -188,7 +173,7 @@
                      data-title="Rendimiento Global"
                      data-icon="fa-speedometer"
                      data-color="bg-lime-500"
-                     data-desc="Velocidad de ejecución comparada con el tiempo estándar de Yellow.">
+                     data-desc="Velocidad de ejecución comparada con el tiempo estándar de EQUAL.">
                      <div class="relative w-48 h-24 overflow-hidden mb-2">
                         <div class="absolute w-48 h-48 rounded-full border-[15px] border-slate-700 box-border"></div>
                         <div class="absolute w-48 h-48 rounded-full border-[15px] border-lime-400 box-border" 
@@ -217,50 +202,119 @@
                     <span class="text-amber-500 font-bold uppercase tracking-wider text-sm">Calidad</span>
                 </div>
             </div>
-            {% endlocalize %}
         </div>
 
-        <!-- 2. DETAILED METRICS CARDS -->
+        <!-- TABS SELECTOR -->
+        <div class="bg-white rounded-lg shadow-sm border border-slate-200 mb-6 sticky top-2 z-30">
+            <div class="flex border-b border-slate-200 gap-2">
+                <button onclick="switchTab('tab-global')" id="btn-tab-global" 
+                    class="px-6 py-3 font-bold text-sm uppercase tracking-wider transition-all border-b-2 border-blue-600 text-blue-600">
+                    <i class="fas fa-chart-pie mr-2"></i>Resumen General
+                </button>
+                <button onclick="switchTab('tab-detalle')" id="btn-tab-detalle" 
+                    class="px-6 py-3 font-bold text-sm uppercase tracking-wider transition-all border-b-2 border-transparent text-slate-400 hover:text-slate-600">
+                    <i class="fas fa-list mr-2"></i>Detalle {% if view_type == 'personnel' %}Individual{% else %}por Máquina{% endif %}
+                </button>
+            </div>
+        </div>
+
+        <div id="tab-global" class="tab-content space-y-6">
+            <!-- 2. DETAILED METRICS CARDS -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <!-- Availability Card -->
-            <div class="bg-slate-800 rounded-lg overflow-hidden border border-slate-700 shadow-xl">
-                <div class="bg-teal-600 px-4 py-2 font-bold text-white tracking-wide">Disponibilidad</div>
+            <div class="bg-slate-800 rounded-lg overflow-hidden border border-slate-700 shadow-xl explain-trigger cursor-help"
+                 data-title="Análisis de Disponibilidad"
+                 data-desc="<b>¿Cómo se llega a este {{ resumen_activo.avg_availability }}%?</b><br><br>
+                            1. <b>Tiempo Esperado:</b> {{ resumen_activo.global_planned_formatted }}<br>
+                            <i>(Es el tiempo total del turno/periodo elegido)</i><br><br>
+                            2. <b>Tiempo Real (Presencia):</b> {{ resumen_activo.global_actual_formatted }}<br>
+                            <i>(Es el tiempo de labor que los operarios realmente reportaron)</i><br><br>
+                            <b>Fórmula:</b><br>
+                            (T. Real / T. Esperado) × 100">
+                <div class="bg-teal-600 px-4 py-2 font-bold text-white tracking-wide flex justify-between items-center text-sm md:text-base">
+                    <span>Disponibilidad</span>
+                    <div class="flex items-center gap-3">
+                        <span class="text-white/90">{{ resumen_activo.avg_availability }}%</span>
+                        <button onclick="event.stopPropagation(); openAvailModal();" 
+                                class="w-6 h-6 rounded-full bg-white/20 hover:bg-white/40 text-white flex items-center justify-center transition-all shadow-sm group/btn" 
+                                title="Auditar Disponibilidad">
+                            <i class="fas fa-microscope text-[10px] group-hover/btn:scale-110 transition-transform"></i>
+                        </button>
+                    </div>
+                </div>
                 <div class="p-6 space-y-4">
                     <div class="flex justify-between items-end group">
-                        <span class="text-slate-400 text-base font-medium explain-trigger" data-title="Turno Esperado" data-desc="Horas que se espera que el {% if view_type == 'personnel' %}operario trabaje (9hs/día){% else %}equipo esté activo según horario{% endif %}.">Esperado</span>
+                        <span class="text-slate-400 text-base font-medium">Esperado</span>
                         <span class="text-white font-bold text-xl">{{ resumen_activo.global_planned_formatted }}</span>
                     </div>
                     <div class="flex justify-between items-end group">
-                        <span class="text-slate-400 text-base font-medium explain-trigger" data-title="Presencia Real" data-desc="Tiempo de actividad efectiva reportada en el ERP.">Real</span>
+                        <span class="text-slate-400 text-base font-medium">Real</span>
                         <span class="text-white font-bold text-xl">{{ resumen_activo.global_actual_formatted }}</span>
                     </div>
-                    <div class="relative h-2 rounded bg-slate-700 overflow-hidden mt-4">
-                        <div class="absolute top-0 left-0 h-full bg-teal-500" style="width: {{ resumen_activo.avg_availability }}%"></div>
+                    <div class="relative h-3 rounded-full bg-slate-900 overflow-hidden mt-4 border border-slate-700">
+                        <div class="absolute top-0 left-0 h-full bg-teal-400 shadow-[0_0_10px_rgba(45,212,191,0.5)] transition-all duration-1000" style="width: {{ resumen_activo.avg_availability }}%"></div>
                     </div>
                 </div>
             </div>
 
             <!-- Performance Card -->
-            <div class="bg-slate-800 rounded-lg overflow-hidden border border-slate-700 shadow-xl">
-                 <div class="bg-lime-600 px-4 py-2 font-bold text-white tracking-wide">Rendimiento</div>
+            <div class="relative bg-slate-800 rounded-lg overflow-hidden border border-slate-700 shadow-xl explain-trigger cursor-help"
+                 data-title="Análisis de Rendimiento"
+                 data-desc="<b>¿Cómo se llega a este {{ resumen_activo.avg_performance }}%?</b><br><br>
+                            1. <b>Cant. Real:</b> {{ resumen_activo.global_actual_qty }} pz<br>
+                            <i>(Piezas buenas terminadas)</i><br><br>
+                            2. <b>T. Estándar:</b> {{ resumen_activo.global_standard_formatted }}<br>
+                            <i>(Es el tiempo que el sistema dice que 'deberían' haber tardado esas piezas)</i><br><br>
+                            <b>Fórmula:</b><br>
+                            (T. Estándar / T. Real) × 100">
+                
+                <div class="bg-lime-600 px-4 py-2 font-bold text-white tracking-wide flex justify-between items-center">
+                    <span>Rendimiento</span>
+                    <div class="flex items-center gap-3">
+                        <span class="text-white/90">{{ resumen_activo.avg_performance }}%</span>
+                        <!-- Audit Button -->
+                        <button onclick="event.stopPropagation(); openPerfModal();" 
+                                class="w-6 h-6 rounded-full bg-white/20 hover:bg-white/40 text-white flex items-center justify-center transition-all shadow-sm group/btn" 
+                                title="Auditar este valor">
+                            <i class="fas fa-microscope text-[10px] group-hover/btn:scale-110 transition-transform"></i>
+                        </button>
+                    </div>
+                </div>
                 <div class="p-6 space-y-4">
                     <div class="flex justify-between items-end group">
-                        <span class="text-slate-400 text-base font-medium explain-trigger" data-title="Piezas Buenas" data-desc="Producción total aceptada.">Cant. Real</span>
+                        <span class="text-slate-400 text-base font-medium">Cant. Real</span>
                         <span class="text-white font-bold text-xl">{{ resumen_activo.global_actual_qty }}</span>
                     </div>
                     <div class="flex justify-between items-end group">
-                        <span class="text-slate-400 text-base font-medium explain-trigger" data-title="Horas Estándar" data-desc="Tiempo acumulado que 'valen' las piezas según Yellow.">T. Estándar</span>
+                        <span class="text-slate-400 text-base font-medium">T. Estándar</span>
                         <span class="text-white font-bold text-xl">{{ resumen_activo.global_standard_formatted }}</span>
                     </div>
-                    <div class="relative h-2 rounded bg-slate-700 overflow-hidden mt-4">
-                        <div class="absolute top-0 left-0 h-full bg-lime-500" style="width: {% if resumen_activo.avg_performance > 100 %}100{% else %}{{ resumen_activo.avg_performance }}{% endif %}%"></div>
+                    <div class="relative h-3 rounded-full bg-slate-900 overflow-hidden mt-4 border border-slate-700">
+                        <div class="absolute top-0 left-0 h-full bg-lime-400 shadow-[0_0_10px_rgba(163,230,53,0.5)] transition-all duration-1000" style="width: {% if resumen_activo.avg_performance > 100 %}100{% else %}{{ resumen_activo.avg_performance }}{% endif %}%"></div>
                     </div>
                 </div>
             </div>
 
             <!-- Quality Card -->
-            <div class="bg-slate-800 rounded-lg overflow-hidden border border-slate-700 shadow-xl">
-                 <div class="bg-amber-500 px-4 py-2 font-bold text-white tracking-wide">Calidad</div>
+            <div class="bg-slate-800 rounded-lg overflow-hidden border border-slate-700 shadow-xl explain-trigger cursor-help"
+                 data-title="Análisis de Calidad"
+                 data-desc="<b>¿Cómo se llega a este {{ resumen_activo.avg_quality }}%?</b><br><br>
+                            1. <b>Total Producido:</b> {{ resumen_activo.global_total_qty }} pz<br>
+                            <i>(Suma de Piezas Buenas + Rechazos)</i><br><br>
+                            2. <b>Piezas Buenas:</b> {{ resumen_activo.global_actual_qty }} pz<br><br>
+                            <b>Fórmula:</b><br>
+                            (P. Buenas / P. Totales) × 100">
+                 <div class="bg-amber-500 px-4 py-2 font-bold text-white tracking-wide flex justify-between items-center text-sm md:text-base">
+                    <span>Calidad</span>
+                    <div class="flex items-center gap-3">
+                        <span class="text-white/90">{{ resumen_activo.avg_quality }}%</span>
+                        <button onclick="event.stopPropagation(); openQualityModal();" 
+                                class="w-6 h-6 rounded-full bg-white/20 hover:bg-white/40 text-white flex items-center justify-center transition-all shadow-sm group/btn" 
+                                title="Auditar Calidad">
+                            <i class="fas fa-microscope text-[10px] group-hover/btn:scale-110 transition-transform"></i>
+                        </button>
+                    </div>
+                 </div>
                 <div class="p-6 space-y-4">
                     <div class="flex justify-between items-end">
                         <span class="text-slate-400 text-base font-medium">Aceptación</span>
@@ -270,14 +324,30 @@
                         <span class="text-rose-400 font-medium">Rechazo</span>
                         <span class="text-rose-400 font-bold text-xl">{{ resumen_activo.global_rejected_qty }} pz</span>
                     </div>
-                    <div class="relative h-2 rounded bg-slate-700 overflow-hidden mt-4">
-                        <div class="absolute top-0 left-0 h-full bg-amber-500" style="width: {{ resumen_activo.avg_quality }}%"></div>
+                    <div class="relative h-3 rounded-full bg-slate-900 overflow-hidden mt-4 border border-slate-700">
+                        <div class="absolute top-0 left-0 h-full bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)] transition-all duration-1000" style="width: {{ resumen_activo.avg_quality }}%"></div>
                     </div>
                 </div>
             </div>
 
             <!-- Comparison Card -->
-            <div class="bg-slate-800 rounded-lg overflow-hidden border border-slate-700 shadow-xl border-dashed">
+            <div class="relative bg-slate-800 rounded-lg overflow-hidden border border-slate-700 shadow-xl border-dashed explain-trigger cursor-help"
+                 data-title="Análisis de Rendimiento"
+                 data-desc="<b>¿Cómo se llega a este {{ resumen_activo.avg_performance }}%?</b><br><br>
+                            1. <b>Tiempo Estándar (Meta):</b> {{ resumen_activo.global_standard_formatted }}<br>
+                            <i>(Es el tiempo que el sistema dice que 'deberían' haber tardado las piezas logradas)</i><br><br>
+                            2. <b>Tiempo Real (Uso):</b> {{ resumen_activo.global_actual_formatted }}<br>
+                            <i>(Es el tiempo de labor que los operarios realmente ficharon)</i><br><br>
+                            <b>Fórmula:</b><br>
+                            (T. Estándar / T. Real) × 100">
+                
+                <!-- Audit Button -->
+                <button onclick="event.stopPropagation(); openPerfModal();" 
+                        class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-slate-700/50 hover:bg-emerald-500 text-slate-300 hover:text-white flex items-center justify-center transition-all shadow-lg z-20 group/btn" 
+                        title="Auditar este valor">
+                    <i class="fas fa-microscope text-[10px] group-hover/btn:scale-110 transition-transform"></i>
+                </button>
+
                  <div class="bg-slate-600 px-4 py-2 font-bold text-white tracking-wide">Eficiencia vs Meta</div>
                 <div class="p-6 flex flex-col justify-center items-center h-full">
                     <span class="text-4xl font-black {% if resumen_activo.avg_performance >= 100 %}text-emerald-400{% elif resumen_activo.avg_performance >= 80 %}text-amber-400{% else %}text-rose-400{% endif %}">
@@ -291,8 +361,16 @@
         {% if view_type == 'machines' %}
         <!-- Mini-Unassigned Badge -->
         <div class="flex justify-end">
-            <div class="bg-slate-800 px-4 py-2 rounded-lg border border-slate-700 shadow-lg flex items-center gap-4 animate-in fade-in slide-in-from-right-4 duration-700">
-                <span class="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Registros sin Máquina:</span>
+            <div class="bg-slate-800 px-4 py-2 rounded-lg border border-slate-700 shadow-lg flex items-center gap-4 animate-in fade-in slide-in-from-right-4 duration-700 explain-trigger cursor-help"
+                 data-title="Registros sin Máquina"
+                 data-desc="<b>Análisis de la Diferencia:</b><br>
+                            1. <b>Piezas:</b> {{ resumen.unassigned_qty }} pz (Coincidencia Perfecta)<br>
+                            2. <b>Tiempo Total:</b> {{ resumen.unassigned_time_formatted }} ({{ resumen.unassigned_time_decimal }} en ERP)<br><br>
+                            <b>Desglose Interno:</b><br>
+                            - Tiempo de Proceso: {{ resumen.unassigned_process_formatted }}<br>
+                            - Interrupciones: {{ resumen.unassigned_interruption_formatted }}<br><br>
+                            <i>Pista: El tablero suma Procesos + Interrupciones para reflejar el 100% del tiempo de operario 'huérfano'.</i>">
+                <span class="text-yellow-400 text-[11px] uppercase font-black tracking-widest">Sin Asignación:</span>
                 <span class="text-white font-mono font-bold">{{ resumen.unassigned_qty }} pz</span>
                 <span class="h-4 w-px bg-slate-700"></span>
                 <span class="text-amber-400 font-mono font-bold">{{ resumen.unassigned_time_formatted }}</span>
@@ -359,8 +437,8 @@
                                         <span class="text-teal-400">Disponibilidad</span>
                                         <span class="text-teal-400">{{ maquina.availability|floatformat:0 }}%</span>
                                     </div>
-                                    <div class="h-1.5 w-full bg-slate-700 rounded-full overflow-hidden">
-                                        <div class="h-full bg-teal-500 rounded-full" style="width: {{ maquina.availability }}%"></div>
+                                     <div class="h-2.5 w-full bg-slate-950/50 rounded-full overflow-hidden border border-slate-700/30">
+                                        <div class="h-full bg-teal-400 shadow-[0_0_8px_rgba(45,212,191,0.4)]" style="width: {{ maquina.availability }}%"></div>
                                     </div>
                                 </div>
                                 <!-- Performance -->
@@ -369,8 +447,18 @@
                                         <span class="text-purple-400">Rendimiento</span>
                                         <span class="text-purple-400">{{ maquina.performance|floatformat:0 }}%</span>
                                     </div>
-                                    <div class="h-1.5 w-full bg-slate-700 rounded-full overflow-hidden">
-                                        <div class="h-full bg-purple-500 rounded-full" style="width: {% if maquina.performance > 100 %}100{% else %}{{ maquina.performance }}{% endif %}%"></div>
+                                    <div class="h-2.5 w-full bg-slate-950/50 rounded-full overflow-hidden border border-slate-700/30">
+                                        <div class="h-full bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.4)]" style="width: {% if maquina.performance > 100 %}100{% else %}{{ maquina.performance }}{% endif %}%"></div>
+                                    </div>
+                                </div>
+                                <!-- Quality -->
+                                <div class="space-y-1">
+                                    <div class="flex justify-between text-[10px] font-bold uppercase tracking-tight">
+                                        <span class="text-amber-400">Calidad</span>
+                                        <span class="text-amber-400">{{ maquina.quality|floatformat:0 }}%</span>
+                                    </div>
+                                    <div class="h-2.5 w-full bg-slate-950/50 rounded-full overflow-hidden border border-slate-700/30">
+                                        <div class="h-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.4)]" style="width: {{ maquina.quality }}%"></div>
                                     </div>
                                 </div>
                             </div>
@@ -446,8 +534,8 @@
                                 <span>Disponibilidad</span>
                                 <span>{{ persona.availability|floatformat:0 }}%</span>
                             </div>
-                            <div class="h-1.5 w-full bg-slate-700 rounded-full overflow-hidden">
-                                <div class="h-full bg-teal-500 rounded-full" style="width: {{ persona.availability }}%"></div>
+                            <div class="h-2.5 w-full bg-slate-950 rounded-full overflow-hidden border border-slate-700/30">
+                                <div class="h-full bg-teal-400 shadow-[0_0_8px_rgba(45,212,191,0.4)]" style="width: {{ persona.availability }}%"></div>
                             </div>
                         </div>
                         <div class="space-y-1">
@@ -455,8 +543,17 @@
                                 <span>Rendimiento</span>
                                 <span>{{ persona.performance|floatformat:0 }}%</span>
                             </div>
-                            <div class="h-1.5 w-full bg-slate-700 rounded-full overflow-hidden">
-                                <div class="h-full bg-purple-500 rounded-full" style="width: {% if persona.performance > 100 %}100{% else %}{{ persona.performance }}{% endif %}%"></div>
+                            <div class="h-2.5 w-full bg-slate-950 rounded-full overflow-hidden border border-slate-700/30">
+                                <div class="h-full bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.4)]" style="width: {% if persona.performance > 100 %}100{% else %}{{ persona.performance }}{% endif %}%"></div>
+                            </div>
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[10px] font-bold uppercase text-amber-400">
+                                <span>Calidad</span>
+                                <span>{{ persona.quality|floatformat:0 }}%</span>
+                            </div>
+                            <div class="h-2.5 w-full bg-slate-950 rounded-full overflow-hidden border border-slate-700/30">
+                                <div class="h-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.4)]" style="width: {{ persona.quality }}%"></div>
                             </div>
                         </div>
                     </div>
@@ -470,6 +567,7 @@
             </div>
             {% endif %}
         </div> <!-- End tab-detalle -->
+        {% endlocalize %}
     </div>
 </div>
 
@@ -501,6 +599,37 @@ function switchTab(tabId) {
     localStorage.setItem('dashboardActiveTab', tabId);
 }
 
+    // Modal Control
+    function openPerfModal() {
+        document.getElementById('perf-audit-modal').classList.remove('hidden');
+        document.body.style.overflow = 'hidden'; // Prevent scroll
+    }
+
+    function closePerfModal() {
+        document.getElementById('perf-audit-modal').classList.add('hidden');
+        document.body.style.overflow = ''; // Restore scroll
+    }
+
+    // Availability Modal
+    function openAvailModal() {
+        document.getElementById('avail-audit-modal').classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+    function closeAvailModal() {
+        document.getElementById('avail-audit-modal').classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+
+    // Quality Modal
+    function openQualityModal() {
+        document.getElementById('quality-audit-modal').classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+    function closeQualityModal() {
+        document.getElementById('quality-audit-modal').classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+
 // Restore tab on load
 document.addEventListener('DOMContentLoaded', () => {
     const activeTab = localStorage.getItem('dashboardActiveTab') || 'tab-global';
@@ -521,7 +650,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const color = e.target.getAttribute('data-color') || 'bg-blue-600';
 
             popTitle.innerText = title;
-            popText.innerText = desc;
+            popText.innerHTML = desc;
             
             // Update Icon and Color
             popIcon.className = 'fas ' + (icon || 'fa-info-circle');
@@ -570,4 +699,186 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 </script>
+
+<!-- Performance Audit Modal -->
+<div id="perf-audit-modal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm hidden animate-in fade-in duration-300">
+    <div class="bg-slate-900 border border-slate-700 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+        <div class="bg-slate-800 px-6 py-4 border-b border-slate-700 flex justify-between items-center">
+            <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                <i class="fas fa-stethoscope text-emerald-400"></i> Auditoría de Rendimiento
+            </h3>
+            <button onclick="closePerfModal()" class="text-slate-400 hover:text-white transition-colors">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+        <div class="p-8 space-y-6 text-slate-300 overflow-y-auto max-h-[80vh]">
+            <p class="text-lg leading-relaxed">
+                Un rendimiento de <span class="font-bold text-white underline decoration-emerald-500">{{ resumen_activo.avg_performance }}%</span> 
+                {% if resumen_activo.avg_performance > 110 %}es un valor <span class="text-rose-400 font-bold uppercase">extremadamente alto</span> (más de lo esperado){% else %}es un valor dentro de los parámetros de productividad{% endif %} 
+                y matemáticamente significa una sola cosa: se produjo mucho más de lo que el estándar decía que se podía hacer en ese tiempo.
+            </p>
+            
+            <div class="bg-slate-950/50 p-6 rounded-xl border border-slate-800 space-y-4 shadow-inner">
+                <h4 class="font-bold text-white uppercase text-xs tracking-widest text-emerald-500 mb-2">Análisis de la Cuenta</h4>
+                <div class="space-y-3">
+                    <p><b class="text-slate-400">Meta (Tiempo Estándar):</b> El sistema dice que para hacer esas <span class="text-white font-bold">{{ resumen_activo.global_actual_qty }} piezas</span>, los operarios deberían haber tardado <span class="text-white font-bold">{{ resumen_activo.global_standard_formatted }}</span>.</p>
+                    <p><b class="text-slate-400">Realidad (Tiempo Real):</b> Sin embargo, los operarios reportaron que lo hicieron en solo <span class="text-white font-bold">{{ resumen_activo.global_actual_formatted }}</span> (aproximadamente).</p>
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                <h4 class="font-bold text-white flex items-center gap-2 text-lg">¿Por qué da tan alto en la realidad?</h4>
+                <div class="grid grid-cols-1 gap-3">
+                    <div class="flex gap-4 p-4 bg-slate-800/40 rounded-lg border border-slate-700/50 hover:bg-slate-800/60 transition-colors">
+                        <div class="text-2xl font-black text-amber-500 opacity-50">01</div>
+                        <div>
+                            <b class="text-white block mb-1">Estándar desactualizado</b>
+                            <p class="text-sm">Es la causa más común. El 'Tiempo Estándar' cargado en el ERP es muy 'generoso' o viejo. El sistema cree que la pieza es lenta de hacer, pero hoy en día se hace mucho más rápido por mejoras en el proceso.</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-4 p-4 bg-slate-800/40 rounded-lg border border-slate-700/50 hover:bg-slate-800/60 transition-colors">
+                        <div class="text-2xl font-black text-amber-500 opacity-50">02</div>
+                        <div>
+                            <b class="text-white block mb-1">Sub-reporte de tiempo</b>
+                            <p class="text-sm">El operario hizo las piezas, pero se olvidó de fichar el inicio o el fin de la tarea correctamente. Si trabajó 8 horas pero el sistema solo registró 3 horas de 'fichaje', el rendimiento se dispara porque parece que produjo el doble en la mitad del tiempo.</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-4 p-4 bg-slate-800/40 rounded-lg border border-slate-700/50 hover:bg-slate-800/60 transition-colors">
+                        <div class="text-2xl font-black text-amber-500 opacity-50">03</div>
+                        <div>
+                            <b class="text-white block mb-1">Cantidades acumuladas</b>
+                            <p class="text-sm">A veces se reportan piezas de varios días en un solo 'clic'. Si se reportan hoy piezas que llevaron 30 horas de trabajo previo pero solo se ficharon las horas de hoy, el sistema ve un rendimiento imposible de cumplir en un turno.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-6 border-t border-slate-700">
+                <p class="text-sm italic text-slate-400 bg-slate-950/30 p-4 rounded-lg">
+                    <b class="text-white not-italic">En resumen:</b> El tablero te está avisando que, según los papeles del sistema, tu gente es <span class="text-emerald-400 font-bold underline">{{ resumen_activo.perf_multiplier }} veces</span> más rápida de lo esperado. Si esto no es real, es una señal clara de que hay que corregir los tiempos estándar en el ERP o ajustar cómo están fichando los operarios.
+                </p>
+            </div>
+        </div>
+        <div class="bg-slate-800 px-6 py-4 flex justify-end">
+            <button onclick="closePerfModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-8 rounded-xl transition-all shadow-lg active:scale-95">
+                Cerrar Análisis
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Availability Audit Modal -->
+<div id="avail-audit-modal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm hidden animate-in fade-in duration-300">
+    <div class="bg-slate-900 border border-slate-700 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+        <div class="bg-slate-800 px-6 py-4 border-b border-slate-700 flex justify-between items-center">
+            <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                <i class="fas fa-clock text-teal-400"></i> Auditoría de Disponibilidad
+            </h3>
+            <button onclick="closeAvailModal()" class="text-slate-400 hover:text-white transition-colors">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+        <div class="p-8 space-y-6 text-slate-300 overflow-y-auto max-h-[80vh]">
+            <p class="text-lg leading-relaxed">
+                Tu disponibilidad promedio es del <span class="font-bold text-white underline decoration-teal-500">{{ resumen_activo.avg_availability }}%</span>. 
+                Esto mide qué tanto tiempo estuvieron los operarios reportando actividad frente al tiempo total del turno.
+            </p>
+            
+            <div class="bg-slate-950/50 p-6 rounded-xl border border-slate-800 space-y-4 shadow-inner">
+                <h4 class="font-bold text-white uppercase text-xs tracking-widest text-teal-500 mb-2">Análisis de Tiempos</h4>
+                <div class="space-y-3">
+                    <p><b class="text-slate-400">Tiempo Esperado:</b> Se calcula en base a los turnos configurados (ej: 9hs por persona/día). Total: <span class="text-white font-bold">{{ resumen_activo.global_planned_formatted }}</span>.</p>
+                    <p><b class="text-slate-400">Tiempo Real:</b> Es la suma de todos los fichajes de labor abiertos en el sistema. Total: <span class="text-white font-bold">{{ resumen_activo.global_actual_formatted }}</span>.</p>
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                <h4 class="font-bold text-white flex items-center gap-2 text-lg">¿Por qué la disponibilidad suele bajar?</h4>
+                <div class="grid grid-cols-1 gap-3">
+                    <div class="flex gap-4 p-4 bg-slate-800/40 rounded-lg border border-slate-700/50 hover:bg-slate-800/60 transition-colors">
+                        <div class="text-2xl font-black text-teal-500 opacity-50">01</div>
+                        <div>
+                            <b class="text-white block mb-1">Inicio/Cierre de sesión a destiempo</b>
+                            <p class="text-sm">Si el operario llega a las 6:00 pero ficha en el sistema a las 6:20, se pierden 20 minutos de disponibilidad aunque esté en la planta.</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-4 p-4 bg-slate-800/40 rounded-lg border border-slate-700/50 hover:bg-slate-800/60 transition-colors">
+                        <div class="text-2xl font-black text-teal-500 opacity-50">02</div>
+                        <div>
+                            <b class="text-white block mb-1">Paradas no registradas</b>
+                            <p class="text-sm">Si hay una interrupción pero no se carga en el sistema, ese tiempo queda 'en blanco' y baja la disponibilidad real reportada.</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-4 p-4 bg-slate-800/40 rounded-lg border border-slate-700/50 hover:bg-slate-800/60 transition-colors">
+                        <div class="text-2xl font-black text-teal-500 opacity-50">03</div>
+                        <div>
+                            <b class="text-white block mb-1">Desajuste de Jornada</b>
+                            <p class="text-sm">Si un día se trabaja menos horas por un motivo especial pero el sistema sigue esperando 9hs, la disponibilidad bajará automáticamente.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="bg-slate-800 px-6 py-4 flex justify-end">
+            <button onclick="closeAvailModal()" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-8 rounded-xl transition-all shadow-lg active:scale-95">
+                Cerrar Análisis
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Quality Audit Modal -->
+<div id="quality-audit-modal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm hidden animate-in fade-in duration-300">
+    <div class="bg-slate-900 border border-slate-700 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+        <div class="bg-slate-800 px-6 py-4 border-b border-slate-700 flex justify-between items-center">
+            <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                <i class="fas fa-check-double text-amber-400"></i> Auditoría de Calidad
+            </h3>
+            <button onclick="closeQualityModal()" class="text-slate-400 hover:text-white transition-colors">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+        <div class="p-8 space-y-6 text-slate-300 overflow-y-auto max-h-[80vh]">
+            <p class="text-lg leading-relaxed">
+                Tu índice de calidad es del <span class="font-bold text-white underline decoration-amber-500">{{ resumen_activo.avg_quality }}%</span>. 
+                Esto refleja el porcentaje de piezas logradas frente al total de intentos de producción.
+            </p>
+            
+            <div class="bg-slate-950/50 p-6 rounded-xl border border-slate-800 space-y-4 shadow-inner">
+                <h4 class="font-bold text-white uppercase text-xs tracking-widest text-amber-500 mb-2">Resumen de Piezas</h4>
+                <div class="space-y-3">
+                    <p><b class="text-slate-400">Total Producido:</b> <span class="text-white font-bold">{{ resumen_activo.global_total_qty }} pz</span> (Buenas + Rechazos).</p>
+                    <p><b class="text-slate-400">Aceptadas:</b> <span class="text-white font-bold">{{ resumen_activo.global_actual_qty }} pz</span> que pasaron el control.</p>
+                    <p><b class="text-slate-400">Rechazadas:</b> <span class="text-rose-400 font-bold">{{ resumen_activo.global_rejected_qty }} pz</span> informadas como scrap.</p>
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                <h4 class="font-bold text-white flex items-center gap-2 text-lg">Consideraciones de Calidad</h4>
+                <div class="grid grid-cols-1 gap-3">
+                    <div class="flex gap-4 p-4 bg-slate-800/40 rounded-lg border border-slate-700/50 hover:bg-slate-800/60 transition-colors">
+                        <div class="text-2xl font-black text-amber-500 opacity-50">01</div>
+                        <div>
+                            <b class="text-white block mb-1">Rechazos no informados</b>
+                            <p class="text-sm">Si la calidad da 100% pero en el tacho de scrap hay piezas, significa que no se están cargando los rechazos en el ERP. Esto 'infla' la calidad pero oculta el costo del desperdicio.</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-4 p-4 bg-slate-800/40 rounded-lg border border-slate-700/50 hover:bg-slate-800/60 transition-colors">
+                        <div class="text-2xl font-black text-amber-500 opacity-50">02</div>
+                        <div>
+                            <b class="text-white block mb-1">Piezas de retrabajo</b>
+                            <p class="text-sm">A veces se toma tiempo extra para 'arreglar' una pieza. Si la pieza se cuenta como buena pero llevó el doble de tiempo, tu Calidad se mantiene alta pero tu Rendimiento bajará.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="bg-slate-800 px-6 py-4 flex justify-end">
+            <button onclick="closeQualityModal()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 px-8 rounded-xl transition-all shadow-lg active:scale-95">
+                Cerrar Análisis
+            </button>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
