@@ -64,6 +64,15 @@
             padding: 32px 32px 0 32px;
         }
     }
+    /* Icon Pulse Animation */
+    @keyframes icon-pulse {
+        0% { transform: scale(1); filter: brightness(1); box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+        50% { transform: scale(1.08); filter: brightness(1.4); }
+        100% { transform: scale(1); filter: brightness(1); box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+    }
+    .animate-icon-pulse {
+        animation: icon-pulse 2s infinite ease-in-out;
+    }
 </style>
 
 <div id="global-popover" class="smart-popover glass-card rounded-xl p-4 hidden">
@@ -313,17 +322,17 @@
                     </div>
                 </div>
                 <div class="flex gap-2">
-                    <!-- Botón Estetoscopio (Ahora abre el Log Técnico/Tabla como pidió el usuario) -->
-                    <button onclick="openIndividualAudit('{{ item.id }}', '{{ item.name|escapejs }}', 'table')" 
-                            title="Ver Auditoría Técnica (Log)"
-                            class="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 text-teal-400 flex items-center justify-center hover:bg-teal-600 hover:text-white transition-all shadow-lg">
-                        <i class="fas fa-stethoscope text-xs"></i>
-                    </button>
                     <!-- Botón Cerebro (Ahora abre el Diagnóstico/Razonamiento como pidió el usuario) -->
                     <button onclick="openIndividualAudit('{{ item.id }}', '{{ item.name|escapejs }}', 'analysis')" 
                             title="Ver Diagnóstico de Desempeño"
                             class="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 text-indigo-400 flex items-center justify-center hover:bg-indigo-600 hover:text-white transition-all shadow-lg">
                         <i class="fas fa-brain text-xs"></i>
+                    </button>
+                    <!-- Botón Estetoscopio (Ahora abre el Log Técnico/Tabla como pidió el usuario) -->
+                    <button onclick="openIndividualAudit('{{ item.id }}', '{{ item.name|escapejs }}', 'table')" 
+                            title="Ver Auditoría Técnica (Log)"
+                            class="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 text-teal-400 flex items-center justify-center hover:bg-teal-600 hover:text-white transition-all shadow-lg">
+                        <i class="fas fa-stethoscope text-xs"></i>
                     </button>
                 </div>
             </div>
@@ -426,15 +435,15 @@
 
         <!-- VISTA 2: MÉTRICAS TÉCNICAS (NÚMEROS) -->
         <div id="report-metrics-view" class="flex-grow overflow-y-auto p-10 hidden bg-slate-900/50">
-            <div id="metrics-content" class="text-slate-200 text-sm whitespace-pre-line leading-relaxed max-w-4xl mx-auto font-mono"></div>
+            <div id="metrics-content" class="text-slate-200 text-sm whitespace-pre-line leading-relaxed max-w-4xl mx-auto font-medium"></div>
         </div>
 
         <!-- VISTA 3: LOG TÉCNICO (TABLA ERP) -->
         <div id="report-table-view" class="flex-grow overflow-y-auto p-6 hidden">
             <table class="w-full text-left text-xs text-slate-300 border-separate border-spacing-y-2">
-                <thead class="sticky top-0 bg-slate-800 text-slate-500 border-b border-white/5 z-10 shadow-sm">
+                <thead class="sticky top-0 bg-slate-800 text-slate-300 border-b border-white/5 z-10 shadow-sm">
                     <tr class="text-[10px] font-black uppercase tracking-widest">
-                        <th class="p-4">Hora</th><th class="p-4">Orden</th><th class="p-4 text-center">Cant</th><th class="p-4">Artículo / Detalle</th><th class="p-4 text-center">Tiempo</th>
+                        <th class="p-4">Inicio</th><th class="p-4">Fin</th><th class="p-4">Orden</th><th class="p-4 text-center">Cant</th><th class="p-4">Artículo / Detalle</th><th class="p-4 text-center">Tiempo</th>
                     </tr>
                 </thead>
                 <tbody id="audit-table-body"></tbody>
@@ -470,21 +479,21 @@
         if (mode === 'analysis') {
             titleEl.innerText = "Diagnóstico de Desempeño";
             iconEl.className = "fas fa-brain";
-            iconBox.className = "w-14 h-14 rounded-2xl bg-indigo-600/30 text-indigo-400 shadow-lg flex items-center justify-center";
+            iconBox.className = "w-14 h-14 rounded-2xl bg-indigo-600/30 text-indigo-400 shadow-lg flex items-center justify-center animate-icon-pulse";
             header.className = "px-8 py-6 border-b border-indigo-500/30 bg-indigo-950/40 flex justify-between items-center transition-all duration-300";
             activeTab.className = "py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-indigo-500 text-indigo-400 flex items-center gap-2";
             statusDot.className = "w-2 h-2 rounded-full animate-pulse bg-indigo-500";
         } else if (mode === 'metrics') {
             titleEl.innerText = "Métricas Técnicas OEE";
             iconEl.className = "fas fa-chart-bar";
-            iconBox.className = "w-14 h-14 rounded-2xl bg-sky-600/30 text-sky-400 shadow-lg flex items-center justify-center";
+            iconBox.className = "w-14 h-14 rounded-2xl bg-sky-600/30 text-sky-400 shadow-lg flex items-center justify-center animate-icon-pulse";
             header.className = "px-8 py-6 border-b border-sky-500/30 bg-sky-950/40 flex justify-between items-center transition-all duration-300";
             activeTab.className = "py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-sky-500 text-sky-400 flex items-center gap-2";
             statusDot.className = "w-2 h-2 rounded-full animate-pulse bg-sky-500";
         } else {
             titleEl.innerText = "Auditoría Técnica Log";
             iconEl.className = "fas fa-stethoscope";
-            iconBox.className = "w-14 h-14 rounded-2xl bg-teal-600/30 text-teal-400 shadow-lg flex items-center justify-center";
+            iconBox.className = "w-14 h-14 rounded-2xl bg-teal-600/30 text-teal-400 shadow-lg flex items-center justify-center animate-icon-pulse";
             header.className = "px-8 py-6 border-b border-teal-500/30 bg-teal-950/40 flex justify-between items-center transition-all duration-300";
             activeTab.className = "py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-teal-500 text-teal-400 flex items-center gap-2";
             statusDot.className = "w-2 h-2 rounded-full animate-pulse bg-teal-500";
@@ -494,7 +503,7 @@
     /**
      * Carga de datos y apertura del modal
      */
-    async function openIndividualAudit(targetId, targetName, mode = 'table') {
+    async function openIndividualAudit(targetId, targetName, mode = 'analysis') {
         const modal = document.getElementById('individual-audit-modal');
         document.getElementById('audit-target-name').innerText = targetName;
         modal.classList.remove('hidden');
@@ -502,7 +511,7 @@
         // Reset de contenidos con loading visual
         document.getElementById('analysis-content').innerHTML = '<div class="p-20 text-center text-slate-500 font-bold uppercase tracking-widest text-xs animate-pulse italic">Generando Diagnóstico IA Inteligente...</div>';
         document.getElementById('metrics-content').innerHTML = '<div class="p-20 text-center text-slate-500 font-bold uppercase tracking-widest text-xs animate-pulse italic">Calculando Métricas Técnicas OEE...</div>';
-        document.getElementById('audit-table-body').innerHTML = '<tr><td colspan="5" class="p-16 text-center text-slate-500 font-black uppercase text-[10px] animate-pulse">Sincronizando con base de datos ERP...</td></tr>';
+        document.getElementById('audit-table-body').innerHTML = '<tr><td colspan="6" class="p-16 text-center text-slate-500 font-black uppercase text-[10px] animate-pulse">Sincronizando con base de datos ERP...</td></tr>';
 
         setModalTab(mode);
 
@@ -516,17 +525,18 @@
                 let html = '';
                 data.audit_log.forEach(log => {
                     html += `<tr class="bg-white/5 hover:bg-white/10 transition-all rounded-lg overflow-hidden group">
-                        <td class="p-4 font-mono text-slate-400 text-[11px] border-l border-white/5">${log.hora}</td>
-                        <td class="p-4 text-sky-400 font-mono font-black">${log.orden}</td>
+                        <td class="p-4 font-mono text-slate-100 text-[13px] font-bold border-l border-white/5">${log.inicio}</td>
+                        <td class="p-4 font-mono text-indigo-300 text-[13px] font-bold">${log.fin}</td>
+                        <td class="p-4 text-sky-400 font-mono font-black text-[13px]">${log.orden}</td>
                         <td class="p-4 text-center text-emerald-400 font-black text-lg">${log.cantidad}</td>
                         <td class="p-4">
-                            <div class="font-black text-slate-100 text-xs uppercase">${log.articulo}</div>
+                            <div class="font-black text-white text-xs uppercase">${log.articulo}</div>
                             <div class="text-[9px] text-slate-500 font-black uppercase tracking-widest mt-1">${log.maquina}</div>
                         </td>
-                        <td class="p-4 text-center text-slate-400 font-bold border-r border-white/5">${log.tiempo}</td>
+                        <td class="p-4 text-center text-slate-300 font-bold border-r border-white/5 text-[13px]">${log.tiempo}</td>
                     </tr>`;
                 });
-                document.getElementById('audit-table-body').innerHTML = html || '<tr><td colspan="5" class="p-12 text-center text-slate-500 font-bold">SIN DATOS PARA EL PERIODO</td></tr>';
+                document.getElementById('audit-table-body').innerHTML = html || '<tr><td colspan="6" class="p-12 text-center text-slate-500 font-bold">SIN DATOS PARA EL PERIODO</td></tr>';
                 
                 // 2. Inyectar Reportes de Texto
                 document.getElementById('analysis-content').innerHTML = data.analysis_conversational || "Análisis no disponible.";
@@ -534,7 +544,7 @@
             }
         } catch (e) { 
             console.error('Error Crítico en Auditoría:', e);
-            document.getElementById('audit-table-body').innerHTML = '<tr><td colspan="5" class="p-12 text-center text-red-500 font-black">ERROR DE CONEXIÓN CON EL SERVIDOR</td></tr>';
+            document.getElementById('audit-table-body').innerHTML = '<tr><td colspan="6" class="p-12 text-center text-red-500 font-black">ERROR DE CONEXIÓN CON EL SERVIDOR</td></tr>';
         }
     }
 

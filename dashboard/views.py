@@ -1109,6 +1109,7 @@ def obtener_auditoria(request):
                        any(k in raw_obs for k in descanso_keywords))
 
         h_inicio = reg_obj.hora_inicio or reg_obj.fecha
+        h_fin = reg_obj.hora_fin
         
         is_matriceria = 'MATRICER' in raw_art_d or 'MATRICER' in raw_op_d
         id_orden = reg_obj.id_orden
@@ -1119,7 +1120,8 @@ def obtener_auditoria(request):
             has_mat_audit = True
 
         audit_log.append({
-            'hora': h_inicio.strftime('%H:%M:%S') if h_inicio else '--:--:--',
+            'inicio': h_inicio.strftime('%H:%M:%S') if h_inicio else '--:--:--',
+            'fin': h_fin.strftime('%H:%M:%S') if h_fin else '--:--:--',
             'maquina': reg_obj.id_maquina or 'S/A',
             'orden': reg_obj.id_orden or '---',
             'articulo': reg_obj.articulod[:40] if reg_obj.articulod else 'Sin Artículo',
@@ -1194,19 +1196,22 @@ def obtener_auditoria(request):
     analysis_conversational += "<span class='text-indigo-400 font-black text-xl uppercase tracking-tighter'>¿POR QUÉ ESE VALOR ES EL CORRECTO?</span>\n"
     analysis_conversational += f"Si miramos los datos de hoy de <span class='text-white font-bold'>{nombre_display} ({uid})</span>, el sistema está haciendo lo siguiente:\n\n"
     
-    # 1. MATRICERÍA
+    # 1. MATRICERÍA (Solo si aplica)
     if has_mat_audit:
-        analysis_conversational += f"<span class='text-emerald-400 font-black'>• MATRICERÍA (NEUTRAL):</span> {nombre_display} trabajó un tiempo en órdenes de <span class='text-white underline'>Matricería</span>. Como aplicamos la nueva regla de gestión, ese tiempo se computa al <span class='font-black underline'>100% de eficiencia</span>. No suma ni resta al OEE, simplemente cuenta como tiempo trabajado cumplido.\n\n"
-    else:
-        analysis_conversational += f"<span class='text-slate-400 font-bold'>• MATRICERÍA (SIN REGISTROS):</span> No se detectaron trabajos de matricería.\n\n"
-
+        analysis_conversational += f"<span class='text-emerald-400 font-black'>• MATRICERÍA (REGLA 1:1):</span> {nombre_display} realizó tareas de matricería. Este tiempo se computa con <span class='text-white underline font-bold'>eficiencia neutra (100%)</span> para no penalizar el OEE por puestas a punto.\n\n"
+    
     # 2. RENDIMIENTO
-    if performance > 105:
-        analysis_conversational += f"<span class='text-emerald-400 font-black'>• PRODUCCIÓN REAL (ALTO RENDIMIENTO):</span> En las órdenes de serie, se está trabajando <span class='text-white font-bold'>mucho más rápido</span> que el estándar del ERP. El ERP preveía más tiempo para estas piezas del que se usó realmente.\n\n"
+    if performance > 115:
+        analysis_conversational += f"<span class='text-emerald-400 font-black'>• PRODUCCIÓN DE SERIE (ALTO RENDIMIENTO):</span> En las órdenes de serie, se está trabajando <span class='text-white font-bold'>sensiblemente más rápido</span> que el estándar del ERP. El OEE superior al 100% es real y refleja una cadencia de producción superior a la estimada.\n\n"
+    elif performance > 100:
+        analysis_conversational += f"<span class='text-lime-400 font-black'>• PRODUCCIÓN DE SERIE (BUEN RITMO):</span> Se está trabajando por encima del estándar del ERP.\n\n"
     elif performance < 80 and total_std_mins > 0:
-        analysis_conversational += f"<span class='text-amber-400 font-black'>• PRODUCCIÓN REAL (BAJO RENDIMIENTO):</span> El ritmo de trabajo actual (<span class='font-black'>{performance:.1f}%</span>) es inferior al estándar del ERP.\n\n"
+        analysis_conversational += f"<span class='text-amber-400 font-black'>• PRODUCCIÓN DE SERIE (BAJO RENDIMIENTO):</span> El ritmo actual (<span class='font-black'>{performance:.1f}%</span>) es inferior al estándar esperado por el sistema.\n\n"
+    elif total_std_mins > 0:
+        analysis_conversational += f"<span class='text-sky-300 font-black'>• PRODUCCIÓN DE SERIE (ESTABLE):</span> El ritmo de trabajo coincide con los estándares del ERP.\n\n"
     else:
-        analysis_conversational += f"<span class='text-sky-300 font-black'>• PRODUCCIÓN REAL (ESTABLE):</span> El ritmo de trabajo coincide casi exactamente con los estándares del ERP.\n\n"
+        analysis_conversational += f"<span class='text-slate-400 font-bold italic'>• SIN PRODUCCIÓN DE SERIE:</span> No hay piezas de serie terminadas reportadas en este periodo.\n\n"
+
 
     # 3. DISPONIBILIDAD
     if is_viewing_today:
