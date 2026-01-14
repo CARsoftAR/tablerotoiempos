@@ -1178,7 +1178,11 @@ def obtener_auditoria(request):
 
     availability = (total_prod_mins / total_disp_mins * 100) if total_disp_mins > 0 else 0
     performance = (total_std_mins / total_prod_mins * 100) if total_prod_mins > 0 else 0
-    oee = (availability * performance / 100)
+    
+    total_piezas_p = total_qty + total_rejected_qty
+    quality = (total_qty / total_piezas_p * 100.0) if total_piezas_p > 0 else 100.0
+    
+    oee = (availability * performance * quality) / 10000.0
     
     nombre_display = uid
     try:
@@ -1227,6 +1231,7 @@ def obtener_auditoria(request):
     analysis_detailed += f"<span class='text-sky-400 font-bold uppercase'>2. CÁLCULO DE LA EFICIENCIA ({oee:.1f}%)</span>\n"
     analysis_detailed += f"    • Disponibilidad ({availability:.1f}%): {total_prod_mins/60.0:.2f} hrs / {total_disp_mins/60.0:.2f} hrs.\n"
     analysis_detailed += f"    • Rendimiento ({performance:.1f}%): {total_std_mins/60.0:.2f} hrs / {total_prod_mins/60.0:.2f} hrs.\n"
+    analysis_detailed += f"    • Calidad ({quality:.1f}%): {total_qty:.1f} buenas / {total_piezas_p:.1f} totales.\n"
     analysis_detailed += f"    • OEE Final: {oee:.1f}%.\n\n"
 
     rating = "EXCELENTE" if oee >= 100 else "MUY BUENO" if oee >= 85 else "BUENO" if oee >= 70 else "REGULAR" if oee >= 50 else "A REVISAR"
@@ -1234,6 +1239,147 @@ def obtener_auditoria(request):
     analysis_detailed += f"  <span class='text-slate-500 font-black text-[10px] uppercase'>Clasificación de Turno</span>\n"
     analysis_detailed += f"  <h4 class='text-2xl font-black text-white'>{rating}</h4>\n"
     analysis_detailed += f"</div>"
+
+    # 3. MANUAL DE CÁLCULO DE RENDIMIENTO (Agregado por pedido del usuario)
+    analysis_detailed += f"\n\n<div class='mt-8 p-6 bg-blue-500/5 border border-blue-500/20 rounded-2xl'>\n"
+    analysis_detailed += "  <div class='flex items-center gap-3 mb-4'>\n"
+    analysis_detailed += "    <div class='w-8 h-8 rounded-lg bg-blue-600/20 flex items-center justify-center text-blue-400'>\n"
+    analysis_detailed += "      <i class='fas fa-book'></i>\n"
+    analysis_detailed += "    </div>\n"
+    analysis_detailed += "    <h5 class='text-sm font-black text-white uppercase tracking-wider'>Guía Técnica: ¿Cómo calculamos tu Rendimiento?</h5>\n"
+    analysis_detailed += "  </div>\n\n"
+    
+    analysis_detailed += "  <div class='space-y-4 text-[12px] text-slate-300 leading-relaxed font-medium'>\n"
+    analysis_detailed += "    <p>El rendimiento es el motor de tu eficiencia. Compara cuánto tiempo <span class='text-white underline'>debería</span> haber tardado el trabajo contra cuánto tiempo <span class='text-white underline'>tardó realmente</span>.</p>\n\n"
+    
+    analysis_detailed += "    <div class='bg-slate-950/40 p-4 rounded-xl border border-white/5 font-mono text-center'>\n"
+    analysis_detailed += f"      <span class='text-blue-400 font-bold'>Rendimiento ({performance:.1f}%)</span> = ( {total_std_mins/60.0:.2f} hs Estándar / {total_prod_mins/60.0:.2f} hs Real ) x 100\n"
+    analysis_detailed += "    </div>\n\n"
+    
+    analysis_detailed += "    <div>\n"
+    analysis_detailed += "      <span class='text-white font-bold block mb-1'>1. ¿De dónde salen los números?</span>\n"
+    analysis_detailed += f"      • <span class='text-blue-300'>TIEMPO ESTÁNDAR ({total_std_mins/60.0:.2f} hs):</span> Es el tiempo objetivo cargado en el ERP para las piezas terminadas.\n"
+    analysis_detailed += f"      • <span class='text-blue-300'>TIEMPO REAL ({total_prod_mins/60.0:.2f} hs):</span> Es el tiempo cronometrado que el operario estuvo trabajando físicamente.\n"
+    analysis_detailed += "    </div>\n\n"
+    
+    analysis_detailed += "    <div>\n"
+    analysis_detailed += "      <span class='text-white font-bold block mb-1'>2. Casos Especiales</span>\n"
+    analysis_detailed += "      • <span class='text-emerald-400'>MATRICERÍA (REGLA 1:1):</span> Como no hay estándar fijo, asignamos Tiempo Estándar = Tiempo Real. Esto da siempre 100% de rendimiento para no penalizar el OEE.\n"
+    analysis_detailed += "      • <span class='text-amber-400'>DEDUPLICACIÓN:</span> El sistema limpia registros repetidos del ERP para que el cálculo sea 100% justo y no se infle artificialmente.\n"
+    analysis_detailed += "    </div>\n"
+    
+    analysis_detailed += "    <div class='pt-2 italic text-slate-500'>\n"
+    analysis_detailed += "      En resumen: Si el valor es > 100%, estás ganando tiempo sobre lo previsto; si es < 100%, la producción fue más lenta que el estándar.\n"
+    analysis_detailed += "    </div>\n"
+    analysis_detailed += "  </div>\n"
+    analysis_detailed += "</div>"
+
+    # 4. MANUAL DE CÁLCULO DE DISPONIBILIDAD (Agregado por pedido del usuario)
+    analysis_detailed += f"\n\n<div class='mt-4 p-6 bg-indigo-500/5 border border-indigo-500/20 rounded-2xl'>\n"
+    analysis_detailed += "  <div class='flex items-center gap-3 mb-4'>\n"
+    analysis_detailed += "    <div class='w-8 h-8 rounded-lg bg-indigo-600/20 flex items-center justify-center text-indigo-400'>\n"
+    analysis_detailed += "      <i class='fas fa-clock'></i>\n"
+    analysis_detailed += "    </div>\n"
+    analysis_detailed += "    <h5 class='text-sm font-black text-white uppercase tracking-wider'>Guía Técnica: ¿Cómo calculamos tu Disponibilidad?</h5>\n"
+    analysis_detailed += "  </div>\n\n"
+    
+    analysis_detailed += "  <div class='space-y-4 text-[12px] text-slate-300 leading-relaxed font-medium'>\n"
+    analysis_detailed += "    <p>La Disponibilidad mide qué tan bien estamos aprovechando el tiempo del turno. Es el porcentaje del tiempo total que el operario o la máquina estuvieron realmente produciendo.</p>\n\n"
+    
+    analysis_detailed += "    <div class='bg-slate-950/40 p-4 rounded-xl border border-white/5 font-mono text-center'>\n"
+    analysis_detailed += "      <span class='text-indigo-400 font-bold'>1. La Fórmula Matemática</span><br>\n"
+    analysis_detailed += f"      <span class='text-white font-bold'>Disponibilidad ({availability:.1f}%)</span> = ( {total_prod_mins/60.0:.2f} hs Real / {total_disp_mins/60.0:.2f} hs Turno ) x 100\n"
+    analysis_detailed += "    </div>\n\n"
+    
+    analysis_detailed += "    <div>\n"
+    analysis_detailed += "      <span class='text-white font-bold block mb-1'>2. ¿De dónde salen los números?</span>\n"
+    analysis_detailed += f"      • <span class='text-indigo-300'>NUMERADOR (Tiempo Real):</span> Suma de todos los minutos de trabajo reportados en el ERP ({total_prod_mins/60.0:.2f} hs).\n"
+    analysis_detailed += f"      • <span class='text-indigo-300'>DENOMINADOR (Tiempo de Turno):</span> Aquí el sistema es <span class='text-white italic underline font-bold'>Inteligente</span>:<br>\n"
+    if is_viewing_today:
+        analysis_detailed += f"        <span class='text-indigo-400 ml-4 font-bold'>→ Mirando HOY:</span> Medimos desde las 07:00 AM hasta este momento ({now_arg.strftime('%H:%M')}). Disponibilidad actual: {total_disp_mins/60.0:.2f} hs.<br>\n"
+    else:
+        analysis_detailed += "        <span class='text-slate-400 ml-4 font-bold'>→ Día Pasado:</span> Se toma el turno completo fijo (9 horas o 540 min).<br>\n"
+    analysis_detailed += "    </div>\n\n"
+
+    analysis_detailed += "    <div class='bg-indigo-900/10 p-4 rounded-xl border border-indigo-500/20'>\n"
+    analysis_detailed += "      <span class='text-white font-bold block mb-1'>3. Ejemplo Práctico (Smart Availability)</span>\n"
+    analysis_detailed += "      Si son las 10:00 AM y el operario trabajó 2.5 horas (150 min) y tuvo 30 min de paradas desde las 07:00 AM:<br>\n"
+    analysis_detailed += "      Cálculo: (150 min / 180 min transcurridos) x 100 = <span class='text-indigo-400 font-bold'>83.3% de Disponibilidad</span>.\n"
+    analysis_detailed += "    </div>\n\n"
+
+    analysis_detailed += "    <div>\n"
+    analysis_detailed += "      <span class='text-white font-bold block mb-1'>4. ¿Por qué el sistema es \"Inteligente\"?</span>\n"
+    analysis_detailed += "      A diferencia de otros sistemas que te castigarían a la mañana (diciendo que tu disponibilidad es baja porque solo trabajaste 2 horas de un turno de 9), este tablero se adapta a la hora actual. A las 08:00 AM te mide contra 1 hora; a las 02:00 PM te mide contra 7 horas.\n"
+    analysis_detailed += "    </div>\n\n"
+    
+    analysis_detailed += "    <div class='pt-2 italic text-slate-500'>\n"
+    analysis_detailed += "      La meta siempre es estar cerca del 100%, lo que significaría que no hubo baches de tiempo sin reportes desde que arrancó el día.\n"
+    analysis_detailed += "    </div>\n"
+    analysis_detailed += "  </div>\n"
+    analysis_detailed += "</div>"
+
+    # 5. MANUAL DE CÁLCULO DE OEE (Agregado por pedido del usuario)
+    analysis_detailed += f"\n<div class='mt-4 p-6 bg-amber-500/5 border border-amber-500/20 rounded-2xl'>\n"
+    analysis_detailed += "  <div class='flex items-center gap-3 mb-4'>\n"
+    analysis_detailed += "    <div class='w-8 h-8 rounded-lg bg-amber-600/20 flex items-center justify-center text-amber-400'>\n"
+    analysis_detailed += "      <i class='fas fa-trophy'></i>\n"
+    analysis_detailed += "    </div>\n"
+    analysis_detailed += "    <h5 class='text-sm font-black text-white uppercase tracking-wider'>Guía Técnica: El Indicador OEE</h5>\n"
+    analysis_detailed += "  </div>\n\n"
+    
+    analysis_detailed += "  <div class='space-y-4 text-[12px] text-slate-300 leading-relaxed font-medium'>\n"
+    analysis_detailed += "    <p>El OEE (Overall Equipment Effectiveness) es el <span class='text-amber-400 font-bold'>Indicador Maestro</span>. No solo mide si estuviste trabajando, sino qué tan bien lo hiciste considerando tiempo, velocidad y calidad.</p>\n\n"
+    
+    analysis_detailed += "    <div class='bg-slate-950/40 p-4 rounded-xl border border-white/5 font-mono text-center'>\n"
+    analysis_detailed += "      <span class='text-amber-400 font-bold'>Fórmula Maestro OEE</span><br>\n"
+    analysis_detailed += f"      <span class='text-white font-bold'>{oee:.1f}% OEE</span> = {availability:.1f}% (Disp) x {performance:.1f}% (Rend) x {quality:.1f}% (Cal)\n"
+    analysis_detailed += "    </div>\n\n"
+    
+    analysis_detailed += "    <div class='grid grid-cols-1 md:grid-cols-3 gap-3'>\n"
+    # Disponibilidad
+    analysis_detailed += "      <div class='p-5 bg-white/5 rounded-2xl border border-white/10'>\n"
+    analysis_detailed += "        <span class='text-indigo-400 text-sm font-black uppercase tracking-wider block mb-3 text-center border-b border-indigo-500/30 pb-2'>1. Disponibilidad</span>\n"
+    analysis_detailed += "        <p class='text-sm text-white font-bold mb-4 italic text-center underline decoration-indigo-500/30'>¿Estuvo operando?</p>\n"
+    analysis_detailed += "        <ul class='text-[13px] text-slate-200 space-y-2 list-disc pl-5'>\n"
+    analysis_detailed += "          <li>Mide el <span class='text-indigo-300 font-bold'>TIEMPO</span>.</li>\n"
+    analysis_detailed += "          <li>Si el turno es de 9hs y reportó 8hs, la respuesta es 'Casi todo'.</li>\n"
+    analysis_detailed += "          <li>Si hay muchos 'baches' sin reportes, este número baja.</li>\n"
+    analysis_detailed += "        </ul>\n"
+    analysis_detailed += "      </div>\n"
+    # Rendimiento
+    analysis_detailed += "      <div class='p-5 bg-white/5 rounded-2xl border border-white/10'>\n"
+    analysis_detailed += "        <span class='text-lime-400 text-sm font-black uppercase tracking-wider block mb-3 text-center border-b border-lime-500/30 pb-2'>2. Rendimiento</span>\n"
+    analysis_detailed += "        <p class='text-sm text-white font-bold mb-4 italic text-center underline decoration-lime-500/30'>¿A qué velocidad?</p>\n"
+    analysis_detailed += "        <ul class='text-[13px] text-slate-200 space-y-2 list-disc pl-5'>\n"
+    analysis_detailed += "          <li>Mide la <span class='text-lime-300 font-bold'>VELOCIDAD</span>.</li>\n"
+    analysis_detailed += "          <li>Debe cumplir la velocidad que pide el ERP.</li>\n"
+    analysis_detailed += "          <li>Si la pieza pide 1 min y tardó 1.5 min, este número baja.</li>\n"
+    analysis_detailed += "        </ul>\n"
+    analysis_detailed += "      </div>\n"
+    # Calidad
+    analysis_detailed += "      <div class='p-5 bg-white/5 rounded-2xl border border-white/10'>\n"
+    analysis_detailed += "        <span class='text-amber-500 text-sm font-black uppercase tracking-wider block mb-3 text-center border-b border-amber-500/30 pb-2'>3. Calidad</span>\n"
+    analysis_detailed += "        <p class='text-sm text-white font-bold mb-4 italic text-center underline decoration-amber-500/30'>¿Sin reprocesos?</p>\n"
+    analysis_detailed += "        <ul class='text-[13px] text-slate-200 space-y-2 list-disc pl-5'>\n"
+    analysis_detailed += "          <li>Mide las <span class='text-amber-300 font-bold'>PIEZAS BUENAS</span>.</li>\n"
+    analysis_detailed += "          <li>¿Cuántas salieron bien a la primera?</li>\n"
+    analysis_detailed += "          <li>Si hizo 100 piezas y 10 son reproceso, la calidad es del 90%.</li>\n"
+    analysis_detailed += "        </ul>\n"
+    analysis_detailed += "      </div>\n"
+    analysis_detailed += "    </div>\n\n"
+
+    analysis_detailed += "    <div class='bg-amber-900/10 p-4 rounded-xl border border-amber-500/20'>\n"
+    analysis_detailed += "      <span class='text-white font-bold block mb-1'>¿Por qué es tan exigente?</span>\n"
+    analysis_detailed += "      El OEE es una multiplicación. Si uno de los factores baja, el resultado final se resiente. Un OEE del 85% es considerado de Clase Mundial.\n"
+    analysis_detailed += "    </div>\n"
+    
+    analysis_detailed += "    <div class='pt-4 text-center'>\n"
+    analysis_detailed += "      <span class='text-amber-400 font-bold text-sm italic underline decoration-amber-500/30'>\n"
+    analysis_detailed += "        Este indicador te permite saber exactamente dónde está la pérdida de eficiencia en el turno.\n"
+    analysis_detailed += "      </span>\n"
+    analysis_detailed += "    </div>\n"
+    analysis_detailed += "  </div>\n"
+    analysis_detailed += "</div>"
 
     return JsonResponse({
         'status': 'success',

@@ -37,9 +37,13 @@ Este documento detalla la lógica de cálculo de todos los indicadores (KPIs) y 
 *   **Cálculo**: `(Tiempo Estándar / Tiempo Real) × 100`.
 *   **Significado**: Mide qué tan rápido se trabajó mientras las máquinas estaban encendidas. Un 110% significa que se produjo más rápido que lo cotizado. Un 80% significa que hubo lentitud.
 
-### ⏱️ Disponibilidad
-*   **Cálculo**: `(Tiempo Real / Tiempo Planificado) × 100`.
-*   **Significado**: Mide qué porcentaje del turno estuviste realmente produciendo. Una baja disponibilidad indica falta de trabajo cargado o máquinas paradas por rotura/falta de personal.
+### ⏱️ Disponibilidad (Smart Availability)
+*   **Fórmula**: `(Tiempo Real Operativo / Tiempo de Turno Transcurrido) × 100`
+*   **Lógica Inteligente**: A diferencia de otros indicadores, este tablero se adapta a la hora actual para no castigar el inicio del turno.
+    *   **Hoy (Tiempo Real)**: El denominador es el tiempo transcurrido desde las **07:00 AM** hasta el momento de la consulta.
+    *   **Histórico**: Se utiliza el turno completo fijo (9 horas).
+*   **Significado**: Mide qué tan bien estamos aprovechando el tiempo del turno. Una meta cercana al 100% indica que no hubo baches de tiempo sin reportes desde que arrancó el día.
+*   **Ejemplo**: A las 10:00 AM han pasado 180 min. Si el operario trabajó 150 min, la disponibilidad es del 83.3%.
 
 ### 🛡️ Calidad
 *   **Cálculo**: `((Cantidad Real - Cantidad Rechazada) / Cantidad Real) × 100`.
