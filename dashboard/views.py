@@ -240,15 +240,16 @@ def dashboard_produccion(request):
         # aunque el usuario dice que "el tiempo de producción siempre será menos", asumimos que si reportan la misma orden
         # en distintas máquinas, cada una aporta al total.
         
-        def should_add_std_for_entity(entity_id, order_id, tracker_dict):
+        def should_add_std_for_entity(entity_id, order_id, art_name, tracker_dict):
             """
             Deduplica el estándar: si el ERP da el total de la orden en cada fila,
             solo lo sumamos una vez por entidad/período.
+            Si no hay ID de orden, usamos el artículo como clave para evitar sumas fantasmas.
             """
-            if not order_id: return True
+            effective_id = order_id if order_id else f"NO_ORDER_{art_name}"
             if entity_id not in tracker_dict: tracker_dict[entity_id] = set()
-            if order_id in tracker_dict[entity_id]: return False
-            tracker_dict[entity_id].add(order_id)
+            if effective_id in tracker_dict[entity_id]: return False
+            tracker_dict[entity_id].add(effective_id)
             return True
 
         # 1. Caso: Sin Asignar (Máquina vacía o inactiva)
@@ -321,6 +322,7 @@ def dashboard_produccion(request):
                 
                 # REGLA OEE MATRICERÍA: En trabajos de larga duración, tratamos la matricería como 100% eficiente (Estándar = Real).
                 added_row_std = False
+                art_name_m = str(reg.get('articulod') or "").strip().upper()
                 if is_matriceria:
                     val_std = duracion
                     data['tiempo_cotizado'] += val_std
@@ -328,7 +330,7 @@ def dashboard_produccion(request):
                     added_row_std = True
                 else:
                     # Para trabajos de SERIE: Deduplicamos por orden porque el ERP suele repetir el total de la orden.
-                    if qty > 0 and should_add_std_for_entity(mid, id_orden, matriceria_std_done_machine):
+                    if qty > 0 and should_add_std_for_entity(mid, id_orden, art_name_m, matriceria_std_done_machine):
                         val_std = std_mins
                         data['tiempo_cotizado'] += val_std
                         if add_std_global:
@@ -441,13 +443,14 @@ def dashboard_produccion(request):
             
             # REGLA OEE MATRICERÍA para Personal
             added_row_std_p = False
+            art_name_p = str(reg.get('articulod') or "").strip().upper()
             if is_matriceria:
                 upers['has_matriceria'] = True
                 upers['tiempo_cotizado'] += duracion
                 added_row_std_p = True
             else:
                 # Trabajos normales: Solo sumar estándar si hay cierre de piezas y no se sumó esta orden aún hoy
-                if qty > 0 and should_add_std_for_entity(uid, id_orden, matriceria_std_done_personal):
+                if qty > 0 and should_add_std_for_entity(uid, id_orden, art_name_p, matriceria_std_done_personal):
                     upers['tiempo_cotizado'] += std_mins
                     added_row_std_p = True
         
@@ -1135,10 +1138,15 @@ def obtener_auditoria(request):
             if is_matriceria:
                 total_std_mins += duracion
                 this_std = duracion # Para el visual del log
-            elif qty > 0 and id_orden not in matriceria_std_done_audit:
-                total_std_mins += std_mins
-                if id_orden: matriceria_std_done_audit.add(id_orden)
-                this_std = std_mins
+            elif qty > 0:
+                # Para auditoría, sincronizamos lógica de deduplicación incluso si no hay ID de orden
+                eff_id = id_orden if id_orden else f"NO_ORDER_{raw_art_d}"
+                if eff_id not in matriceria_std_done_audit:
+                    total_std_mins += std_mins
+                    matriceria_std_done_audit.add(eff_id)
+                    this_std = std_mins
+                else:
+                    this_std = 0
             else:
                 # Si es una fila sin cantidad o repetida, para el log individual el std es 0
                 # para que la suma del log coincida con el KPI final
@@ -1178,47 +1186,55 @@ def obtener_auditoria(request):
             nombre_display = MaquinaConfig.objects.get(id_maquina=uid).nombre
     except: pass
 
-    analysis = f"<span class='report-main-title'>DIAGNÓSTICO DETALLADO: {nombre_display} ({uid})</span>\n\n"
-    analysis += "<span class='text-indigo-400 font-bold'>1. VERIFICACIÓN DE TIEMPOS (TABLERO VS ERP):</span>\n"
-    analysis += f"    • Tiempo Estándar: <span class='text-white font-bold'>{total_std_mins/60.0:.2f} hs</span>\n"
-    analysis += f"    • Tiempo Real (Operativo): <span class='text-white font-bold'>{total_prod_mins/60.0:.2f} hs</span>\n"
-    analysis += f"    • Tiempo Fichado (Turno): <span class='text-white font-bold'>{total_disp_mins/60.0:.2f} hs</span>\n\n"
-    
-    analysis += f"<span class='text-indigo-400 font-bold'>2. CÁLCULO DE LA EFICIENCIA ({oee:.1f}%):</span>\n"
-    analysis += f"    • Disponibilidad (<span class='text-emerald-400 font-bold'>{availability:.1f}%</span>): {total_prod_mins/60.0:.2f} hrs / {total_disp_mins/60.0:.2f} hrs.\n"
-    analysis += f"    • Rendimiento (<span class='text-emerald-400 font-bold'>{performance:.1f}%</span>): {total_std_mins/60.0:.2f} hrs / {total_prod_mins/60.0:.2f} hrs.\n"
-    analysis += f"    • Eficiencia Final (OEE): <span class='text-emerald-400 font-bold'>{oee:.1f}%</span>.\n\n"
-    
-    analysis += f"<span class='text-indigo-400 font-bold'>3. ¿POR QUÉ ESTE VALOR ES EL CORRECTO?</span>\n"
-    if has_mat_audit:
-        analysis += f"    • <span class='text-sky-300 font-bold'>Matricería (Neutral):</span> Eficiencia al 100% para no distorsionar el OEE.\n"
-    else:
-        analysis += f"    • <span class='text-slate-400'>Matricería:</span> No se detectaron trabajos de matricería.\n"
-    if performance > 105:
-        analysis += f"    • <span class='text-emerald-400 font-bold'>Producción (Alto Rendimiento):</span> Ritmo mayor al estándar ({performance:.1f}%).\n"
-    elif performance < 80 and total_std_mins > 0:
-        analysis += f"    • <span class='text-amber-400 font-bold'>Producción (Bajo Rendimiento):</span> Ritmo inferior al estándar.\n"
-    if is_viewing_today:
-        analysis += f"    • <span class='text-indigo-300 font-bold'>Disponibilidad Inteligente:</span> Basado en tiempo transcurrido hoy.\n\n"
-    else:
-        analysis += f"    • <span class='text-slate-400'>Disponibilidad Fija:</span> Basado en jornada de 9hs.\n\n"
+    analysis_conversational = f"<span class='report-main-title'>ANÁLISIS DE DESEMPEÑO INTELIGENTE</span>\n"
+    analysis_conversational += f"<div class='mb-6 p-5 bg-indigo-500/10 rounded-2xl border-l-4 border-indigo-500 shadow-inner'>\n"
+    analysis_conversational += f"  <span class='text-lg font-black text-white italic'>\"¡Sí! El valor de <span class='text-indigo-400'>{oee:.1f}%</span> que ves ahora es un valor muy real y correcto para la situación actual de {nombre_display}.\"</span>\n"
+    analysis_conversational += f"</div>\n\n"
 
-    analysis += "<span class='text-indigo-400 font-bold'>4. DESGLOSE TÉCNICO DE PRODUCCIÓN:</span>\n"
-    if not articulos_resumen:
-        analysis += "    • Sin producción computable.\n"
-    else:
-        for name, a_data in articulos_resumen.items():
-            std_pz = (a_data['std_sum'] / a_data['qty']) if a_data['qty'] > 0 else 0
-            analysis += f"    • <span class='text-white'>{a_data['qty']:.1f}</span> pz de <span class='text-indigo-300'>'{name}'</span> ({std_pz:.2f} min/pz)\n"
+    analysis_conversational += "<span class='text-indigo-400 font-black text-xl uppercase tracking-tighter'>¿POR QUÉ ESE VALOR ES EL CORRECTO?</span>\n"
+    analysis_conversational += f"Si miramos los datos de hoy de <span class='text-white font-bold'>{nombre_display} ({uid})</span>, el sistema está haciendo lo siguiente:\n\n"
     
-    analysis += "\n<span class='text-indigo-400 font-bold'>5. CONCLUSIÓN Y ANÁLISIS DE DESVÍO:</span>\n"
-    rating = "MUY BUENO" if oee >= 85 else "BUENO" if oee >= 70 else "REGULAR" if oee >= 50 else "MALO"
-    analysis += f"    Puntaje General (OEE): <span class='font-black underline'>{rating}</span>\n"
+    # 1. MATRICERÍA
+    if has_mat_audit:
+        analysis_conversational += f"<span class='text-emerald-400 font-black'>• MATRICERÍA (NEUTRAL):</span> {nombre_display} trabajó un tiempo en órdenes de <span class='text-white underline'>Matricería</span>. Como aplicamos la nueva regla de gestión, ese tiempo se computa al <span class='font-black underline'>100% de eficiencia</span>. No suma ni resta al OEE, simplemente cuenta como tiempo trabajado cumplido.\n\n"
+    else:
+        analysis_conversational += f"<span class='text-slate-400 font-bold'>• MATRICERÍA (SIN REGISTROS):</span> No se detectaron trabajos de matricería.\n\n"
+
+    # 2. RENDIMIENTO
+    if performance > 105:
+        analysis_conversational += f"<span class='text-emerald-400 font-black'>• PRODUCCIÓN REAL (ALTO RENDIMIENTO):</span> En las órdenes de serie, se está trabajando <span class='text-white font-bold'>mucho más rápido</span> que el estándar del ERP. El ERP preveía más tiempo para estas piezas del que se usó realmente.\n\n"
+    elif performance < 80 and total_std_mins > 0:
+        analysis_conversational += f"<span class='text-amber-400 font-black'>• PRODUCCIÓN REAL (BAJO RENDIMIENTO):</span> El ritmo de trabajo actual (<span class='font-black'>{performance:.1f}%</span>) es inferior al estándar del ERP.\n\n"
+    else:
+        analysis_conversational += f"<span class='text-sky-300 font-black'>• PRODUCCIÓN REAL (ESTABLE):</span> El ritmo de trabajo coincide casi exactamente con los estándares del ERP.\n\n"
+
+    # 3. DISPONIBILIDAD
+    if is_viewing_today:
+        analysis_conversational += f"<span class='text-indigo-300 font-black'>• DISPONIBILIDAD REAL ({availability:.1f}%):</span> El sistema es <span class='text-white italic underline font-bold'>INTELIGENTE</span>: compara el tiempo trabajado contra el tiempo transcurrido hoy (07:00 AM hasta ahora).\n\n"
+
+    # REPORTE 2: MÉTRICAS DETALLADAS (El que pedía el usuario)
+    analysis_detailed = f"<span class='report-main-title'>MÉTRICAS TÉCNICAS DE CONTROL</span>\n\n"
+    analysis_detailed += "<span class='text-sky-400 font-bold uppercase'>1. VERIFICACIÓN DE TIEMPOS (TABLERO VS ERP)</span>\n"
+    analysis_detailed += f"    • Tiempo Estándar Computado: <span class='text-white font-bold'>{total_std_mins/60.0:.2f} hs</span>\n"
+    analysis_detailed += f"    • Tiempo Real Operativo: <span class='text-white font-bold'>{total_prod_mins/60.0:.2f} hs</span>\n"
+    analysis_detailed += f"    • Tiempo Fichado Turno: <span class='text-white font-bold'>{total_disp_mins/60.0:.2f} hs</span>\n\n"
+    
+    analysis_detailed += f"<span class='text-sky-400 font-bold uppercase'>2. CÁLCULO DE LA EFICIENCIA ({oee:.1f}%)</span>\n"
+    analysis_detailed += f"    • Disponibilidad ({availability:.1f}%): {total_prod_mins/60.0:.2f} hrs / {total_disp_mins/60.0:.2f} hrs.\n"
+    analysis_detailed += f"    • Rendimiento ({performance:.1f}%): {total_std_mins/60.0:.2f} hrs / {total_prod_mins/60.0:.2f} hrs.\n"
+    analysis_detailed += f"    • OEE Final: {oee:.1f}%.\n\n"
+
+    rating = "EXCELENTE" if oee >= 100 else "MUY BUENO" if oee >= 85 else "BUENO" if oee >= 70 else "REGULAR" if oee >= 50 else "A REVISAR"
+    analysis_detailed += f"<div class='mt-6 p-4 bg-white/5 border border-white/10 rounded-xl text-center'>\n"
+    analysis_detailed += f"  <span class='text-slate-500 font-black text-[10px] uppercase'>Clasificación de Turno</span>\n"
+    analysis_detailed += f"  <h4 class='text-2xl font-black text-white'>{rating}</h4>\n"
+    analysis_detailed += f"</div>"
 
     return JsonResponse({
         'status': 'success',
         'audit_log': audit_log,
-        'analysis': analysis
+        'analysis_conversational': analysis_conversational,
+        'analysis_detailed': analysis_detailed
     })
 
 # --- MÓDULO DE MANTENIMIENTO ---
