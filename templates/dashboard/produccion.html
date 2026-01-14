@@ -296,7 +296,7 @@
                     </div>
                     <div>
                         <h3 class="text-white font-bold leading-none mb-1 group-hover:text-blue-400 transition-colors">{{ item.name }}</h3>
-                        <p class="text-[10px] text-slate-500 font-mono uppercase">{{ item.id }}</p>
+                        <p class="text-xs text-slate-300 font-mono uppercase">{{ item.id }}</p>
                     </div>
                 </div>
                 <button onclick="openIndividualAudit('{{ item.id }}', '{{ item.name|escapejs }}')" 
@@ -306,16 +306,32 @@
             </div>
             <div class="p-5 space-y-5">
                 <div class="bg-slate-900/30 rounded-lg p-3 border border-slate-700/50">
-                    <p class="text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-1">Motivo / Estado</p>
-                    <p class="text-blue-300 text-[10px] font-bold italic truncate">{{ item.last_reason|default:"Sin actividad" }}</p>
+                    <p class="text-[10px] font-bold text-slate-300 uppercase tracking-widest mb-1">Motivo / Estado</p>
+                    <p class="text-blue-300 text-xs font-bold italic truncate">{{ item.last_reason|default:"Sin actividad" }}</p>
                 </div>
-                <div class="flex justify-between items-end">
+
+                <div class="grid grid-cols-3 gap-2">
+                    <div class="bg-slate-900/20 p-2 rounded border border-slate-700/30">
+                        <p class="text-[10px] text-slate-300 font-bold uppercase mb-1">Disp.</p>
+                        <p class="text-xs text-teal-400 font-black">{{ item.availability }}%</p>
+                    </div>
+                    <div class="bg-slate-900/20 p-2 rounded border border-slate-700/30">
+                        <p class="text-[10px] text-slate-300 font-bold uppercase mb-1">Rend.</p>
+                        <p class="text-xs text-lime-400 font-black">{{ item.performance }}%</p>
+                    </div>
+                    <div class="bg-slate-900/20 p-2 rounded border border-slate-700/30">
+                        <p class="text-[10px] text-slate-300 font-bold uppercase mb-1">Cal.</p>
+                        <p class="text-xs text-amber-400 font-black">{{ item.quality }}%</p>
+                    </div>
+                </div>
+
+                <div class="flex justify-between items-end pt-2">
                     <div>
-                        <p class="text-[8px] font-bold text-slate-500 uppercase">OEE</p>
-                        <p class="text-2xl font-black text-white">{{ item.oee }}%</p>
+                        <p class="text-[10px] font-bold text-slate-300 uppercase">OEE Final</p>
+                        <p class="text-2xl font-black text-white group-hover:text-blue-400 transition-all">{{ item.oee }}%</p>
                     </div>
                     <div class="text-right">
-                        <p class="text-[8px] font-bold text-slate-500 uppercase">Producido</p>
+                        <p class="text-[10px] font-bold text-slate-300 uppercase">Total Producido</p>
                         <p class="text-lg font-bold text-emerald-400">{{ item.actual_qty }} <span class="text-[10px] text-slate-500">pz</span></p>
                     </div>
                 </div>

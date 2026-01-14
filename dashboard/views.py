@@ -253,16 +253,14 @@ def dashboard_produccion(request):
                 global_planned_time += std_mins 
             
             # Cálculo de Tiempos
-            if is_descanso:
-                # El descanso se cuenta como Parada (Interrupción) para no matar el rendimiento
+            if is_descanso or reg['es_interrupcion']:
+                # El descanso y las interrupciones declaradas se cuentan como Parada
                 data['tiempo_paradas'] += duracion
                 global_downtime += duracion
-            elif reg['es_proceso']:
+            else:
+                # Si no es parada explícita, se considera tiempo operativo de máquina
                 data['tiempo_operativo'] += duracion
                 global_actual_time += duracion
-            elif reg['es_interrupcion']:
-                data['tiempo_paradas'] += duracion
-                global_downtime += duracion
 
         # --- Lógica por Personal ---
         # ATENCIÓN: En este ERP, el ID de la persona (legajo) viene en 'id_concepto',
@@ -354,7 +352,10 @@ def dashboard_produccion(request):
             upers['tiempo_paradas'] += duracion
             upers['descanso_mins'] += duracion
             upers['descanso_qty'] += qty
-        elif reg['es_proceso']:
+        elif reg['es_interrupcion']:
+            upers['tiempo_paradas'] += duracion
+        else:
+            # Es TIEMPO OPERATIVO (Proceso o similar que no es parada)
             upers['tiempo_operativo'] += duracion
             # Sumar al detalle de artículos
             art_name = str(reg.get('articulod') or "Sin Artículo").strip().upper()
@@ -362,8 +363,6 @@ def dashboard_produccion(request):
                 upers['articulos'][art_name] = {'qty': 0.0, 'std': 0.0}
             upers['articulos'][art_name]['qty'] += qty
             upers['articulos'][art_name]['std'] += std_mins
-        elif reg['es_interrupcion']:
-            upers['tiempo_paradas'] += duracion
 
     # 3. Calcular KPIs finales
     lista_kpis = []
@@ -561,14 +560,32 @@ def dashboard_produccion(request):
         analysis_text += "\n".join(art_indented) + "\n\n"
 
         analysis_text += f"<span class='text-indigo-400 font-bold'>4. CONCLUSIÓN Y ANÁLISIS DE DESVÍO:</span>\n"
+        
+        # Lógica de Puntaje Resiliente
+        performance_status = ""
+        if t_op_hrs > 0 and qty == 0:
+            performance_status = "<span class='text-amber-400 font-bold underline'>SIN PRODUCCIÓN REPORTADA</span>\n    <span class='text-[10px] text-slate-400'>* Se registra tiempo de trabajo pero no se cerraron piezas (Cantidad = 0).</span>"
+        elif t_std_hrs == 0 and qty > 0:
+            performance_status = "<span class='text-amber-400 font-bold underline'>SIN ESTÁNDAR TÉCNICO</span>\n    <span class='text-[10px] text-slate-400'>* Se detectó producción ({qty:.1f} pz) pero el ERP no tiene tiempos estándar cargados.</span>"
+        elif performance >= 95:
+             performance_status = "<span class='text-emerald-400 font-bold underline'>MUY BUENO</span>"
+        elif performance >= 80:
+             performance_status = "<span class='text-sky-400 font-bold underline'>BUENO</span>"
+        elif performance >= 65:
+             performance_status = "<span class='text-amber-400 font-bold underline'>REGULAR</span>"
+        else:
+             performance_status = "<span class='text-red-400 font-bold underline'>MALO</span>"
+
+        analysis_text += f"    Puntaje de Desempeño: {performance_status}\n\n"
+
         if factor_velocidad > 1.1:
-            analysis_text += f"    <i class='fas fa-exclamation-triangle text-amber-400 mr-2'></i>El operario trabajó a una velocidad <span class='text-amber-400 font-bold'>{factor_velocidad:.1f} veces menor</span> que la del tiempo estándar cargado en el sistema.\n"
+            analysis_text += f"    <i class='fas fa-exclamation-triangle text-amber-400 mr-2'></i>El operario trabajó a una velocidad <span class='text-amber-400 font-bold'>{factor_velocidad:.1f} veces menor</span> que la del tiempo estándar.\n"
         elif 0 < factor_velocidad <= 0.9:
             analysis_text += f"    <i class='fas fa-rocket text-emerald-400 mr-2'></i>El operario superó el estándar, trabajando un <span class='text-emerald-400 font-bold'>{((1-factor_velocidad)*100):.1f}% más rápido</span> de lo previsto.\n"
-        elif factor_velocidad == 0:
-            analysis_text += f"    No se registran tiempos estándar para los artículos producidos, lo que impide calcular el rendimiento real.\n"
+        elif t_std_hrs == 0:
+            analysis_text += f"    <i class='fas fa-info-circle text-sky-400 mr-2'></i>No se registran tiempos estándar para los artículos producidos, lo que impide calcular el rendimiento real.\n"
         else:
-            analysis_text += f"    El ritmo de trabajo se mantiene dentro de los parámetros estándar (Desvío menor al 10%).\n"
+            analysis_text += f"    El ritmo de trabajo se mantiene dentro de los parámetros estándar.\n"
 
         if not data['has_any_obs']:
             analysis_text += f"\n    <span class='text-sky-300 italic'>Nota: No se detectaron observaciones manuales en los registros para este periodo.</span>"
@@ -970,7 +987,10 @@ def obtener_auditoria(request):
         elif not is_descanso:
             total_qty += qty
             total_std_mins += std_mins
-            if reg_obj.es_proceso:
+            
+            # Lógica resiliente para Tiempo Operativo: 
+            # Si no es descanso ni interrupción, es trabajo.
+            if not reg_obj.es_interrupcion:
                 total_prod_mins += duracion
                 art_name = reg_obj.articulod or "Sin Nombre"
                 if art_name not in articulos_resumen:
@@ -1020,20 +1040,31 @@ def obtener_auditoria(request):
     # Puntaje basado en OEE (más representativo de lo que ve el usuario)
     rating = ""
     rating_color = ""
-    if oee >= 85:
-        rating = "MUY BUENO"
-        rating_color = "text-emerald-400"
-    elif oee >= 70:
-        rating = "BUENO"
-        rating_color = "text-sky-400"
-    elif oee >= 50:
-        rating = "REGULAR"
+    
+    if total_prod_mins > 0 and total_qty == 0:
+        rating = "SIN PRODUCCIÓN REPORTADA"
         rating_color = "text-amber-400"
+        analysis += f"    Puntaje: <span class='{rating_color} font-black underline'>{rating}</span>\n"
+        analysis += f"    <span class='text-[10px] text-slate-400 italic'>    * El recurso estuvo activo {total_prod_mins/60.0:.1f} hs pero no declaró piezas terminadas (Cant=0).</span>\n"
+    elif total_std_mins == 0 and total_qty > 0:
+        rating = "SIN ESTÁNDAR TÉCNICO"
+        rating_color = "text-amber-400"
+        analysis += f"    Puntaje: <span class='{rating_color} font-black underline'>{rating}</span>\n"
+        analysis += f"    <span class='text-[10px] text-slate-400 italic'>    * El ERP no tiene cargado el tiempo estándar para estas piezas, por lo que el OEE resulta en 0%.</span>\n"
     else:
-        rating = "MALO"
-        rating_color = "text-red-400"
-
-    analysis += f"    Puntaje General (OEE): <span class='{rating_color} font-black underline'>{rating}</span>\n"
+        if oee >= 85:
+            rating = "MUY BUENO"
+            rating_color = "text-emerald-400"
+        elif oee >= 70:
+            rating = "BUENO"
+            rating_color = "text-sky-400"
+        elif oee >= 50:
+            rating = "REGULAR"
+            rating_color = "text-amber-400"
+        else:
+            rating = "MALO"
+            rating_color = "text-red-400"
+        analysis += f"    Puntaje General (OEE): <span class='{rating_color} font-black underline'>{rating}</span>\n"
 
     if performance > 110:
         analysis += f"    <i class='fas fa-rocket text-emerald-400 mr-2'></i>El recurso superó el estándar teórico en un <span class='text-emerald-400 font-bold'>{(performance-100):.1f}%</span>.\n"
@@ -1041,6 +1072,10 @@ def obtener_auditoria(request):
          desvio_val = 100 - performance
          analysis += f"    <i class='fas fa-exclamation-triangle text-amber-400 mr-2'></i>Se detectó un desvío del <span class='text-amber-400 font-bold'>{desvio_val:.1f}%</span> (Ritmo inferior al estándar).\n"
          analysis += f"    <span class='text-slate-400 text-[10px]'>    * El desvío indica que se produjo un {desvio_val:.1f}% menos de lo esperado en el tiempo trabajado.</span>\n"
+    elif performance == 0 and total_qty > 0:
+        analysis += "    <i class='fas fa-info-circle text-sky-400 mr-2'></i>Información: Rendimiento no calculable por falta de Estándares en ERP.\n"
+    elif performance == 0 and total_prod_mins > 0:
+        analysis += "    <i class='fas fa-history text-amber-400 mr-2'></i>Nota: Se registra tiempo operativo pero sin cierre de cantidades.\n"
     elif performance == 0:
         analysis += "    Puntaje: <span class='text-slate-500 font-bold italic'>SIN TIEMPOS RECARGADOS</span>\n"
     else:
