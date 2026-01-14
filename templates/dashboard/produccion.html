@@ -296,7 +296,9 @@
                     </div>
                     <div>
                         <h3 class="text-white font-bold leading-none mb-1 group-hover:text-blue-400 transition-colors">{{ item.name }}</h3>
-                        <p class="text-xs text-slate-300 font-mono uppercase">{{ item.id }}</p>
+                        <p class="text-xs text-slate-300 font-mono uppercase">
+                            {% if view_type == 'personnel' %}{{ item.last_machine|default:item.id }}{% else %}{{ item.operator_name|default:item.id }}{% endif %}
+                        </p>
                     </div>
                 </div>
                 <button onclick="openIndividualAudit('{{ item.id }}', '{{ item.name|escapejs }}')" 
@@ -305,8 +307,25 @@
                 </button>
             </div>
             <div class="p-5 space-y-5">
-                <div class="bg-slate-900/30 rounded-lg p-3 border border-slate-700/50">
-                    <p class="text-[10px] font-bold text-slate-300 uppercase tracking-widest mb-1">Motivo / Estado</p>
+                {% if view_type != 'personnel' and item.mantenimiento %}
+                <div class="animate-pulse bg-red-500/10 border border-red-500/50 rounded-xl p-3 flex items-center justify-between shadow-[0_0_15px_rgba(239,68,68,0.2)]">
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-exclamation-triangle text-red-500"></i>
+                        <span class="text-red-500 text-[10px] font-black uppercase tracking-wider">
+                            {{ item.mantenimiento.estado_display }}
+                        </span>
+                    </div>
+                    <span class="text-slate-300 text-[9px] font-bold">Técnico: {{ item.mantenimiento.tecnico|default:"S/N" }}</span>
+                </div>
+                {% endif %}
+
+                <div class="bg-slate-900/40 rounded-xl p-3 border border-slate-700/50">
+                    <div class="flex justify-between items-center mb-1">
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Motivo / Estado</p>
+                        <p class="text-[9px] font-bold text-indigo-400 uppercase truncate max-w-[150px]" title="{{ item.article_desc }}">
+                            {{ item.article_desc|default:"---" }}
+                        </p>
+                    </div>
                     <p class="text-blue-300 text-xs font-bold italic truncate">{{ item.last_reason|default:"Sin actividad" }}</p>
                 </div>
 
@@ -335,6 +354,19 @@
                         <p class="text-lg font-bold text-emerald-400">{{ item.actual_qty }} <span class="text-[10px] text-slate-500">pz</span></p>
                     </div>
                 </div>
+
+                <!-- Análisis / Razonamiento (Nuevo solicitado) -->
+                {% if item.analysis_summary %}
+                <div class="mt-4 p-3 bg-slate-900/50 rounded-xl border border-slate-700/50">
+                    <div class="flex items-center gap-2 mb-2">
+                        <i class="fas fa-brain text-indigo-400 text-[10px]"></i>
+                        <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Análisis de Desempeño</span>
+                    </div>
+                    <div class="text-[10px] text-slate-400 leading-relaxed max-h-32 overflow-y-auto custom-scrollbar italic">
+                        {{ item.analysis_summary|safe }}
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
         {% endfor %}

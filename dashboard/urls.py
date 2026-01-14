@@ -13,6 +13,12 @@ urlpatterns = [
     path('gestion-personal/crear/', views.crear_operario, name='crear_operario'),
     path('gestion-personal/editar/<int:pk>/', views.editar_operario, name='editar_operario'),
     path('gestion-personal/eliminar/<int:pk>/', views.eliminar_operario, name='eliminar_operario'),
+    
+    # Mantenimiento
+    path('gestion-mantenimiento/', views.lista_mantenimiento, name='lista_mantenimiento'),
+    path('mantenimiento/crear/', views.crear_incidencia, name='crear_incidencia'),
+    path('mantenimiento/gestionar/<int:pk>/', views.gestionar_incidencia, name='gestionar_incidencia'),
+    path('mantenimiento/eliminar/<int:pk>/', views.eliminar_incidencia, name='eliminar_incidencia'),
 
     # API Auditoría
     path('obtener-auditoria/', views.obtener_auditoria, name='obtener_auditoria'),

@@ -1,9 +1,10 @@
 import json
+import datetime
 from django.shortcuts import render, redirect, get_object_or_404
 from django.db.models import Sum, Q, F
 from django.utils import timezone
 from datetime import timedelta
-from .models import VTMan, Maquina, MaquinaConfig, OperarioConfig
+from .models import VTMan, Maquina, MaquinaConfig, OperarioConfig, Mantenimiento
 from django.contrib import messages
 
 def dashboard_produccion(request):
@@ -104,6 +105,28 @@ def dashboard_produccion(request):
                 operarios_activos_ids.add(o.legajo)
     except: pass
 
+    # 1.6 Obtener estados de mantenimiento ACTIVOS DURANTE EL PERIODO (MySQL)
+    # Una falla es relevante si: empezó antes que termine el día Y (no terminó o terminó después que empiece el día)
+    mantenimientos_periodo = Mantenimiento.objects.filter(
+        fecha_reporte__lte=fecha_fin_utc
+    ).exclude(
+        estado='CERRADO', fecha_fin__lt=fecha_inicio_utc
+    ).select_related('maquina')
+    
+    maquina_mantenimiento = {} # {id_maquina: {estado, tipo, tecnico}}
+    for m in mantenimientos_periodo:
+        # Si estamos viendo HOY (tiempo real), ignoramos las incidencias que ya se cerraron.
+        # Solo queremos que el tablero parpadee si la máquina está rota AHORA.
+        if is_viewing_today and m.estado == 'CERRADO':
+            continue
+
+        maquina_mantenimiento[m.maquina.id_maquina] = {
+            'estado': m.estado,
+            'estado_display': m.get_estado_display(),
+            'tipo': m.tipo,
+            'tecnico': m.tecnico_asignado
+        }
+
     fecha_str = fecha_target_start.strftime('%Y-%m-%d')
 
     # Forzar comparación de FECHA como cadena o usando extra() para evitar el desplazamiento de zona horaria de Django
@@ -139,6 +162,8 @@ def dashboard_produccion(request):
                 'cantidad_rechazada': 0.0,
                 'latest_obs': '',
                 'latest_date': None,
+                'latest_operator': 'S/A',
+                'latest_article': '---',
                 'current_order': '---',
                 'is_found_online': False,
                 'audit_log': []
@@ -160,6 +185,11 @@ def dashboard_produccion(request):
 
     machine_orders = {} 
     kpi_por_personal = {}
+    
+    # Trackers para evitar duplicar estándares en MATRICERÍA (donde el estándar es por trabajo terminado, no por pieza)
+    matriceria_std_done_machine = {} # {mid: set(id_orden)}
+    matriceria_std_done_personal = {} # {uid: set(id_orden)}
+    matriceria_std_done_global = set()
 
     for reg in registros_data:
         mid = reg['id_maquina']
@@ -169,7 +199,7 @@ def dashboard_produccion(request):
         
         # Identificar Reproceso o tareas que no deben sumar a Cantidad Real
         raw_id_op = str(reg.get('id_operacion') or "").strip().upper()
-        raw_art_d = str(reg.get('articulod') or "").upper()
+        raw_art_d = str(reg.get('articulod') or "").strip().upper()
         raw_op_d = str(reg.get('operacion') or "").strip().upper()
         raw_obs = str(reg.get('observaciones') or "").strip().upper()
 
@@ -192,6 +222,35 @@ def dashboard_produccion(request):
         # El 'ONLINE' a veces trae cantidad 1 para marcar actividad, pero no es producción real terminada
         is_online_record = (raw_obs == 'ONLINE')
 
+        # Lógica especial para MATRICERÍA: el estándar es por TRABAJO TOTAL, no por pieza.
+        # Buscamos 'MATRICERIA' de forma insensible a mayúsculas y acentos
+        raw_clean = str(reg.get('articulod') or "").upper() + " " + str(reg.get('operacion') or "").upper()
+        is_matriceria = 'MATRICER' in raw_clean
+        id_orden = reg.get('id_orden')
+        
+        # Determinamos si sumamos el estándar para Global, Máquina y Personal
+        add_std_global = True
+        if is_matriceria and id_orden:
+            if id_orden in matriceria_std_done_global:
+                add_std_global = False
+            else:
+                matriceria_std_done_global.add(id_orden)
+        
+        # Para máquinas y personal, el tracker es individual para que todos reciban su "parte" del crédito si trabajan en la misma orden
+        # aunque el usuario dice que "el tiempo de producción siempre será menos", asumimos que si reportan la misma orden
+        # en distintas máquinas, cada una aporta al total.
+        
+        def should_add_std_for_entity(entity_id, order_id, tracker_dict):
+            """
+            Deduplica el estándar: si el ERP da el total de la orden en cada fila,
+            solo lo sumamos una vez por entidad/período.
+            """
+            if not order_id: return True
+            if entity_id not in tracker_dict: tracker_dict[entity_id] = set()
+            if order_id in tracker_dict[entity_id]: return False
+            tracker_dict[entity_id].add(order_id)
+            return True
+
         # 1. Caso: Sin Asignar (Máquina vacía o inactiva)
         is_unassigned = (not mid or mid in maquinas_inactivas_ids)
         
@@ -208,7 +267,8 @@ def dashboard_produccion(request):
             else:
                 unassigned_qty += qty
                 global_actual_qty += qty
-                unassigned_std += std_mins
+                if add_std_global:
+                    unassigned_std += std_mins
         
         # 2. Caso: Máquina Asignada (Solo si no es unassigned)
         data = None
@@ -238,6 +298,15 @@ def dashboard_produccion(request):
             elif not data['current_order'] or data['current_order'] == '---':
                 data['current_order'] = reg['id_orden']
                 data['latest_date'] = reg['fecha']
+            
+            # Siempre guardamos el último operario y artículo visto (ya que viene ordenado por hora_inicio)
+            uid = str(reg.get('id_concepto') or '').strip()
+            if uid:
+                data['latest_operator'] = nombres_operarios.get(uid, f"Operario {uid}")
+            
+            art_desc = str(reg.get('articulod') or "").strip().upper()
+            if art_desc:
+                data['latest_article'] = art_desc
 
             if is_repro:
                 data['cantidad_rechazada'] += qty
@@ -249,8 +318,22 @@ def dashboard_produccion(request):
             else:
                 data['cantidad_producida'] += qty
                 global_actual_qty += qty
-                data['tiempo_cotizado'] += std_mins
-                global_planned_time += std_mins 
+                
+                # REGLA OEE MATRICERÍA: En trabajos de larga duración, tratamos la matricería como 100% eficiente (Estándar = Real).
+                added_row_std = False
+                if is_matriceria:
+                    val_std = duracion
+                    data['tiempo_cotizado'] += val_std
+                    global_planned_time += val_std
+                    added_row_std = True
+                else:
+                    # Para trabajos de SERIE: Deduplicamos por orden porque el ERP suele repetir el total de la orden.
+                    if qty > 0 and should_add_std_for_entity(mid, id_orden, matriceria_std_done_machine):
+                        val_std = std_mins
+                        data['tiempo_cotizado'] += val_std
+                        if add_std_global:
+                            global_planned_time += val_std
+                        added_row_std = True
             
             # Cálculo de Tiempos
             if is_descanso or reg['es_interrupcion']:
@@ -284,6 +367,8 @@ def dashboard_produccion(request):
                 'articulos': {}, # { nombre: {qty, std} }
                 'descanso_mins': 0.0,
                 'descanso_qty': 0.0,
+                'latest_article': '---',
+                'has_matriceria': False,
                 'has_any_obs': False,
                 'audit_log': []
             }
@@ -294,15 +379,22 @@ def dashboard_produccion(request):
 
         # Actualizar lo más reciente (que no sea descanso)
         if not is_descanso:
-            if not per.get('max_time') or (reg_time and per['max_time'] and reg_time > per['max_time']):
+            if not per.get('max_time') or (reg_time and per['max_time'] and reg_time >= per['max_time']):
                 per['max_time'] = reg_time
-                per['latest_obs'] = (obs_val or str(reg['articulod'] or "")).strip().upper()
-                per['latest_machine'] = mid
+                per['latest_obs'] = (obs_val or "ONLINE").strip().upper()
+                per['latest_machine'] = mid or per.get('latest_machine', '')
                 per['current_order'] = reg['id_orden']
+                # Fallback: si no hay artículo, usamos el nombre de la operación
+                art_d = (str(reg.get('articulod') or "").strip() or str(reg.get('operacion') or "").strip()).upper()
+                if art_d:
+                    per['latest_article'] = art_d
             elif not per.get('max_time'): # Si es el primero que vemos
                 per['max_time'] = reg_time
-                per['latest_obs'] = (obs_val or str(reg['articulod'] or "")).strip().upper()
-                per['latest_machine'] = mid
+                per['latest_obs'] = (obs_val or "ONLINE").strip().upper()
+                per['latest_machine'] = mid or per.get('latest_machine', '')
+                art_d = (str(reg.get('articulod') or "").strip() or str(reg.get('operacion') or "").strip()).upper()
+                if art_d:
+                    per['latest_article'] = art_d
                 per['current_order'] = reg['id_orden']
         elif not per.get('latest_obs'):
             # Si solo hay descansos por ahora, guardamos uno como fallback pero seguimos buscando
@@ -346,7 +438,18 @@ def dashboard_produccion(request):
             pass
         else:
             upers['cantidad_producida'] += qty
-            upers['tiempo_cotizado'] += std_mins
+            
+            # REGLA OEE MATRICERÍA para Personal
+            added_row_std_p = False
+            if is_matriceria:
+                upers['has_matriceria'] = True
+                upers['tiempo_cotizado'] += duracion
+                added_row_std_p = True
+            else:
+                # Trabajos normales: Solo sumar estándar si hay cierre de piezas y no se sumó esta orden aún hoy
+                if qty > 0 and should_add_std_for_entity(uid, id_orden, matriceria_std_done_personal):
+                    upers['tiempo_cotizado'] += std_mins
+                    added_row_std_p = True
         
         if is_descanso:
             upers['tiempo_paradas'] += duracion
@@ -357,12 +460,18 @@ def dashboard_produccion(request):
         else:
             # Es TIEMPO OPERATIVO (Proceso o similar que no es parada)
             upers['tiempo_operativo'] += duracion
-            # Sumar al detalle de artículos
+            # Sumar al detalle de artículos (para el total final que vea en el análisis)
             art_name = str(reg.get('articulod') or "Sin Artículo").strip().upper()
             if art_name not in upers['articulos']:
                 upers['articulos'][art_name] = {'qty': 0.0, 'std': 0.0}
             upers['articulos'][art_name]['qty'] += qty
-            upers['articulos'][art_name]['std'] += std_mins
+            
+            # Agregamos al desglose solo lo que sumó al KPI para que sea consistente
+            if added_row_std_p:
+                if is_matriceria:
+                    upers['articulos'][art_name]['std'] += duracion
+                else:
+                    upers['articulos'][art_name]['std'] += std_mins
 
     # 3. Calcular KPIs finales
     lista_kpis = []
@@ -478,6 +587,9 @@ def dashboard_produccion(request):
             'actual_time_formatted': format_time_display(t_op_hrs),
             'standard_time_formatted': format_time_display(t_std_hrs),
             'last_reason': data['latest_obs'],
+            'operator_name': data['latest_operator'],
+            'article_desc': data['latest_article'],
+            'mantenimiento': maquina_mantenimiento.get(mid),
             'last_machine': None,
             'latest_date': data['latest_date'],
             'current_order': data['current_order'],
@@ -503,9 +615,23 @@ def dashboard_produccion(request):
         qty = data['cantidad_producida']
         
         # Turno promedio para personal (9hs por día trabajado o del periodo)
-        # Aquí asumimos 9hs por cada día que el personal registró algo
-        t_disp_p = 9.0 * count_p 
+        # Para hoy, usamos el tiempo transcurrido del turno para que el OEE sea real
+        t_disp_p = 0.0
+        for d in dias_periodo:
+            start_h = 7.0 # Default start 07:00
+            end_h = 16.0  # Default end 16:00 (9hs shift)
+            
+            if is_viewing_today and d == today_date:
+                now_local = timezone.localtime(now)
+                now_dec = now_local.hour + now_local.minute/60.0
+                if now_dec < start_h: t_disp_p += 0.0
+                elif now_dec > end_h: t_disp_p += (end_h - start_h)
+                else: t_disp_p += (now_dec - start_h)
+            else:
+                t_disp_p += (end_h - start_h)
+        
         if t_disp_p < t_op_hrs: t_disp_p = t_op_hrs
+        if t_disp_p < 0.01: t_disp_p = 0.01
         
         availability = (t_op_hrs / t_disp_p) * 100.0 if t_disp_p > 0 else 0.0
         performance = (t_std_hrs / t_op_hrs) * 100.0 if t_op_hrs > 0 else 0.0
@@ -555,11 +681,32 @@ def dashboard_produccion(request):
         analysis_text += f"    • <span class='text-emerald-400 font-bold'>Rendimiento ({performance:.1f}%):</span> Resulta de {t_std_hrs:.2f} hrs estándar / {t_op_hrs:.2f} hrs reales.\n"
         analysis_text += f"    • <span class='text-emerald-400 font-bold'>Eficiencia Final (OEE):</span> {availability:.1f}% x {performance:.1f}% = <span class='text-emerald-400 font-bold'>{oee:.1f}%</span>.\n\n"
 
-        analysis_text += f"<span class='text-indigo-400 font-bold'>3. DESGLOSE TÉCNICO DE PRODUCCIÓN:</span>\n"
+        # --- SECCIÓN EXPLICATIVA SOLICITADA ---
+        analysis_text += f"<span class='text-indigo-400 font-bold'>3. ¿POR QUÉ ESTE VALOR ES EL CORRECTO?</span>\n"
+        analysis_text += f"    El sistema analiza el comportamiento de {data['nombre_personal']}:\n"
+        
+        if data.get('has_matriceria'):
+            analysis_text += f"    • <span class='text-sky-300 font-bold'>Matricería (Neutral):</span> Detectamos registros de Matricería. En estas tareas, la eficiencia se fija en 100% (tiempo estándar = tiempo real) para no inflar el OEE con trabajos de larga duración, contando como tiempo cumplido.\n"
+        else:
+            analysis_text += f"    • <span class='text-slate-400'>Matricería:</span> No se detectaron trabajos de matricería en este periodo.\n"
+
+        if performance > 105:
+            analysis_text += f"    • <span class='text-emerald-400 font-bold'>Producción (Alto Rendimiento):</span> El operario está trabajando significativamente más rápido que el estándar del ERP para las piezas en serie, lo que eleva su Rendimiento al {performance:.1f}%.\n"
+        elif performance < 80 and t_std_hrs > 0:
+            analysis_text += f"    • <span class='text-amber-400 font-bold'>Producción (Bajo Rendimiento):</span> El tiempo reportado excede el estándar teórico del ERP para las piezas producidas.\n"
+        else:
+            analysis_text += f"    • <span class='text-sky-300 font-bold'>Producción (Normal):</span> El ritmo de trabajo se encuentra dentro de los parámetros esperados según los estándares del ERP.\n"
+
+        if is_viewing_today:
+             analysis_text += f"    • <span class='text-indigo-300 font-bold'>Disponibilidad Inteligente:</span> Al ser 'Hoy', el cálculo de disponibilidad se ajusta automáticamente al tiempo transcurrido desde el inicio del turno (07:00). Esto evita que el OEE se vea bajo artificialmente al principio del día.\n\n"
+        else:
+             analysis_text += f"    • <span class='text-slate-400'>Disponibilidad Fija:</span> Para días pasados, se toma el turno completo (9 horas) para el cálculo histórico.\n\n"
+
+        analysis_text += f"<span class='text-indigo-400 font-bold'>4. DESGLOSE TÉCNICO DE PRODUCCIÓN:</span>\n"
         art_indented = [f"    {a}" for a in art_summary]
         analysis_text += "\n".join(art_indented) + "\n\n"
 
-        analysis_text += f"<span class='text-indigo-400 font-bold'>4. CONCLUSIÓN Y ANÁLISIS DE DESVÍO:</span>\n"
+        analysis_text += f"<span class='text-indigo-400 font-bold'>5. CONCLUSIÓN Y ANÁLISIS DE DESVÍO:</span>\n"
         
         # Lógica de Puntaje Resiliente
         performance_status = ""
@@ -605,7 +752,9 @@ def dashboard_produccion(request):
             'actual_time_formatted': format_time_display(t_op_hrs),
             'is_active_production': t_op_hrs > 0.001,
             'last_reason': data['latest_obs'],
-            'last_machine': data['latest_machine'],
+            'last_machine': nombres_maquinas.get(data['latest_machine'], data['latest_machine'] or 'S/M'),
+            'operator_name': data['nombre_personal'],
+            'article_desc': data['latest_article'],
             'current_order': data['current_order'],
             'audit_log': json.dumps(clean_log_p),
             'analysis_summary': analysis_text
@@ -909,22 +1058,15 @@ def obtener_auditoria(request):
     except:
         return JsonResponse({'status': 'error', 'message': 'Fechas inválidas'})
         
-    start_utc = timezone.make_aware(datetime.datetime.combine(d1, datetime.time.min))
-    end_utc = timezone.make_aware(datetime.datetime.combine(d2, datetime.time.max))
-    
-    # Sincronizamos con la lógica de fecha del dashboard principal
-    # para evitar desplazamientos de zona horaria (CONVERT(date, FECHA))
     start_str = d1.strftime('%Y-%m-%d')
     end_str = d2.strftime('%Y-%m-%d')
     
-    # Extraemos registros igual que en el dashboard para paridad total
     registros_raw = VTMan.objects.extra(
         where=["CONVERT(date, FECHA) >= %s AND CONVERT(date, FECHA) <= %s"],
         params=[start_str, end_str]
     ).order_by('fecha')
 
     if view_type == 'personnel':
-        # Buscamos registros que contengan el legajo (uid)
         registros_raw = registros_raw.filter(id_concepto__contains=uid)
     else:
         registros_raw = registros_raw.filter(id_maquina=uid)
@@ -934,10 +1076,11 @@ def obtener_auditoria(request):
     total_prod_mins = 0.0
     total_qty = 0.0
     total_rejected_qty = 0.0
-    articulos_resumen = {} # { name: {qty, std_sum} }
+    articulos_resumen = {} 
+    has_mat_audit = False
+    matriceria_std_done_audit = set()
     
     for reg_obj in registros_raw:
-        # Replicamos el strip() del dashboard para asegurar paridad total
         reg_uid = str(reg_obj.id_concepto or '').strip()
         if view_type == 'personnel' and reg_uid != uid:
             continue
@@ -955,21 +1098,23 @@ def obtener_auditoria(request):
         non_prod_keywords = ['REPROCESO', 'RETRABAJO']
         descanso_keywords = ['DESCANSO', 'ALMUERZO', 'PAUSA']
         
-        is_repro = (
-            raw_id_op in non_prod_keywords or 
-            raw_op_d in non_prod_keywords or
-            any(k in raw_art_d for k in non_prod_keywords) or
-            any(k in raw_obs for k in non_prod_keywords)
-        )
-        is_descanso = (
-            raw_op_d in descanso_keywords or
-            any(k in raw_art_d for k in descanso_keywords) or
-            any(k in raw_obs for k in descanso_keywords)
-        )
+        is_repro = (raw_id_op in non_prod_keywords or raw_op_d in non_prod_keywords or
+                    any(k in raw_art_d for k in non_prod_keywords) or
+                    any(k in raw_obs for k in non_prod_keywords))
+        is_descanso = (raw_op_d in descanso_keywords or
+                       any(k in raw_art_d for k in descanso_keywords) or
+                       any(k in raw_obs for k in descanso_keywords))
 
-        h_inicio = reg_obj.hora_inicio
-        if not h_inicio: h_inicio = reg_obj.fecha
+        h_inicio = reg_obj.hora_inicio or reg_obj.fecha
         
+        is_matriceria = 'MATRICER' in raw_art_d or 'MATRICER' in raw_op_d
+        id_orden = reg_obj.id_orden
+        
+        this_std = std_mins
+        if is_matriceria:
+            this_std = duracion
+            has_mat_audit = True
+
         audit_log.append({
             'hora': h_inicio.strftime('%H:%M:%S') if h_inicio else '--:--:--',
             'maquina': reg_obj.id_maquina or 'S/A',
@@ -978,7 +1123,7 @@ def obtener_auditoria(request):
             'cliente': '-',
             'cantidad': round(qty, 1),
             'tiempo': f"{round(duracion, 1)} min",
-            'estandar': f"{round(std_mins, 1)} min",
+            'estandar': f"{round(this_std, 1)} min",
             'observacion': reg_obj.observaciones or ''
         })
         
@@ -986,103 +1131,186 @@ def obtener_auditoria(request):
             total_rejected_qty += qty
         elif not is_descanso:
             total_qty += qty
-            total_std_mins += std_mins
+            # Para auditoría, sincronizamos lógica de deduplicación
+            if is_matriceria:
+                total_std_mins += duracion
+                this_std = duracion # Para el visual del log
+            elif qty > 0 and id_orden not in matriceria_std_done_audit:
+                total_std_mins += std_mins
+                if id_orden: matriceria_std_done_audit.add(id_orden)
+                this_std = std_mins
+            else:
+                # Si es una fila sin cantidad o repetida, para el log individual el std es 0
+                # para que la suma del log coincida con el KPI final
+                this_std = 0
             
-            # Lógica resiliente para Tiempo Operativo: 
-            # Si no es descanso ni interrupción, es trabajo.
             if not reg_obj.es_interrupcion:
                 total_prod_mins += duracion
                 art_name = reg_obj.articulod or "Sin Nombre"
                 if art_name not in articulos_resumen:
                     articulos_resumen[art_name] = {'qty': 0, 'std_sum': 0}
                 articulos_resumen[art_name]['qty'] += qty
-                articulos_resumen[art_name]['std_sum'] += std_mins
+                if is_matriceria or qty > 0:
+                    articulos_resumen[art_name]['std_sum'] += this_std
 
-    # Planned Time (Shift) - Match dashboard logic
     now_arg = timezone.localtime(timezone.now())
     is_viewing_today = (d1 == now_arg.date())
     if is_viewing_today:
-        start_shift = now_arg.replace(hour=6, minute=1, second=0, microsecond=0)
-        total_disp_mins = max(0, (now_arg - start_shift).total_seconds() / 60.0) if now_arg > start_shift else 0.01
+        sh, eh = 7.0, 16.0
+        now_dec = now_arg.hour + now_arg.minute / 60.0
+        if now_dec < sh: total_disp_mins = 0.01
+        elif now_dec > eh: total_disp_mins = (eh - sh) * 60.0
+        else: total_disp_mins = (now_dec - sh) * 60.0
     else:
-        total_disp_mins = 9 * 60.0 # 9hs standard
+        total_disp_mins = 9 * 60.0
 
     if total_disp_mins < total_prod_mins: total_disp_mins = total_prod_mins
 
-    # RICH DIAGNOSIS
     availability = (total_prod_mins / total_disp_mins * 100) if total_disp_mins > 0 else 0
     performance = (total_std_mins / total_prod_mins * 100) if total_prod_mins > 0 else 0
     oee = (availability * performance / 100)
     
-    analysis = f"<span class='text-indigo-400 font-bold'>DIAGNÓSTICO DETALLADO: {request.GET.get('id')}</span>\n\n"
-    
-    analysis += "<span class='text-sky-400 font-bold'>1. VERIFICACIÓN DE TIEMPOS (TABLERO VS ERP):</span>\n"
-    analysis += f"    • Tiempo Estándar: <span class='text-white font-bold'>{total_std_mins/60.0:.2f} hs</span> (Total acumulado por piezas).\n"
-    analysis += f"    • Tiempo Real (Operativo): <span class='text-white font-bold'>{total_prod_mins/60.0:.2f} hs</span> (Tiempo frente a máquina).\n"
-    analysis += f"    • Tiempo Fichado (Turno): <span class='text-white font-bold'>{total_disp_mins/60.0:.2f} hs</span> (Base de cálculo de disponibilidad).\n\n"
-    
-    analysis += f"<span class='text-sky-400 font-bold'>2. CÁLCULO DE LA EFICIENCIA ({oee:.1f}%):</span>\n"
-    analysis += "    El sistema cruza la Disponibilidad y el Rendimiento:\n"
-    analysis += f"    • Disponibilidad (<span class='text-emerald-400 font-bold'>{availability:.1f}%</span>): Resulta de {total_prod_mins/60.0:.2f} hrs trabajadas / {total_disp_mins/60.0:.2f} hrs de turno.\n"
-    analysis += f"    • Rendimiento (<span class='text-emerald-400 font-bold'>{performance:.1f}%</span>): Resulta de {total_std_mins/60.0:.2f} hrs estándar / {total_prod_mins/60.0:.2f} hrs reales.\n"
-    analysis += f"    • Eficiencia Final (OEE): {availability:.1f}% x {performance:.1f}% = <span class='text-emerald-400 font-bold'>{oee:.1f}%</span>.\n\n"
-    
-    analysis += "<span class='text-sky-400 font-bold'>3. DESGLOSE TÉCNICO DE PRODUCCIÓN:</span>\n"
-    if not articulos_resumen:
-        analysis += "    • No se detectó producción computable en este periodo.\n"
-    else:
-        for name, data in articulos_resumen.items():
-            std_pz = (data['std_sum'] / data['qty']) if data['qty'] > 0 else 0
-            analysis += f"    • <span class='text-white'>{data['qty']:.1f}</span> unidades de <span class='text-indigo-300'>'{name}'</span> (Estándar: {std_pz:.2f} min/pz)\n"
-    
-    analysis += "\n<span class='text-sky-400 font-bold'>4. CONCLUSIÓN Y ANÁLISIS DE DESVÍO:</span>\n"
-    
-    # Puntaje basado en OEE (más representativo de lo que ve el usuario)
-    rating = ""
-    rating_color = ""
-    
-    if total_prod_mins > 0 and total_qty == 0:
-        rating = "SIN PRODUCCIÓN REPORTADA"
-        rating_color = "text-amber-400"
-        analysis += f"    Puntaje: <span class='{rating_color} font-black underline'>{rating}</span>\n"
-        analysis += f"    <span class='text-[10px] text-slate-400 italic'>    * El recurso estuvo activo {total_prod_mins/60.0:.1f} hs pero no declaró piezas terminadas (Cant=0).</span>\n"
-    elif total_std_mins == 0 and total_qty > 0:
-        rating = "SIN ESTÁNDAR TÉCNICO"
-        rating_color = "text-amber-400"
-        analysis += f"    Puntaje: <span class='{rating_color} font-black underline'>{rating}</span>\n"
-        analysis += f"    <span class='text-[10px] text-slate-400 italic'>    * El ERP no tiene cargado el tiempo estándar para estas piezas, por lo que el OEE resulta en 0%.</span>\n"
-    else:
-        if oee >= 85:
-            rating = "MUY BUENO"
-            rating_color = "text-emerald-400"
-        elif oee >= 70:
-            rating = "BUENO"
-            rating_color = "text-sky-400"
-        elif oee >= 50:
-            rating = "REGULAR"
-            rating_color = "text-amber-400"
+    nombre_display = uid
+    try:
+        if view_type == 'personnel':
+            nombre_display = OperarioConfig.objects.get(legajo=uid).nombre
         else:
-            rating = "MALO"
-            rating_color = "text-red-400"
-        analysis += f"    Puntaje General (OEE): <span class='{rating_color} font-black underline'>{rating}</span>\n"
+            nombre_display = MaquinaConfig.objects.get(id_maquina=uid).nombre
+    except: pass
 
-    if performance > 110:
-        analysis += f"    <i class='fas fa-rocket text-emerald-400 mr-2'></i>El recurso superó el estándar teórico en un <span class='text-emerald-400 font-bold'>{(performance-100):.1f}%</span>.\n"
-    elif performance < 90 and performance > 0:
-         desvio_val = 100 - performance
-         analysis += f"    <i class='fas fa-exclamation-triangle text-amber-400 mr-2'></i>Se detectó un desvío del <span class='text-amber-400 font-bold'>{desvio_val:.1f}%</span> (Ritmo inferior al estándar).\n"
-         analysis += f"    <span class='text-slate-400 text-[10px]'>    * El desvío indica que se produjo un {desvio_val:.1f}% menos de lo esperado en el tiempo trabajado.</span>\n"
-    elif performance == 0 and total_qty > 0:
-        analysis += "    <i class='fas fa-info-circle text-sky-400 mr-2'></i>Información: Rendimiento no calculable por falta de Estándares en ERP.\n"
-    elif performance == 0 and total_prod_mins > 0:
-        analysis += "    <i class='fas fa-history text-amber-400 mr-2'></i>Nota: Se registra tiempo operativo pero sin cierre de cantidades.\n"
-    elif performance == 0:
-        analysis += "    Puntaje: <span class='text-slate-500 font-bold italic'>SIN TIEMPOS RECARGADOS</span>\n"
+    analysis = f"<span class='report-main-title'>DIAGNÓSTICO DETALLADO: {nombre_display} ({uid})</span>\n\n"
+    analysis += "<span class='text-indigo-400 font-bold'>1. VERIFICACIÓN DE TIEMPOS (TABLERO VS ERP):</span>\n"
+    analysis += f"    • Tiempo Estándar: <span class='text-white font-bold'>{total_std_mins/60.0:.2f} hs</span>\n"
+    analysis += f"    • Tiempo Real (Operativo): <span class='text-white font-bold'>{total_prod_mins/60.0:.2f} hs</span>\n"
+    analysis += f"    • Tiempo Fichado (Turno): <span class='text-white font-bold'>{total_disp_mins/60.0:.2f} hs</span>\n\n"
+    
+    analysis += f"<span class='text-indigo-400 font-bold'>2. CÁLCULO DE LA EFICIENCIA ({oee:.1f}%):</span>\n"
+    analysis += f"    • Disponibilidad (<span class='text-emerald-400 font-bold'>{availability:.1f}%</span>): {total_prod_mins/60.0:.2f} hrs / {total_disp_mins/60.0:.2f} hrs.\n"
+    analysis += f"    • Rendimiento (<span class='text-emerald-400 font-bold'>{performance:.1f}%</span>): {total_std_mins/60.0:.2f} hrs / {total_prod_mins/60.0:.2f} hrs.\n"
+    analysis += f"    • Eficiencia Final (OEE): <span class='text-emerald-400 font-bold'>{oee:.1f}%</span>.\n\n"
+    
+    analysis += f"<span class='text-indigo-400 font-bold'>3. ¿POR QUÉ ESTE VALOR ES EL CORRECTO?</span>\n"
+    if has_mat_audit:
+        analysis += f"    • <span class='text-sky-300 font-bold'>Matricería (Neutral):</span> Eficiencia al 100% para no distorsionar el OEE.\n"
     else:
-        analysis += "    El ritmo de trabajo se mantiene dentro de los parámetros estándar.\n"
+        analysis += f"    • <span class='text-slate-400'>Matricería:</span> No se detectaron trabajos de matricería.\n"
+    if performance > 105:
+        analysis += f"    • <span class='text-emerald-400 font-bold'>Producción (Alto Rendimiento):</span> Ritmo mayor al estándar ({performance:.1f}%).\n"
+    elif performance < 80 and total_std_mins > 0:
+        analysis += f"    • <span class='text-amber-400 font-bold'>Producción (Bajo Rendimiento):</span> Ritmo inferior al estándar.\n"
+    if is_viewing_today:
+        analysis += f"    • <span class='text-indigo-300 font-bold'>Disponibilidad Inteligente:</span> Basado en tiempo transcurrido hoy.\n\n"
+    else:
+        analysis += f"    • <span class='text-slate-400'>Disponibilidad Fija:</span> Basado en jornada de 9hs.\n\n"
+
+    analysis += "<span class='text-indigo-400 font-bold'>4. DESGLOSE TÉCNICO DE PRODUCCIÓN:</span>\n"
+    if not articulos_resumen:
+        analysis += "    • Sin producción computable.\n"
+    else:
+        for name, a_data in articulos_resumen.items():
+            std_pz = (a_data['std_sum'] / a_data['qty']) if a_data['qty'] > 0 else 0
+            analysis += f"    • <span class='text-white'>{a_data['qty']:.1f}</span> pz de <span class='text-indigo-300'>'{name}'</span> ({std_pz:.2f} min/pz)\n"
+    
+    analysis += "\n<span class='text-indigo-400 font-bold'>5. CONCLUSIÓN Y ANÁLISIS DE DESVÍO:</span>\n"
+    rating = "MUY BUENO" if oee >= 85 else "BUENO" if oee >= 70 else "REGULAR" if oee >= 50 else "MALO"
+    analysis += f"    Puntaje General (OEE): <span class='font-black underline'>{rating}</span>\n"
 
     return JsonResponse({
         'status': 'success',
         'audit_log': audit_log,
         'analysis': analysis
     })
+
+# --- MÓDULO DE MANTENIMIENTO ---
+
+def lista_mantenimiento(request):
+    """
+    Vista principal de mantenimiento: Lista de incidencias y formulario de reporte.
+    """
+    incidencias = Mantenimiento.objects.all().order_by('-fecha_reporte')
+    maquinas = MaquinaConfig.objects.filter(activa=True)
+    
+    # Filtros simples
+    maquina_id = request.GET.get('maquina')
+    estado = request.GET.get('estado')
+    
+    if maquina_id:
+        incidencias = incidencias.filter(maquina_id=maquina_id)
+    # Conteos para los cuadros de arriba
+    today_local = timezone.localtime(timezone.now()).date()
+    counts = {
+        'abiertos': Mantenimiento.objects.filter(estado='ABIERTO').count(),
+        'proceso': Mantenimiento.objects.filter(estado='PROCESO').count(),
+        'cerrados_hoy': Mantenimiento.objects.filter(estado='CERRADO', fecha_fin__date=today_local).count()
+    }
+        
+    return render(request, 'dashboard/mantenimiento.html', {
+        'incidencias': incidencias,
+        'maquinas': maquinas,
+        'counts': counts,
+        'filtros': {
+            'maquina': maquina_id,
+            'estado': estado
+        }
+    })
+
+def crear_incidencia(request):
+    """
+    API/Vista para reportar una nueva avería o servicio programado.
+    """
+    if request.method == 'POST':
+        maquina_id = request.POST.get('maquina')
+        tipo = request.POST.get('tipo')
+        descripcion = request.POST.get('descripcion')
+        tecnico = request.POST.get('tecnico')
+        fecha_str = request.POST.get('fecha')
+        
+        fecha_final = timezone.now()
+        if fecha_str:
+            try:
+                # El formato de datetime-local es YYYY-MM-DDTHH:MM
+                fecha_final = timezone.make_aware(datetime.datetime.strptime(fecha_str, '%Y-%m-%dT%H:%M'))
+            except:
+                pass
+        
+        Mantenimiento.objects.create(
+            maquina_id=maquina_id,
+            tipo=tipo,
+            descripcion_falla=descripcion,
+            tecnico_asignado=tecnico,
+            fecha_reporte=fecha_final,
+            estado='ABIERTO'
+        )
+        messages.success(request, "Incidencia reportada correctamente.")
+        return redirect('lista_mantenimiento')
+    return redirect('lista_mantenimiento')
+
+def gestionar_incidencia(request, pk):
+    """
+    Cambia el estado de una incidencia (Iniciar reparación o Finalizar).
+    """
+    incidencia = get_object_or_404(Mantenimiento, pk=pk)
+    accion = request.POST.get('accion')
+    
+    if accion == 'iniciar':
+        incidencia.estado = 'PROCESO'
+        incidencia.fecha_inicio_reparacion = timezone.now()
+        messages.info(request, f"Se ha iniciado la reparación de la máquina {incidencia.maquina.nombre}.")
+    elif accion == 'cerrar':
+        incidencia.estado = 'CERRADO'
+        incidencia.fecha_fin = timezone.now()
+        incidencia.observaciones_tecnicas = request.POST.get('observaciones')
+        messages.success(request, f"Reparación finalizada. La máquina {incidencia.maquina.nombre} vuelve a estar operativa.")
+        
+    incidencia.save()
+    return redirect('lista_mantenimiento')
+
+def eliminar_incidencia(request, pk):
+    """
+    Elimina una incidencia de mantenimiento.
+    """
+    incidencia = get_object_or_404(Mantenimiento, pk=pk)
+    nombre_maq = incidencia.maquina.nombre
+    incidencia.delete()
+    messages.warning(request, f"Se ha eliminado la incidencia de la máquina {nombre_maq}.")
+    return redirect('lista_mantenimiento')

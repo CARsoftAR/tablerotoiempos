@@ -39,8 +39,8 @@
                 <i class="fas fa-chart-line w-6 text-center"></i>
                 Producción
             </a>
-            <a href="#" class="flex items-center gap-3 px-3 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors group">
-                <i class="fas fa-tools w-6 text-center group-hover:text-indigo-400 transition-colors"></i>
+            <a href="{% url 'lista_mantenimiento' %}" class="flex items-center gap-3 px-3 py-3 rounded-lg {% if 'mantenimiento' in request.resolver_match.url_name %}bg-amber-600 shadow-lg shadow-amber-900/40 text-white{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %} transition-all group">
+                <i class="fas fa-tools w-6 text-center group-hover:text-amber-400 transition-colors"></i>
                 Mantenimiento
             </a>
             <a href="#" class="flex items-center gap-3 px-3 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors group">

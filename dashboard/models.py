@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 class VTMan(models.Model):
     use_db = 'sql_server'
@@ -97,3 +98,40 @@ class OperarioConfig(models.Model):
 
     def __str__(self):
         return f"{self.nombre} ({self.legajo})"
+
+class Mantenimiento(models.Model):
+    TIPO_CHOICES = [
+        ('CORRECTIVO', 'Correctivo (Rotura)'),
+        ('PREVENTIVO', 'Preventivo (Programado)'),
+        ('MEJORA', 'Mejora / Instalación'),
+    ]
+    ESTADO_CHOICES = [
+        ('ABIERTO', 'Pendiente / Averiada'),
+        ('PROCESO', 'En Reparación'),
+        ('CERRADO', 'Reparada / Finalizada'),
+    ]
+    maquina = models.ForeignKey(MaquinaConfig, on_delete=models.CASCADE, related_name='mantenimientos')
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default='CORRECTIVO')
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='ABIERTO')
+    descripcion_falla = models.TextField(verbose_name="Descripción de la Falla")
+    fecha_reporte = models.DateTimeField(default=timezone.now, verbose_name="Fecha del Reporte/Falla")
+    fecha_inicio_reparacion = models.DateTimeField(null=True, blank=True)
+    fecha_fin = models.DateTimeField(null=True, blank=True)
+    tecnico_asignado = models.CharField(max_length=100, null=True, blank=True)
+    observaciones_tecnicas = models.TextField(null=True, blank=True)
+
+    class Meta:
+        managed = True
+        db_table = 'mantenimiento_incidencias'
+        verbose_name = 'Incidencia de Mantenimiento'
+        verbose_name_plural = 'Incidencias de Mantenimiento'
+
+    def __str__(self):
+        return f"{self.maquina.nombre} - {self.tipo} ({self.estado})"
+
+    @property
+    def duracion_minutos(self):
+        if not self.fecha_fin:
+            return 0
+        diff = self.fecha_fin - self.fecha_reporte
+        return int(diff.total_seconds() / 60)
