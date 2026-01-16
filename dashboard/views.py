@@ -186,10 +186,7 @@ def dashboard_produccion(request):
     machine_orders = {} 
     kpi_por_personal = {}
     
-    # Trackers para evitar duplicar estándares en MATRICERÍA (donde el estándar es por trabajo terminado, no por pieza)
-    matriceria_std_done_machine = {} # {mid: set(id_orden)}
-    matriceria_std_done_personal = {} # {uid: set(id_orden)}
-    matriceria_std_done_global = set()
+    # Acumuladores Globales
 
     for reg in registros_data:
         mid = reg['id_maquina']
@@ -222,35 +219,16 @@ def dashboard_produccion(request):
         # El 'ONLINE' a veces trae cantidad 1 para marcar actividad, pero no es producción real terminada
         is_online_record = (raw_obs == 'ONLINE')
 
-        # Lógica especial para MATRICERÍA: el estándar es por TRABAJO TOTAL, no por pieza.
-        # Buscamos 'MATRICERIA' de forma insensible a mayúsculas y acentos
+        # Lógica especial para MATRICERÍA, TAREAS GENERALES y TAREAS MANUALES (Ajustes, Rebabado, etc.)
+        # El estándar en estas tareas suele ser nulo en el ERP, así que las tratamos como 100% eficientes.
         raw_clean = str(reg.get('articulod') or "").upper() + " " + str(reg.get('operacion') or "").upper()
-        is_matriceria = 'MATRICER' in raw_clean
+        special_keywords = ['MATRICER', 'TAREAS GENERALES', 'AJUSTES', 'REBABADO', 'GRABADO']
+        is_matriceria = any(k in raw_clean for k in special_keywords)
+        is_armado = ('ARMADO' in raw_clean) and not is_matriceria
+        
         id_orden = reg.get('id_orden')
         
-        # Determinamos si sumamos el estándar para Global, Máquina y Personal
         add_std_global = True
-        if is_matriceria and id_orden:
-            if id_orden in matriceria_std_done_global:
-                add_std_global = False
-            else:
-                matriceria_std_done_global.add(id_orden)
-        
-        # Para máquinas y personal, el tracker es individual para que todos reciban su "parte" del crédito si trabajan en la misma orden
-        # aunque el usuario dice que "el tiempo de producción siempre será menos", asumimos que si reportan la misma orden
-        # en distintas máquinas, cada una aporta al total.
-        
-        def should_add_std_for_entity(entity_id, order_id, art_name, tracker_dict):
-            """
-            Deduplica el estándar: si el ERP da el total de la orden en cada fila,
-            solo lo sumamos una vez por entidad/período.
-            Si no hay ID de orden, usamos el artículo como clave para evitar sumas fantasmas.
-            """
-            effective_id = order_id if order_id else f"NO_ORDER_{art_name}"
-            if entity_id not in tracker_dict: tracker_dict[entity_id] = set()
-            if effective_id in tracker_dict[entity_id]: return False
-            tracker_dict[entity_id].add(effective_id)
-            return True
 
         # 1. Caso: Sin Asignar (Máquina vacía o inactiva)
         is_unassigned = (not mid or mid in maquinas_inactivas_ids)
@@ -329,8 +307,9 @@ def dashboard_produccion(request):
                     global_planned_time += val_std
                     added_row_std = True
                 else:
-                    # Para trabajos de SERIE: Deduplicamos por orden porque el ERP suele repetir el total de la orden.
-                    if qty > 0 and should_add_std_for_entity(mid, id_orden, art_name_m, matriceria_std_done_machine):
+                    # Para trabajos de SERIE (incluido ARMADO): Sumamos el estándar del ERP.
+                    # El usuario dice que para Armado la cantidad siempre es 1 (para cálculo de std).
+                    if qty > 0 or (is_armado and std_mins > 0):
                         val_std = std_mins
                         data['tiempo_cotizado'] += val_std
                         if add_std_global:
@@ -449,8 +428,8 @@ def dashboard_produccion(request):
                 upers['tiempo_cotizado'] += duracion
                 added_row_std_p = True
             else:
-                # Trabajos normales: Solo sumar estándar si hay cierre de piezas y no se sumó esta orden aún hoy
-                if qty > 0 and should_add_std_for_entity(uid, id_orden, art_name_p, matriceria_std_done_personal):
+                # Trabajos normales: Sumar estándar si hay piezas (o si es Armado con estándar)
+                if qty > 0 or (is_armado and std_mins > 0):
                     upers['tiempo_cotizado'] += std_mins
                     added_row_std_p = True
         
@@ -1081,6 +1060,7 @@ def obtener_auditoria(request):
     total_rejected_qty = 0.0
     articulos_resumen = {} 
     has_mat_audit = False
+    has_special_tasks = False
     matriceria_std_done_audit = set()
     
     for reg_obj in registros_raw:
@@ -1108,16 +1088,18 @@ def obtener_auditoria(request):
                        any(k in raw_art_d for k in descanso_keywords) or
                        any(k in raw_obs for k in descanso_keywords))
 
-        h_inicio = reg_obj.hora_inicio or reg_obj.fecha
-        h_fin = reg_obj.hora_fin
-        
-        is_matriceria = 'MATRICER' in raw_art_d or 'MATRICER' in raw_op_d
+        special_audit_keywords = ['MATRICER', 'TAREAS GENERALES', 'AJUSTES', 'REBABADO', 'GRABADO']
+        is_matriceria = any(k in raw_art_d or k in raw_op_d for k in special_audit_keywords)
+        is_armado = ('ARMADO' in raw_art_d or 'ARMADO' in raw_op_d) and not is_matriceria
         id_orden = reg_obj.id_orden
         
         this_std = std_mins
         if is_matriceria:
             this_std = duracion
-            has_mat_audit = True
+            if 'MATRICER' in raw_art_d or 'MATRICER' in raw_op_d:
+                has_mat_audit = True
+            else:
+                has_special_tasks = True
 
         audit_log.append({
             'inicio': h_inicio.strftime('%H:%M:%S') if h_inicio else '--:--:--',
@@ -1140,18 +1122,15 @@ def obtener_auditoria(request):
             if is_matriceria:
                 total_std_mins += duracion
                 this_std = duracion # Para el visual del log
+            elif qty > 0 or (is_armado and std_mins > 0):
+                # Caso Normal / Armado: Sumar estándar de la fila
+                total_std_mins += std_mins
+                this_std = std_mins
             elif qty > 0:
-                # Para auditoría, sincronizamos lógica de deduplicación incluso si no hay ID de orden
-                eff_id = id_orden if id_orden else f"NO_ORDER_{raw_art_d}"
-                if eff_id not in matriceria_std_done_audit:
-                    total_std_mins += std_mins
-                    matriceria_std_done_audit.add(eff_id)
-                    this_std = std_mins
-                else:
-                    this_std = 0
+                # Caso Normal: Sumar estándar de la fila
+                total_std_mins += std_mins
+                this_std = std_mins
             else:
-                # Si es una fila sin cantidad o repetida, para el log individual el std es 0
-                # para que la suma del log coincida con el KPI final
                 this_std = 0
             
             if not reg_obj.es_interrupcion:
@@ -1200,9 +1179,13 @@ def obtener_auditoria(request):
     analysis_conversational += "<span class='text-indigo-400 font-black text-xl uppercase tracking-tighter'>¿POR QUÉ ESE VALOR ES EL CORRECTO?</span>\n"
     analysis_conversational += f"Si miramos los datos de hoy de <span class='text-white font-bold'>{nombre_display} ({uid})</span>, el sistema está haciendo lo siguiente:\n\n"
     
-    # 1. MATRICERÍA (Solo si aplica)
-    if has_mat_audit:
-        analysis_conversational += f"<span class='text-emerald-400 font-black'>• MATRICERÍA (REGLA 1:1):</span> {nombre_display} realizó tareas de matricería. Este tiempo se computa con <span class='text-white underline font-bold'>eficiencia neutra (100%)</span> para no penalizar el OEE por puestas a punto.\n\n"
+    # 1. MATRICERÍA / TAREAS ESPECIALES (Solo si aplica)
+    if has_mat_audit or has_special_tasks:
+        tipo_tarea = "Matricería" if has_mat_audit else "Tareas Especiales"
+        if has_mat_audit and has_special_tasks:
+            tipo_tarea = "Matricería y Tareas Especiales"
+            
+        analysis_conversational += f"<span class='text-emerald-400 font-black'>• {tipo_tarea.upper()} (REGLA 1:1):</span> {nombre_display} realizó <span class='text-white font-bold'>{tipo_tarea.lower()}</span>. Este tiempo se computa con <span class='text-white underline font-bold'>eficiencia neutra (100%)</span> para no penalizar el OEE en trabajos sin estándar fijo.\n\n"
     
     # 2. RENDIMIENTO
     if performance > 115:
@@ -1264,7 +1247,7 @@ def obtener_auditoria(request):
     
     analysis_detailed += "    <div>\n"
     analysis_detailed += "      <span class='text-white font-bold block mb-1'>2. Casos Especiales</span>\n"
-    analysis_detailed += "      • <span class='text-emerald-400'>MATRICERÍA (REGLA 1:1):</span> Como no hay estándar fijo, asignamos Tiempo Estándar = Tiempo Real. Esto da siempre 100% de rendimiento para no penalizar el OEE.\n"
+    analysis_detailed += "      • <span class='text-emerald-400'>REGLA 1:1 (NEUTRA):</span> En tareas como Matricería, Ajustes o Tareas Generales (sin estándar fijo), asignamos Tiempo Estándar = Tiempo Real. Esto da siempre 100% de rendimiento para no penalizar el OEE.\n"
     analysis_detailed += "      • <span class='text-amber-400'>DEDUPLICACIÓN:</span> El sistema limpia registros repetidos del ERP para que el cálculo sea 100% justo y no se infle artificialmente.\n"
     analysis_detailed += "    </div>\n"
     
