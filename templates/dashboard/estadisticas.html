@@ -341,8 +341,11 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             colors: ['#3b82f6', '#f59e0b', '#10b981', '#f43f5e', '#8b5cf6', '#6366f1', '#ec4899', '#14b8a6'],
             
-            // Global DataLabels (disabled here to use per-series, but kept for safety overrides)
-            dataLabels: { enabled: false },
+            // Global DataLabels configuration
+            dataLabels: {
+                enabled: true,
+                enabledOnSeries: [0, 1] // Enable on both Bars (Minutes) and Line (%)
+            },
             
             labels: chartData.pareto.labels,
             xaxis: {

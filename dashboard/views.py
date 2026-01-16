@@ -1600,7 +1600,7 @@ def lista_mantenimiento(request):
     preventivos = []
     # Solo procesamos si hay maquinas activas
     for m in maquinas:
-        if m.frecuencia_preventivo_horas > 0:
+        if m.frecuencia_preventivo_horas > 0 or m.fecha_proximo_preventivo:
             # Calcular uso desde el último service
             start_date = m.fecha_ultimo_preventivo
             
@@ -1614,18 +1614,21 @@ def lista_mantenimiento(request):
             used_mins = agg['total'] or 0.0
             used_hours = used_mins / 60.0
             
-            completion_pct = (used_hours / m.frecuencia_preventivo_horas * 100.0)
+            completion_pct = 0.0
+            if m.frecuencia_preventivo_horas > 0:
+                completion_pct = (used_hours / m.frecuencia_preventivo_horas * 100.0)
             
             status = 'OK'
             details = []
 
-            # 1. Comprobación por HORAS
-            if used_hours >= m.frecuencia_preventivo_horas:
-                status = 'CRITICAL'
-                details.append("Límite de horas excedido")
-            elif completion_pct >= 85:
-                status = 'WARNING' if status != 'CRITICAL' else status
-                details.append("Próximo a límite de horas")
+            # 1. Comprobación por HORAS (solo si frecuencia > 0)
+            if m.frecuencia_preventivo_horas > 0:
+                if used_hours >= m.frecuencia_preventivo_horas:
+                    status = 'CRITICAL'
+                    details.append("Límite de horas excedido")
+                elif completion_pct >= 85:
+                    status = 'WARNING' if status != 'CRITICAL' else status
+                    details.append("Próximo a límite de horas")
             
             # 2. Comprobación por FECHA (Agenda)
             agenda_msg = ""
@@ -1651,20 +1654,21 @@ def lista_mantenimiento(request):
                     details.append(msg)
                     agenda_msg = msg
                 
-            preventivos.append({
-                'maquina': m,
-                'used_hours': round(used_hours, 1),
-                'limit_hours': m.frecuencia_preventivo_horas,
-                'progress': min(round(completion_pct, 1), 100),
-                'status': status,
-                'last_service': m.fecha_ultimo_preventivo,
-                'next_service_date': m.fecha_proximo_preventivo,
-                'agenda_msg': agenda_msg,
-                'days_diff': days_diff
-            })
+            if status != 'OK':
+                preventivos.append({
+                    'maquina': m,
+                    'used_hours': round(used_hours, 1),
+                    'limit_hours': m.frecuencia_preventivo_horas,
+                    'progress': min(round(completion_pct, 1), 100),
+                    'status': status,
+                    'last_service': m.fecha_ultimo_preventivo,
+                    'next_service_date': m.fecha_proximo_preventivo,
+                    'agenda_msg': agenda_msg,
+                    'days_diff': days_diff
+                })
             
     # Ordenar: Críticos primero
-    preventivos.sort(key=lambda x: x['progress'], reverse=True)
+    preventivos.sort(key=lambda x: (x['status'] == 'CRITICAL', x['progress']), reverse=True)
 
     # Conteos para los cuadros de arriba
     today_local = timezone.localtime(timezone.now()).date()
