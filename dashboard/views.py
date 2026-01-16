@@ -4,10 +4,14 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.db.models import Sum, Q, F
 from django.utils import timezone
 from datetime import timedelta
-from .models import VTMan, Maquina, MaquinaConfig, OperarioConfig, Mantenimiento
+from .models import VTMan, Maquina, MaquinaConfig, OperarioConfig, Mantenimiento, AuditLog
 from django.contrib import messages
+from django.http import HttpResponse
+from django.template.loader import get_template
+from xhtml2pdf import pisa
 
-def dashboard_produccion(request):
+
+def dashboard_produccion(request, return_context=False, force_date=None, force_start=None, force_end=None, force_format=None):
     # Rango de fechas: HOY (para ver estado en tiempo real)
     # Rango de fechas: HOY
     # Lógica de Fecha:
@@ -25,6 +29,9 @@ def dashboard_produccion(request):
     else:
         time_format = request.session.get('time_format', 'clock')
 
+    if force_format:
+        time_format = force_format
+
     is_tv_mode = request.GET.get('mode') == 'tv'
     if is_tv_mode:
         request.session['is_tv_mode'] = True
@@ -33,9 +40,13 @@ def dashboard_produccion(request):
     
     is_tv_mode = request.session.get('is_tv_mode', False)
 
-    fecha_param = request.GET.get('date') or request.GET.get('fecha')
-    start_param = request.GET.get('start_date')
-    end_param = request.GET.get('end_date')
+    if force_date:
+        fecha_param = str(force_date)
+    else:
+        fecha_param = request.GET.get('date') or request.GET.get('fecha')
+        
+    start_param = force_start or request.GET.get('start_date')
+    end_param = force_end or request.GET.get('end_date')
 
     now_local = timezone.localtime(timezone.now())
     today_date = now_local.date()
@@ -137,11 +148,22 @@ def dashboard_produccion(request):
 
     fecha_str = fecha_target_start.strftime('%Y-%m-%d')
 
-    # Forzar comparación de FECHA como cadena o usando extra() para evitar el desplazamiento de zona horaria de Django
-    # que estaba causando que el día 08/01 muestre registros del 09/01 (y pierda los del 08/01 temprano)
+    # OPTIMIZACIÓN DE QUERY (RANGO DE FECHAS)
+    # Reemplazamos CONVERT(date, FECHA) que prevenía el uso de índices (Full Table Scan)
+    # por un filtro de rango nativo.
+    # Usamos datetime naive para que Django no convierta la zona horaria y busque "literalmente" en la DB
+    # tal como están guardados los registros (similar a lo que hacía el CONVERT).
+    f_start_naive = datetime.datetime.combine(fecha_target_start, datetime.time.min)
+    f_end_naive = datetime.datetime.combine(fecha_target_end, datetime.time.max)
+
+    # Usamos CONVERT para asegurar coincidencia total con la lógica de auditoría
+    # Esto evita problemas de Timezone donde fecha__range corta registros de la tarde/noche
+    start_str = fecha_target_start.strftime('%Y-%m-%d')
+    end_str = fecha_target_end.strftime('%Y-%m-%d')
+    
     registros_data = VTMan.objects.extra(
-        where=["CONVERT(date, FECHA) = %s"],
-        params=[fecha_str]
+        where=["CONVERT(date, FECHA) >= %s AND CONVERT(date, FECHA) <= %s"],
+        params=[start_str, end_str]
     ).order_by('hora_inicio').values(
         'id_maquina', 'tiempo_minutos', 'tiempo_cotizado', 'cantidad_producida',
         'es_proceso', 'es_interrupcion', 'observaciones', 'fecha', 'id_orden', 'operacion',
@@ -151,10 +173,10 @@ def dashboard_produccion(request):
     kpi_por_maquina = {}
     actual_online_ids = set()
     if is_viewing_today:
-        online_qs = VTMan.objects.extra(
-            where=["CONVERT(date, FECHA) = %s"],
-            params=[fecha_str]
-        ).filter(observaciones='ONLINE').values_list('id_maquina', flat=True)
+        online_qs = VTMan.objects.filter(
+            fecha__range=(f_start_naive, f_end_naive),
+            observaciones='ONLINE'
+        ).values_list('id_maquina', flat=True)
         actual_online_ids = set(online_qs)
 
     # Pre-inicializar TODAS las máquinas configuradas y activas
@@ -543,7 +565,10 @@ def dashboard_produccion(request):
             h = int(total_minutes // 60)
             m = int(round(total_minutes % 60))
             if m == 60: h += 1; m = 0
-            return f"{h} hs {m} min" if h > 0 else f"{m} min"
+            if h > 0:
+                return f"{h} hs {m} min"
+            else:
+                return f"{m} min"
 
         # Preparar log para serializar SIN modificar el original (porque se comparte con personal)
         serializable_log = []
@@ -659,7 +684,10 @@ def dashboard_produccion(request):
             h = int(total_minutes // 60)
             m = int(round(total_minutes % 60))
             if m == 60: h += 1; m = 0
-            return f"{h} hs {m} min" if h > 0 else f"{m} min"
+            if h > 0:
+                return f"{h} hs {m} min"
+            else:
+                return f"{m} min"
 
         # FILTRADO: Solo mostrar personal activo y de producción
         if uid not in operarios_activos_ids:
@@ -902,18 +930,53 @@ def dashboard_produccion(request):
         })
 
     # 2. Pareto de Paradas (Motivos de interrupción)
+    # OPTIMIZACIÓN Y CORRECCIÓN PARETO: Incluir Mantenimientos y Fix Query
+    # 1. Interrupciones de Producción (VTMan)
     pareto_data = []
-    # Buscamos registros de interrupción en el periodo actual
-    interrupciones = VTMan.objects.extra(
-        where=["CONVERT(date, FECHA) >= %s AND CONVERT(date, FECHA) <= %s"],
-        params=[fecha_target_start.strftime('%Y-%m-%d'), fecha_target_end.strftime('%Y-%m-%d')]
+    interrupciones = VTMan.objects.filter(
+        fecha__range=(f_start_naive, f_end_naive)
     ).filter(Q(es_interrupcion=True) | Q(articulod__icontains='DESCANSO'))
     
     reasons = {}
     for inter in interrupciones:
         r = str(inter.observaciones or inter.articulod or "S/M").strip().upper()
         if not r or r == 'NONE': r = "OTRO"
+        # Limpiamos prefijos comunes para agrupar mejor
+        r = r.replace("PARADA POR ", "").replace("INTERRUPCION ", "")
         reasons[r] = reasons.get(r, 0) + (inter.tiempo_minutos or 0)
+
+    # 2. Incidencias de Mantenimiento (Tabla MySQL)
+    # Las paradas por mantenimiento CRÍTICAS suelen estar aquí y no en VTMan
+    for m in mantenimientos_periodo:
+        try:
+            # Calcular duración efectiva dentro del periodo visualizado
+            # Inicio del problema (o inicio del periodo si empezó antes)
+            start_m = max(m.fecha_reporte, fecha_inicio_utc)
+            
+            # Fin del problema
+            if m.fecha_fin:
+                end_m = min(m.fecha_fin, fecha_fin_utc)
+            elif is_viewing_today:
+                # Si sigue abierta y es hoy, contamos hasta AHORA
+                end_m = timezone.now()
+            else:
+                # Si sigue abierta pero estamos viendo el pasado, contamos hasta fin del día
+                end_m = fecha_fin_utc
+            
+            if end_m > start_m:
+                duration_mins = (end_m - start_m).total_seconds() / 60.0
+                
+                # Etiqueta para el gráfico
+                # Usamos el TIPO o la Falla como motivo
+                if m.tipo == 'CORRECTIVO':
+                    label = f"ROTURA: {m.maquina.nombre}" 
+                else:
+                    label = f"MANT: {m.tipo}"
+                
+                # Sumamos al Pareto
+                reasons[label] = reasons.get(label, 0) + duration_mins
+        except Exception as e:
+            pass
     
     sorted_reasons = sorted(reasons.items(), key=lambda x: x[1], reverse=True)[:5]
     for name, mins in sorted_reasons:
@@ -936,6 +999,8 @@ def dashboard_produccion(request):
         'history_trend': json.dumps(history_trend),
         'pareto_data': json.dumps(pareto_data)
     }
+    if return_context:
+        return context
     return render(request, 'dashboard/produccion.html', context)
 
 
@@ -972,7 +1037,7 @@ def crear_maquina(request):
                 messages.error(request, 'El ID y Nombre son obligatorios.')
                 return render(request, 'dashboard/form_maquina.html')
 
-            MaquinaConfig.objects.create(
+            mc = MaquinaConfig.objects.create(
                 id_maquina=id_maquina,
                 nombre=nombre,
                 activa=request.POST.get('activa') == 'on',
@@ -985,6 +1050,16 @@ def crear_maquina(request):
                 horario_inicio_dom=request.POST.get('horario_inicio_dom') or None,
                 horario_fin_dom=request.POST.get('horario_fin_dom') or None,
             )
+            
+            # Audit
+            AuditLog.objects.create(
+                usuario=request.user.username if request.user.is_authenticated else 'Admin',
+                modelo='MaquinaConfig',
+                referencia_id=id_maquina,
+                accion='CREATE',
+                detalle=f"Creación de máquina {nombre}"
+            )
+            
             messages.success(request, 'Máquina creada correctamente.')
             return redirect('gestion_maquinas')
         except Exception as e:
@@ -1012,7 +1087,18 @@ def editar_maquina(request, pk):
             maquina.trabaja_domingo = request.POST.get('trabaja_domingo') == 'on'
             maquina.horario_inicio_dom = request.POST.get('horario_inicio_dom') or None
             maquina.horario_fin_dom = request.POST.get('horario_fin_dom') or None
+            
+            # Detect changes (basic)
             maquina.save()
+            
+            AuditLog.objects.create(
+                usuario=request.user.username if request.user.is_authenticated else 'Admin',
+                modelo='MaquinaConfig',
+                referencia_id=maquina.id_maquina,
+                accion='UPDATE',
+                detalle=f"Actualización de configuración: {maquina.nombre}"
+            )
+
             messages.success(request, 'Máquina actualizada.')
             
             # Redirigir a la misma página del listado
@@ -1025,7 +1111,17 @@ def editar_maquina(request, pk):
 
 def eliminar_maquina(request, pk):
     maquina = get_object_or_404(MaquinaConfig, pk=pk)
+    mid = maquina.id_maquina
     maquina.delete()
+    
+    AuditLog.objects.create(
+        usuario=request.user.username if request.user.is_authenticated else 'Admin',
+        modelo='MaquinaConfig',
+        referencia_id=mid,
+        accion='DELETE',
+        detalle=f"Eliminación de máquina {mid}"
+    )
+    
     messages.success(request, 'Máquina eliminada.')
     return redirect('gestion_maquinas')
 
@@ -1177,6 +1273,9 @@ def obtener_auditoria(request):
                 has_mat_audit = True
             else:
                 has_special_tasks = True
+
+        h_inicio = reg_obj.hora_inicio
+        h_fin = reg_obj.hora_fin
 
         audit_log.append({
             'inicio': h_inicio.strftime('%H:%M:%S') if h_inicio else '--:--:--',
@@ -1541,3 +1640,60 @@ def eliminar_incidencia(request, pk):
     incidencia.delete()
     messages.warning(request, f"Se ha eliminado la incidencia de la máquina {nombre_maq}.")
     return redirect('lista_mantenimiento')
+
+def auditoria_cambios(request):
+    logs = AuditLog.objects.all().order_by('-fecha')
+    return render(request, 'dashboard/auditoria_cambios.html', {'logs': logs})
+
+def generar_reporte_pdf(request):
+    # Reuse dashboard logic to get data
+    # Force context return
+    # Explicitly extract params to ensure they are passed
+    date_param = request.GET.get('date')
+    start_param = request.GET.get('start_date')
+    end_param = request.GET.get('end_date')
+    
+    context = dashboard_produccion(request, return_context=True, force_date=date_param, force_start=start_param, force_end=end_param, force_format='clock')
+    
+    if not isinstance(context, dict):
+        return HttpResponse("Error al generar datos del reporte", status=500)
+
+    machines = context.get('cards_data', [])
+    operators = context.get('kpis_personal', [])
+    
+    # Global OEE Average (Active Machines only)
+    active_machines = [m for m in machines if m['is_active_production']]
+    total_oee = sum([m['oee'] for m in active_machines])
+    count_active = len(active_machines)
+    global_oee = total_oee / count_active if count_active > 0 else 0
+    
+    # Top 5 Operators (Dashboard logic sorts them by OEE descending already)
+    # But let's make sure
+    operators_sorted = sorted(operators, key=lambda x: x['oee'], reverse=True)
+    top_operators = operators_sorted[:5]
+    
+    # Top 5 Downtime Machines (Lowest Availability)
+    # Filter only those that had planned time (don't count unused machines as downtime)
+    machines_with_work = [m for m in machines if m['horas_std'] > 0 or m['horas_prod'] > 0]
+    top_downtime_machines = sorted(machines_with_work, key=lambda x: x['availability'])[:5]
+    
+    pdf_context = {
+        'fecha': context.get('fecha_target'),
+        'global_oee': round(global_oee, 2),
+        'top_operators': top_operators,
+        'top_downtime_machines': top_downtime_machines,
+        'machines': machines, # Full list
+    }
+    
+    template_path = 'dashboard/reporte_pdf.html'
+    template = get_template(template_path)
+    html = template.render(pdf_context)
+
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = 'filename="reporte_diario.pdf"'
+
+    pisa_status = pisa.CreatePDF(html, dest=response)
+
+    if pisa_status.err:
+       return HttpResponse('Error al generar PDF', status=500)
+    return response

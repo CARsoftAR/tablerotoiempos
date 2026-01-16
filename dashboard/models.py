@@ -135,3 +135,30 @@ class Mantenimiento(models.Model):
             return 0
         diff = self.fecha_fin - self.fecha_reporte
         return int(diff.total_seconds() / 60)
+from django.db import models
+from django.utils import timezone
+from django.contrib.auth.models import User
+
+class AuditLog(models.Model):
+    ACTION_CHOICES = [
+        ('CREATE', 'Creación'),
+        ('UPDATE', 'Actualización'),
+        ('DELETE', 'Eliminación'),
+    ]
+    
+    usuario = models.CharField(max_length=100, null=True, blank=True, verbose_name="Usuario")
+    modelo = models.CharField(max_length=50, verbose_name="Entidad Afectada") # Ej: MaquinaConfig, Incidencia
+    referencia_id = models.CharField(max_length=100, verbose_name="ID Referencia") # ID del objeto
+    accion = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    detalle = models.TextField(verbose_name="Detalle del Cambio") # JSON or Text description of what changed
+    fecha = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        managed = True
+        db_table = 'audit_log_cambios'
+        verbose_name = 'Registro de Auditoría'
+        verbose_name_plural = 'Registros de Auditoría'
+        ordering = ['-fecha']
+
+    def __str__(self):
+        return f"{self.fecha} - {self.usuario} - {self.accion} {self.modelo}"

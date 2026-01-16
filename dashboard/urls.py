@@ -22,4 +22,8 @@ urlpatterns = [
 
     # API Auditoría
     path('obtener-auditoria/', views.obtener_auditoria, name='obtener_auditoria'),
+    
+    # Reportes y Auditoría General
+    path('auditoria-cambios/', views.auditoria_cambios, name='auditoria_cambios'),
+    path('generar-reporte-pdf/', views.generar_reporte_pdf, name='generar_reporte_pdf'),
 ]

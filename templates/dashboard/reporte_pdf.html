@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        @page {
+            size: A4;
+            margin: 1.5cm;
+            @frame footer_frame {           /* Another static Frame */
+                -pdf-frame-content: footerContent;
+                bottom: 1cm;
+                margin-left: 1cm;
+                margin-right: 1cm;
+                height: 1cm;
+            }
+        }
+        body {
+            font-family: Helvetica, Arial, sans-serif;
+            font-size: 11px;
+            color: #333;
+            line-height: 1.4;
+        }
+        h1 { color: #1e3a8a; font-size: 22px; margin-bottom: 5px; text-transform: uppercase; border-bottom: 2px solid #1e3a8a; padding-bottom: 10px; }
+        h2 { color: #0f172a; font-size: 16px; margin-top: 25px; margin-bottom: 10px; background-color: #f1f5f9; padding: 5px 10px; border-left: 5px solid #1e3a8a; }
+        
+        .header-info { text-align: center; margin-bottom: 10px; color: #64748b; }
+        
+        .kpi-box {
+            background-color: #eff6ff;
+            border: 1px solid #bfdbfe;
+            color: #1e40af;
+            padding: 15px;
+            text-align: center;
+            font-size: 18px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        .kpi-label { font-size: 12px; text-transform: uppercase; color: #60a5fa; margin-bottom: 5px; display: block; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 5px; }
+        th { background-color: #0f172a; color: white; font-weight: bold; padding: 8px; text-align: left; font-size: 10px; text-transform: uppercase; }
+        td { border-bottom: 1px solid #e2e8f0; padding: 8px; color: #334155; }
+        tr:nth-child(even) { background-color: #f8fafc; }
+        
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .font-bold { font-weight: bold; }
+        
+        .status-good { color: #059669; font-weight: bold; }
+        .status-warn { color: #d97706; font-weight: bold; }
+        .status-bad { color: #dc2626; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Reporte Diario de Producción</h1>
+    <div class="header-info">
+        Generado el: {% now "d/m/Y H:i" %} | Análisis de Fecha: <strong>{{ fecha|date:"d/m/Y" }}</strong>
+    </div>
+
+    <div class="kpi-box">
+        <span class="kpi-label">Eficiencia Global de Equipos (OEE)</span>
+        <strong>{{ global_oee }}%</strong>
+    </div>
+
+    <h2>Top 5 Operarios (Más Eficientes)</h2>
+    <table>
+        <thead>
+            <tr>
+                <th width="30%">Operario</th>
+                <th width="15%" class="text-center">OEE</th>
+                <th width="15%" class="text-center">Disponibilidad</th>
+                <th width="15%" class="text-center">Rendimiento</th>
+                <th width="15%" class="text-center">Calidad</th>
+                <th width="10%">Prod.</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for op in top_operators %}
+            <tr>
+                <td>{{ op.operator_name }}</td>
+                <td class="text-center font-bold" style="color: #1e3a8a;">{{ op.oee }}%</td>
+                <td class="text-center">{{ op.availability }}%</td>
+                <td class="text-center">{{ op.performance }}%</td>
+                <td class="text-center">{{ op.quality }}%</td>
+                <td class="text-right">{{ op.actual_qty|floatformat:0 }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="text-center">No hay datos de operarios para este periodo.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Top 5 Máquinas con Mayor Impacto (Baja Disponibilidad)</h2>
+    <table>
+        <thead>
+            <tr>
+                <th width="40%">Máquina</th>
+                <th width="20%" class="text-center">Disponibilidad</th>
+                <th width="40%">Última Actividad / Observación</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for m in top_downtime_machines %}
+            <tr>
+                <td>{{ m.name }}</td>
+                <td class="text-center {% if m.availability < 85 %}status-bad{% else %}status-good{% endif %}">
+                    {{ m.availability }}%
+                </td>
+                <td>
+                    <div style="font-size: 10px; font-weight: bold; color: #1e40af;">
+                        Tiempo Operativo: {{ m.actual_time_formatted }}
+                    </div>
+                    {% if m.last_reason %}
+                    <div style="font-size: 9px; color: #64748b; margin-top: 2px;">
+                        Última Obs: {{ m.last_reason|truncatechars:40 }}
+                    </div>
+                    {% else %}
+                    <div style="font-size: 9px; color: #94a3b8; margin-top: 2px; font-style: italic;">
+                        (Sin motivos de parada registrados)
+                    </div>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="3" class="text-center">No hay datos de máquinas activas para este periodo.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    <div id="footerContent" style="text-align:center; color:#94a3b8; font-size:9px;">
+        Documento generado automáticamente por sistema Tablero de Tiempos ABBAMAT.
+    </div>
+</body>
+</html>

@@ -219,6 +219,12 @@
             <a href="?mode={% if is_tv_mode %}normal{% else %}tv{% endif %}" class="{% if is_tv_mode %}bg-emerald-600 ring-2 ring-emerald-400 text-white animate-pulse{% else %}bg-slate-200 text-slate-600 hover:bg-slate-300{% endif %} px-3 py-1.5 rounded shadow transition-all font-medium text-xs flex items-center gap-2">
                 <i class="fas fa-desktop"></i> MODO TV
             </a>
+            
+            <a href="{% url 'generar_reporte_pdf' %}{% if is_range %}?start_date={{ fecha_target|date:'Y-m-d' }}&end_date={{ fecha_fin_target|date:'Y-m-d' }}{% else %}?date={{ fecha_target|date:'Y-m-d' }}{% endif %}" 
+               target="_blank"
+               class="bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded shadow transition-all font-medium text-xs flex items-center gap-2 border border-rose-500">
+                <i class="fas fa-file-pdf"></i> PDF
+            </a>
         </div>
     </div>
 
