@@ -82,7 +82,8 @@ DATABASES = {
         'PORT': os.getenv('SQLSERVER_PORT'),
         'OPTIONS': {
             'driver': os.getenv('SQLSERVER_DRIVER'),
-            'connection_timeout': 20,
+            'connection_timeout': 60,
+            'command_timeout': 60,
         },
     }
 }

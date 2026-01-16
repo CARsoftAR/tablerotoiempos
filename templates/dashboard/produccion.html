@@ -220,6 +220,16 @@
                 <i class="fas fa-desktop"></i> MODO TV
             </a>
             
+            <!-- Full Screen Toggle -->
+            <button id="btnFullScreen" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded shadow transition-all font-medium text-xs flex items-center gap-2 border border-indigo-500">
+                <i class="fas fa-expand"></i> <span class="hidden sm:inline">PANTALLA</span>
+            </button>
+
+            <!-- TTS Audio Toggle -->
+            <button id="btnAudio" onclick="enableAudioContext()" class="bg-slate-200 hover:bg-slate-300 text-slate-600 px-3 py-1.5 rounded shadow transition-all font-medium text-xs flex items-center gap-2">
+                <i class="fas fa-volume-mute"></i>
+            </button>
+
             <a href="{% url 'generar_reporte_pdf' %}{% if is_range %}?start_date={{ fecha_target|date:'Y-m-d' }}&end_date={{ fecha_fin_target|date:'Y-m-d' }}{% else %}?date={{ fecha_target|date:'Y-m-d' }}{% endif %}" 
                target="_blank"
                class="bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded shadow transition-all font-medium text-xs flex items-center gap-2 border border-rose-500">
@@ -806,8 +816,97 @@
     }
     {% endif %}
 
+    // --- ALERTAS DE VOZ INTELIGENTES (TTS) ---
+    // Inicialización de síntesis de voz
+    let audioEnabled = false;
+    let speechSynth = window.speechSynthesis;
+    let alertsAnnounced = new Set(); // Para no repetir la misma alerta constantemente
+
+    function enableAudioContext() {
+        audioEnabled = !audioEnabled;
+        const btn = document.getElementById('btnAudio');
+        
+        if (audioEnabled) {
+            btn.innerHTML = '<i class="fas fa-volume-up text-indigo-600"></i>';
+            btn.classList.add('ring-2', 'ring-indigo-400', 'bg-indigo-50');
+            // Test breve para "desbloquear" audio en móviles/browsers
+            speak("Alertas de voz activadas.");
+            checkCriticalAlerts(); // Chequear inmediatamente
+        } else {
+            btn.innerHTML = '<i class="fas fa-volume-mute"></i>';
+            btn.classList.remove('ring-2', 'ring-indigo-400', 'bg-indigo-50');
+            speechSynth.cancel();
+        }
+    }
+
+    function speak(text) {
+        if (!audioEnabled || !speechSynth) return;
+        
+        // Cancelar lo anterior para priorizar lo nuevo
+        speechSynth.cancel(); 
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'es-ES'; // Español
+        utterance.rate = 1.0; 
+        utterance.pitch = 1.0;
+        
+        speechSynth.speak(utterance);
+    }
+
+    function checkCriticalAlerts() {
+        if (!audioEnabled) return;
+
+        // Buscar elementos con alerta visual de inactividad
+        const alerts = document.querySelectorAll('.animate-bounce'); // Usamos la clase del badge rojo
+        let message = "";
+        let count = 0;
+
+        alerts.forEach(alertEl => {
+            const text = alertEl.innerText;
+            // Extraer info: "35 MIN. INACTIVO" -> 35
+            // Buscar el nombre de la máquina asociado (está en el padre)
+            const card = alertEl.closest('.group');
+            const machineName = card.querySelector('h3').innerText;
+
+            const alertId = machineName + text; 
+            
+            // Si no se anunció recientemente
+            if (!alertsAnnounced.has(alertId)) {
+                message += `Atención. ${machineName} detenida por más de 30 minutos. `;
+                alertsAnnounced.add(alertId);
+                count++;
+                
+                // Limpiar del set después de 10 min para volver a avisar si sigue igual
+                setTimeout(() => alertsAnnounced.delete(alertId), 600000); 
+            }
+        });
+
+        if (count > 0) {
+            speak(message + " Por favor verificar.");
+        }
+    }
+
     // --- GRÁFICOS APEX ---
     document.addEventListener('DOMContentLoaded', function() {
+        // Full Screen Toggle Logic (Top Bar)
+        const btnFs = document.getElementById('btnFullScreen');
+        if (btnFs) {
+            btnFs.addEventListener('click', () => {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen();
+                    btnFs.innerHTML = '<i class="fas fa-compress"></i><span class="hidden sm:inline">SALIR</span>';
+                } else {
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                        btnFs.innerHTML = '<i class="fas fa-expand"></i><span class="hidden sm:inline">PANTALLA</span>';
+                    }
+                }
+            });
+        }
+        
+        // Chequear alertas periodicamente si está activado
+        setInterval(checkCriticalAlerts, 60000); // Cada 1 min
+
         const trendData = JSON.parse('{{ history_trend|safe }}');
         const paretoData = JSON.parse('{{ pareto_data|safe }}');
 
@@ -823,13 +922,66 @@
         }
 
         if(document.getElementById('chart-pareto')) {
-            new ApexCharts(document.getElementById('chart-pareto'), {
-                series: [{ name: 'Horas', data: paretoData.map(i => i.value) }],
-                chart: { height: '100%', type: 'bar', toolbar: { show: false }, foreColor: '#94a3b8' },
-                plotOptions: { bar: { borderRadius: 4, distributed: true, horizontal: true } },
-                xaxis: { categories: paretoData.map(i => i.label) },
-                legend: { show: false }
-            }).render();
+            if (paretoData && paretoData.labels && paretoData.labels.length > 0) {
+                new ApexCharts(document.getElementById('chart-pareto'), {
+                    series: [
+                        {
+                            name: 'Tiempo (Min)',
+                            type: 'column',
+                            data: paretoData.values
+                        },
+                        {
+                            name: 'Acumulado %',
+                            type: 'line',
+                            data: paretoData.cumulative
+                        }
+                    ],
+                    chart: { 
+                        height: '100%', 
+                        type: 'line', 
+                        toolbar: { show: false }, 
+                        foreColor: '#94a3b8',
+                        animations: { enabled: true, easing: 'easeinout', speed: 800 }
+                    },
+                    stroke: { width: [0, 3], curve: 'smooth' },
+                    plotOptions: {
+                        bar: { borderRadius: 2, distributed: true, columnWidth: '60%' }
+                    },
+                    colors: ['#3b82f6', '#f59e0b', '#10b981', '#f43f5e', '#8b5cf6'],
+                    dataLabels: {
+                        enabled: true,
+                        enabledOnSeries: [0, 1],
+                        formatter: function (val, opts) {
+                            if (opts.seriesIndex === 1) return val + "%";
+                            const h = Math.floor(val / 60);
+                            return h > 0 ? h + "h" : val + "m";
+                        },
+                        style: { fontSize: '10px', fontWeight: 'bold' },
+                        background: { enabled: true, foreColor: '#fff', borderRadius: 2, opacity: 0.9, borderWidth: 0 }
+                    },
+                    legend: { show: false },
+                    xaxis: { 
+                        categories: paretoData.labels,
+                        labels: { style: { fontSize: '10px' }, rotate: -45, trim: true }
+                    },
+                    yaxis: [
+                        {
+                            title: { text: 'Minutos', style: { color: '#3b82f6', fontSize: '10px' } },
+                            labels: { style: { colors: '#94a3b8' } }
+                        },
+                        {
+                            opposite: true,
+                            title: { text: '% Acumulado', style: { color: '#f59e0b', fontSize: '10px' } },
+                            max: 105,
+                            labels: { style: { colors: '#94a3b8' } }
+                        }
+                    ],
+                    grid: { borderColor: '#334155', strokeDashArray: 4 },
+                    tooltip: { theme: 'dark', shared: true, intersect: false }
+                }).render();
+            } else {
+                 document.getElementById('chart-pareto').innerHTML = "<div class='h-full flex items-center justify-center text-slate-600 text-xs font-bold uppercase tracking-widest'>Sin datos de paradas</div>";
+            }
         }
     });
 </script>

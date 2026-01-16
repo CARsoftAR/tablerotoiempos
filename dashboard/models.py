@@ -69,10 +69,13 @@ class MaquinaConfig(models.Model):
     horario_inicio_sab = models.TimeField(verbose_name="Inicio Sábado", null=True, blank=True)
     horario_fin_sab = models.TimeField(verbose_name="Fin Sábado", null=True, blank=True)
     
-    # Horarios Domingo (Opcional)
-    trabaja_domingo = models.BooleanField(default=False)
     horario_inicio_dom = models.TimeField(verbose_name="Inicio Domingo", null=True, blank=True)
     horario_fin_dom = models.TimeField(verbose_name="Fin Domingo", null=True, blank=True)
+
+    # Mantenimiento Preventivo
+    frecuencia_preventivo_horas = models.IntegerField(default=0, verbose_name="Frecuencia Service (Hs)", help_text="0 = Desactivado")
+    fecha_ultimo_preventivo = models.DateTimeField(null=True, blank=True, verbose_name="Fecha Último Service")
+    fecha_proximo_preventivo = models.DateField(null=True, blank=True, verbose_name="Fecha Próximo Service (Agenda)")
 
     class Meta:
         managed = True

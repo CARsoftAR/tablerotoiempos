@@ -26,4 +26,8 @@ urlpatterns = [
     # Reportes y Auditoría General
     path('auditoria-cambios/', views.auditoria_cambios, name='auditoria_cambios'),
     path('generar-reporte-pdf/', views.generar_reporte_pdf, name='generar_reporte_pdf'),
+    path('estadisticas/', views.estadisticas_avanzadas, name='estadisticas'),
+    
+    # API Alertas
+    path('api/check-alerts/', views.check_alerts, name='check_alerts'),
 ]

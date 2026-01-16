@@ -39,6 +39,10 @@
                 <i class="fas fa-chart-line w-6 text-center"></i>
                 Producción
             </a>
+            <a href="{% url 'estadisticas' %}" class="flex items-center gap-3 px-3 py-3 rounded-lg {% if 'estadisticas' in request.resolver_match.url_name %}bg-purple-600 shadow-lg shadow-purple-900/50 text-white{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %} font-medium group transition-all">
+                <i class="fas fa-chart-pie w-6 text-center group-hover:text-purple-400 transition-colors"></i>
+                Estadísticas
+            </a>
             <a href="{% url 'lista_mantenimiento' %}" class="flex items-center gap-3 px-3 py-3 rounded-lg {% if 'mantenimiento' in request.resolver_match.url_name %}bg-amber-600 shadow-lg shadow-amber-900/40 text-white{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %} transition-all group">
                 <i class="fas fa-tools w-6 text-center group-hover:text-amber-400 transition-colors"></i>
                 Mantenimiento
@@ -96,10 +100,23 @@
                 </div>
 
                 <!-- Notifications -->
-                <button class="relative text-gray-500 hover:text-indigo-600 transition-colors">
-                    <i class="fas fa-bell text-xl"></i>
-                    <span class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full border-2 border-white">3</span>
-                </button>
+                <div class="relative" id="notification-container">
+                    <button class="relative text-gray-500 hover:text-indigo-600 transition-colors" id="notification-btn" onclick="toggleNotifications()">
+                        <i class="fas fa-bell text-xl" id="bell-icon"></i>
+                        <span id="notification-count" class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full border-2 border-white hidden">0</span>
+                    </button>
+                    <!-- Dropdown -->
+                    <div id="notification-dropdown" class="hidden absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-2xl border border-gray-100 z-[100] overflow-hidden">
+                        <div class="px-4 py-3 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
+                            <h3 class="font-bold text-gray-700 text-sm">Notificaciones</h3>
+                            <button class="text-xs text-indigo-500 hover:text-indigo-700 font-medium" onclick="clearNotifications()">Limpiar</button>
+                        </div>
+                        <ul id="notification-list" class="max-h-64 overflow-y-auto">
+                            <!-- Items will be injected here -->
+                            <li class="px-4 py-8 text-center text-gray-400 text-xs italic">No tienes nuevas notificaciones</li>
+                        </ul>
+                    </div>
+                </div>
 
                 <!-- Time -->
                 <div class="bg-indigo-50 px-4 py-1.5 rounded-full text-indigo-700 font-medium text-sm border border-indigo-100 hidden sm:block" id="current-time">
@@ -114,6 +131,37 @@
         </div>
     </main>
 
+    <!-- ALERT DETAILS MODAL -->
+    <div id="alert-modal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[150] flex items-center justify-center hidden p-4 opacity-0 transition-opacity duration-300">
+        <div class="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm overflow-hidden scale-95 transition-transform duration-300 transform" id="alert-modal-content">
+            <div class="p-8 flex flex-col items-center text-center">
+                <!-- Icono Dinámico -->
+                <div id="alert-modal-icon-bg" class="w-20 h-20 rounded-full flex items-center justify-center mb-6 bg-red-50 text-red-500 shadow-xl shadow-red-100">
+                    <i id="alert-modal-icon" class="fas fa-exclamation-triangle text-3xl"></i>
+                </div>
+                
+                <h3 id="alert-modal-title" class="text-2xl font-black text-slate-800 mb-2 font-brand">Detención Crítica</h3>
+                
+                <div class="bg-slate-50 rounded-xl p-4 w-full mb-6 border border-slate-100">
+                    <p id="alert-modal-message" class="text-slate-600 text-sm leading-relaxed font-medium">
+                        La máquina ha detenido su producción sin justificación.
+                    </p>
+                </div>
+
+                <div class="flex gap-3 w-full">
+                    <button onclick="closeAlertModal()" 
+                        class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-3.5 rounded-2xl transition-all text-sm">
+                        Cerrar
+                    </button>
+                    <a href="{% url 'lista_mantenimiento' %}" id="alert-btn-action"
+                        class="flex-1 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-red-200 transition-all text-sm transform hover:-translate-y-0.5" >
+                        Ver Máquina
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         function updateTime() {
             const now = new Date();
@@ -122,6 +170,161 @@
         }
         setInterval(updateTime, 1000);
         updateTime();
+
+        // --- NOTIFICATION SYSTEM ---
+        const notifDropdown = document.getElementById('notification-dropdown');
+        const notifList = document.getElementById('notification-list');
+        const notifCount = document.getElementById('notification-count');
+        const bellIcon = document.getElementById('bell-icon');
+        let notificationStore = [];
+
+        function toggleNotifications() {
+            notifDropdown.classList.toggle('hidden');
+        }
+
+        function clearNotifications() {
+            notificationStore = [];
+            renderNotifications();
+        }
+
+        function addNotification(type, title, message) {
+            const id = Date.now();
+            notificationStore.unshift({ id, type, title, message, time: new Date() });
+            renderNotifications();
+            
+            // Visual Effect
+            bellIcon.classList.add('animate-swing'); 
+            setTimeout(() => bellIcon.classList.remove('animate-swing'), 1000);
+        }
+
+        // --- MODAL LOGIC ---
+        function openAlertModal(alert) {
+            const modal = document.getElementById('alert-modal');
+            const content = document.getElementById('alert-modal-content');
+            
+            // Set Content
+            document.getElementById('alert-modal-title').textContent = alert.title;
+            document.getElementById('alert-modal-message').textContent = alert.message;
+            
+            // Style based on type
+            const iconBg = document.getElementById('alert-modal-icon-bg');
+            const icon = document.getElementById('alert-modal-icon');
+            const btnAction = document.getElementById('alert-btn-action');
+
+            if (alert.type === 'error') {
+                iconBg.className = "w-20 h-20 rounded-full flex items-center justify-center mb-6 bg-red-50 text-red-500 shadow-xl shadow-red-100";
+                icon.className = "fas fa-exclamation-triangle text-3xl";
+                btnAction.className = "flex-1 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-red-200 transition-all text-sm transform hover:-translate-y-0.5";
+                btnAction.textContent = "Reportar Falla";
+                btnAction.href = "{% url 'lista_mantenimiento' %}"; 
+            } else {
+                iconBg.className = "w-20 h-20 rounded-full flex items-center justify-center mb-6 bg-amber-50 text-amber-500 shadow-xl shadow-amber-100";
+                icon.className = "fas fa-info-circle text-3xl";
+                btnAction.className = "flex-1 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-amber-200 transition-all text-sm transform hover:-translate-y-0.5";
+                btnAction.textContent = "Ver Detalles";
+                btnAction.href = "#"; // Could link to specific machine stats if we parsed the ID
+            }
+
+            // Show
+            modal.classList.remove('hidden');
+            // Small delay for transition
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                content.classList.remove('scale-95');
+                content.classList.add('scale-100');
+            }, 10);
+            
+            // Close dropdown
+            notifDropdown.classList.add('hidden');
+        }
+
+        function closeAlertModal() {
+            const modal = document.getElementById('alert-modal');
+            const content = document.getElementById('alert-modal-content');
+            
+            modal.classList.add('opacity-0');
+            content.classList.remove('scale-100');
+            content.classList.add('scale-95');
+            
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        function renderNotifications() {
+            if (notificationStore.length === 0) {
+                notifList.innerHTML = '<li class="px-4 py-8 text-center text-gray-400 text-xs italic">No tienes nuevas notificaciones</li>';
+                notifCount.classList.add('hidden');
+                return;
+            }
+
+            notifCount.textContent = notificationStore.length;
+            notifCount.classList.remove('hidden');
+
+            let html = '';
+            notificationStore.forEach((n, index) => {
+                let iconClass = 'fa-info-circle text-blue-500 bg-blue-50';
+                if (n.type === 'warning') iconClass = 'fa-exclamation-triangle text-amber-500 bg-amber-50';
+                if (n.type === 'error') iconClass = 'fa-exclamation-circle text-red-500 bg-red-50';
+
+                // We store the object in a way we can retrieve it. 
+                // Simple trick: attach it to window or use index.
+                // Better: Pass index to click handler.
+                html += `
+                <li onclick='openAlertModal(notificationStore[${index}])' class="cursor-pointer px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors flex gap-3 text-left group">
+                    <div class="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center ${iconClass.split(' ').slice(1).join(' ')} group-hover:scale-110 transition-transform">
+                        <i class="fas ${iconClass.split(' ')[0]}"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold text-gray-800">${n.title}</p>
+                        <p class="text-[11px] text-gray-500 leading-snug line-clamp-2">${n.message}</p>
+                        <span class="text-[9px] text-gray-400 mt-1 block">${n.time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    </div>
+                </li>`;
+            });
+            notifList.innerHTML = html;
+        }
+
+        // --- REAL TIME ALERTS POLLING ---
+        async function fetchRealAlerts() {
+            try {
+                const response = await fetch('{% url "check_alerts" %}');
+                const data = await response.json();
+                
+                if (data.alerts && data.alerts.length > 0) {
+                    data.alerts.forEach(alert => {
+                        // Avoid duplicates if recent (simple check by message body)
+                        const exists = notificationStore.some(n => n.message === alert.message && (new Date() - n.time) < 600000); // 10 min throttle
+                        if (!exists) {
+                            addNotification(alert.type, alert.title, alert.message);
+                            
+                            // Audio Alert if function exists (from dashboard/produccion.html)
+                            if (typeof speak === 'function') {
+                                speak(alert.message);
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error("Error fetching alerts:", error);
+            }
+        }
+
+        // Start Polling
+        fetchRealAlerts();
+        setInterval(fetchRealAlerts, 60000); // Every 1 minute
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const container = document.getElementById('notification-container');
+            // If click is outside notification container AND outside the modal (if open)
+            const modal = document.getElementById('alert-modal');
+            const isModalOpen = !modal.classList.contains('hidden');
+            
+            if (!container.contains(event.target) && !isModalOpen) {
+                notifDropdown.classList.add('hidden');
+            }
+        });
     </script>
     {% block extra_js %}{% endblock %}
 </body>

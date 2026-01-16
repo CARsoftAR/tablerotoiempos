@@ -48,6 +48,78 @@
         </div>
     </div>
 
+    <!-- Mantenimiento Preventivo -->
+    {% if preventivos %}
+    <div class="mb-2">
+        <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2 mb-4">
+            <i class="fas fa-clock text-indigo-600"></i> Estado de Mantenimiento Preventivo
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {% for p in preventivos %}
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
+                <!-- Status Bar -->
+                <div class="absolute top-0 left-0 w-full h-1 
+                    {% if p.status == 'CRITICAL' %}bg-red-500
+                    {% elif p.status == 'WARNING' %}bg-amber-500
+                    {% else %}bg-emerald-500{% endif %}"></div>
+                
+                <div class="flex justify-between items-start mb-4 pt-2">
+                    <div>
+                       <h3 class="font-bold text-slate-800 text-sm">{{ p.maquina.nombre }}</h3>
+                       <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">INTERVALO {{ p.limit_hours }}H</span>
+                    </div>
+                    <div class="w-10 h-10 rounded-full flex items-center justify-center font-black text-xs
+                        {% if p.status == 'CRITICAL' %}bg-red-100 text-red-600 animate-pulse
+                        {% elif p.status == 'WARNING' %}bg-amber-100 text-amber-600
+                        {% else %}bg-slate-100 text-emerald-600{% endif %}">
+                        {{ p.progress }}%
+                    </div>
+                </div>
+                
+                <div class="flex justify-between items-end mb-2">
+                     <div class="flex flex-col">
+                        <span class="text-[10px] text-slate-400 uppercase font-bold">Uso Actual</span>
+                        <span class="text-sm font-black text-slate-700">{{ p.used_hours }} h</span>
+                     </div>
+                     <div class="flex flex-col text-right">
+                        <span class="text-[10px] text-slate-400 uppercase font-bold">Agenda</span>
+                        {% if p.agenda_msg %}
+                            <span class="text-[10px] font-bold {% if p.status == 'CRITICAL' %}text-red-500{% else %}text-amber-500{% endif %}">
+                                <i class="fas fa-calendar-times mr-1"></i>{{ p.agenda_msg }}
+                            </span>
+                        {% elif p.next_service_date %}
+                            <span class="text-[10px] text-slate-500 font-medium">{{ p.next_service_date|date:"d/m/Y" }}</span>
+                        {% else %}
+                             <span class="text-[10px] text-slate-300 italic">No programado</span>
+                        {% endif %}
+                     </div>
+                </div>
+                
+                <!-- Progress Bar -->
+                <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden mb-4 relative">
+                    <div class="h-full rounded-full transition-all duration-1000
+                        {% if p.status == 'CRITICAL' %}bg-red-500
+                        {% elif p.status == 'WARNING' %}bg-amber-500
+                        {% else %}bg-emerald-500{% endif %}"
+                        style="width: {{ p.progress }}%"></div>
+                </div>
+                
+                {% if p.status == 'CRITICAL' or p.status == 'WARNING' %}
+                <button onclick="document.getElementById('modal-reporte').classList.remove('hidden'); setTimeout(() => { document.querySelector('select[name=maquina]').value='{{ p.maquina.id }}'; document.querySelector('select[name=tipo]').value='PREVENTIVO'; document.querySelector('textarea[name=descripcion]').value='Mantenimiento Preventivo:{% if p.agenda_msg %} Calendario - {{ p.agenda_msg }}{% else %} {{ p.limit_hours }} Horas (Uso: {{ p.used_hours }}h){% endif %}'; }, 100);" 
+                    class="w-full py-2 rounded-lg bg-indigo-50 hover:bg-indigo-600 text-indigo-600 hover:text-white text-xs font-bold transition-all border border-indigo-200 hover:border-indigo-600 flex items-center justify-center gap-2">
+                    <i class="fas fa-calendar-check"></i> Programar Service
+                </button>
+                {% else %}
+                 <div class="w-full py-2 rounded-lg bg-slate-50 text-slate-400 text-xs font-bold text-center border border-slate-100 flex items-center justify-center gap-2">
+                    <i class="fas fa-check"></i> Operativo
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Active Incidents -->
     <div class="bg-slate-900 rounded-3xl shadow-2xl overflow-hidden border border-slate-800">
         <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
