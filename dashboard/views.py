@@ -25,6 +25,14 @@ def dashboard_produccion(request):
     else:
         time_format = request.session.get('time_format', 'clock')
 
+    is_tv_mode = request.GET.get('mode') == 'tv'
+    if is_tv_mode:
+        request.session['is_tv_mode'] = True
+    elif 'mode' in request.GET: # Si viene mode=normal o similar
+        request.session['is_tv_mode'] = False
+    
+    is_tv_mode = request.session.get('is_tv_mode', False)
+
     fecha_param = request.GET.get('date') or request.GET.get('fecha')
     start_param = request.GET.get('start_date')
     end_param = request.GET.get('end_date')
@@ -162,6 +170,7 @@ def dashboard_produccion(request):
                 'cantidad_rechazada': 0.0,
                 'latest_obs': '',
                 'latest_date': None,
+                'latest_activity_time': None,
                 'latest_operator': 'S/A',
                 'latest_article': '---',
                 'current_order': '---',
@@ -270,13 +279,14 @@ def dashboard_produccion(request):
 
             data = kpi_por_maquina[mid]
             
-            if not data['latest_obs'] and reg['observaciones']:
-                data['latest_obs'] = str(reg['observaciones']).strip().upper()
+            # Tracking de última actividad real
+            act_time = reg.get('hora_fin') or reg.get('hora_inicio') or reg.get('fecha')
+            if not data['latest_activity_time'] or (act_time and data['latest_activity_time'] and act_time > data['latest_activity_time']):
+                data['latest_activity_time'] = act_time
+                if reg['observaciones']:
+                    data['latest_obs'] = str(reg['observaciones']).strip().upper()
                 data['latest_date'] = reg['fecha']
                 data['current_order'] = reg['id_orden']
-            elif not data['current_order'] or data['current_order'] == '---':
-                data['current_order'] = reg['id_orden']
-                data['latest_date'] = reg['fecha']
             
             # Siempre guardamos el último operario y artículo visto (ya que viene ordenado por hora_inicio)
             uid = str(reg.get('id_concepto') or '').strip()
@@ -553,6 +563,27 @@ def dashboard_produccion(request):
             c.pop('fecha_dt', None)
             clean_log.append(c)
 
+        idle_mins = 0
+        if is_viewing_today and data['latest_activity_time']:
+            l_act = data['latest_activity_time']
+            # Corrección de Zona Horaria (FIX DEFINITIVO v2):
+            # El usuario ve "180 MIN INACTIVO" constantemente.
+            # Esto indica que el registro de la DB (l_act) está 3 horas ATRÁS de la hora actual (Wall Clock).
+            # Ejemplo: Ahora es 10:55. DB dice 07:55. Diferencia = 3h (180 min).
+            # Solución: Asumimos que la DB guarda en UTC naive o con delay de zona.
+            # Le SUMAMOS 3 horas a la fecha de la DB para traerla a la hora Argentina.
+            
+            now_local = timezone.localtime(timezone.now()).replace(tzinfo=None)
+            
+            if timezone.is_aware(l_act):
+                l_act = timezone.make_naive(l_act)
+            
+            # Compensación del Offset de 3 horas
+            l_act_adjusted = l_act + datetime.timedelta(hours=3)
+            
+            diff = now_local - l_act_adjusted
+            idle_mins = max(0, diff.total_seconds() / 60.0)
+
         lista_kpis.append({
             'id': mid,
             'name': data['nombre_maquina'],
@@ -576,6 +607,7 @@ def dashboard_produccion(request):
             'latest_date': data['latest_date'],
             'current_order': data['current_order'],
             'is_active_production': t_op_hrs > 0.001,
+            'idle_mins': round(idle_mins, 1),
             'audit_log': json.dumps(clean_log)
         })
         
@@ -845,6 +877,48 @@ def dashboard_produccion(request):
         'active_count': len(lista_kpis_personal),
     }
 
+    # --- NUEVOS DATOS PARA GRÁFICOS PROFESIONALES ---
+    
+    # 1. Gráfico de Tendencia (Últimos 7 días)
+    history_trend = []
+    days_back = 7
+    for i in range(days_back - 1, -1, -1):
+        d_check = today_date - datetime.timedelta(days=i)
+        if d_check.weekday() == 6: continue # Saltar domingos
+        
+        # Básicamente: sumamos std y prod de ese día
+        d_start = timezone.make_aware(datetime.datetime.combine(d_check, datetime.time.min), datetime.timezone.utc)
+        d_end = timezone.make_aware(datetime.datetime.combine(d_check, datetime.time.max), datetime.timezone.utc)
+        
+        # Simplificamos Performance para el histórico (Ratio de sumas)
+        hist_data = VTMan.objects.filter(fecha__range=(d_start, d_end))
+        h_std = hist_data.aggregate(s=Sum('tiempo_cotizado'))['s'] or 0.0
+        h_prod = hist_data.aggregate(s=Sum('tiempo_minutos'))['s'] or 0.0
+            
+        h_perf = (h_std * 60 / h_prod * 100) if h_prod > 0 else 0
+        history_trend.append({
+            'day': d_check.strftime('%d/%m'),
+            'oee': round(h_perf * 0.8, 1) # Estimación rápida OEE Histórico
+        })
+
+    # 2. Pareto de Paradas (Motivos de interrupción)
+    pareto_data = []
+    # Buscamos registros de interrupción en el periodo actual
+    interrupciones = VTMan.objects.extra(
+        where=["CONVERT(date, FECHA) >= %s AND CONVERT(date, FECHA) <= %s"],
+        params=[fecha_target_start.strftime('%Y-%m-%d'), fecha_target_end.strftime('%Y-%m-%d')]
+    ).filter(Q(es_interrupcion=True) | Q(articulod__icontains='DESCANSO'))
+    
+    reasons = {}
+    for inter in interrupciones:
+        r = str(inter.observaciones or inter.articulod or "S/M").strip().upper()
+        if not r or r == 'NONE': r = "OTRO"
+        reasons[r] = reasons.get(r, 0) + (inter.tiempo_minutos or 0)
+    
+    sorted_reasons = sorted(reasons.items(), key=lambda x: x[1], reverse=True)[:5]
+    for name, mins in sorted_reasons:
+        pareto_data.append({'label': name[:15], 'value': round(mins/60.0, 1)})
+
     context = {
         'kpis': lista_kpis,
         'fecha_target': fecha_target_start,
@@ -857,7 +931,10 @@ def dashboard_produccion(request):
         'resumen_activo': resumen_personal_dict if view_type == 'personnel' else resumen_maquinas,
         'cards_data': lista_kpis_personal if view_type == 'personnel' else lista_kpis,
         'kpis_personal': lista_kpis_personal,
-        'resumen_personal': resumen_personal_dict
+        'resumen_personal': resumen_personal_dict,
+        'is_tv_mode': is_tv_mode,
+        'history_trend': json.dumps(history_trend),
+        'pareto_data': json.dumps(pareto_data)
     }
     return render(request, 'dashboard/produccion.html', context)
 

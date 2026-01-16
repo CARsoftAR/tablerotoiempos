@@ -105,7 +105,7 @@
                 OEE Global ({{ resumen_activo.promedio_oee }}%)
             </h2>
             <div class="flex gap-4 items-center">
-                {% if view_type == 'machines' %}
+                {% if view_type == 'machines' and not is_tv_mode %}
                 <a href="{% url 'gestion_maquinas' %}" class="flex gap-2 text-white bg-white/20 hover:bg-white/30 px-3 py-1 rounded text-[10px] font-semibold uppercase tracking-wider transition-colors items-center">
                     <i class="fas fa-cogs"></i> <span>Configurar</span>
                 </a>
@@ -163,8 +163,8 @@
     </div>
     {% endlocalize %}
 
-    <!-- B. DATE NAVIGATION & PERSPECTIVE -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+    <!-- B. DATE NAVIGATION & PERSPECTIVE (Oculto en TV) -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 {% if is_tv_mode %}hidden{% endif %}">
         <div class="flex items-center gap-4">
             <h1 class="text-xl font-bold text-slate-800">Tablero de Control</h1>
             <div class="flex bg-slate-200 p-1 rounded-lg border border-slate-300 shadow-inner overflow-hidden">
@@ -215,11 +215,15 @@
                     <i class="fas fa-calculator"></i> Decimal
                 </a>
             </div>
+            <!-- TV Mode Toggle -->
+            <a href="?mode={% if is_tv_mode %}normal{% else %}tv{% endif %}" class="{% if is_tv_mode %}bg-emerald-600 ring-2 ring-emerald-400 text-white animate-pulse{% else %}bg-slate-200 text-slate-600 hover:bg-slate-300{% endif %} px-3 py-1.5 rounded shadow transition-all font-medium text-xs flex items-center gap-2">
+                <i class="fas fa-desktop"></i> MODO TV
+            </a>
         </div>
     </div>
 
-    <!-- C. TABS Selector -->
-    <div class="flex border-b border-slate-200 gap-2">
+    <!-- C. TABS Selector (Oculto en TV porque rotan solas) -->
+    <div class="flex border-b border-slate-200 gap-2 {% if is_tv_mode %}hidden{% endif %}">
         <button onclick="switchTab('tab-global')" id="btn-tab-global" 
             class="px-6 py-3 font-bold text-xs uppercase tracking-wider transition-all border-b-2 border-blue-600 text-blue-600">
             Resumen General
@@ -231,7 +235,49 @@
     </div>
 </div>
 
+{% if is_tv_mode %}
+<!-- Exit TV Mode Button -->
+<a href="?mode=normal" 
+   class="fixed bottom-6 right-24 z-[9999] w-14 h-14 bg-red-600/80 hover:bg-red-500 text-white rounded-full shadow-[0_0_20px_rgba(220,38,38,0.5)] flex items-center justify-center transition-all backdrop-blur-md border border-white/20 hover:scale-110 active:scale-95 group"
+   title="Salir de Modo TV">
+    <i class="fas fa-door-open text-xl drop-shadow-md"></i>
+</a>
+
+<!-- Floating Fullscreen Toggle Button for TV Mode -->
+<button id="tv-fullscreen-toggle" 
+        class="fixed bottom-6 right-6 z-[9999] w-14 h-14 bg-blue-600/80 hover:bg-blue-500 text-white rounded-full shadow-[0_0_20px_rgba(37,99,235,0.5)] flex items-center justify-center transition-all backdrop-blur-md border border-white/20 hover:scale-110 active:scale-95 group"
+        title="Pantalla Completa / Ventana">
+    <i class="fas fa-expand text-xl drop-shadow-md"></i>
+</button>
+{% endif %}
+
 <div id="tab-global" class="tab-content space-y-6">
+    <!-- C. GRÁFICOS AVANZADOS -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Gráfico de Tendencia -->
+        <div class="bg-slate-800 rounded-lg p-5 border border-slate-700 shadow-xl relative overflow-hidden group">
+            <div class="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                <i class="fas fa-chart-line text-6xl text-blue-500"></i>
+            </div>
+            <h3 class="text-white font-bold text-sm mb-4 flex items-center gap-2 relative z-10 uppercase tracking-widest">
+                <span class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                Evolución OEE (7 Días)
+            </h3>
+            <div id="chart-trend" class="h-56 relative z-10 w-full"></div>
+        </div>
+        <!-- Pareto de Paradas -->
+        <div class="bg-slate-800 rounded-lg p-5 border border-slate-700 shadow-xl relative overflow-hidden group">
+             <div class="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                <i class="fas fa-clock text-6xl text-amber-500"></i>
+            </div>
+            <h3 class="text-white font-bold text-sm mb-4 flex items-center gap-2 relative z-10 uppercase tracking-widest">
+                <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                Pareto de Paradas (Hs / Motivo)
+            </h3>
+            <div id="chart-pareto" class="h-56 relative z-10 w-full"></div>
+        </div>
+    </div>
+
     <!-- Detailed Metrics Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <!-- Availability Card -->
@@ -358,7 +404,20 @@
 <div id="tab-detalle" class="tab-content hidden space-y-8">
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {% for item in cards_data %}
-        <div class="bg-slate-800 rounded-2xl overflow-hidden border border-slate-700 hover:border-slate-500 transition-all shadow-xl group">
+        <div class="bg-slate-800 rounded-2xl overflow-hidden border border-slate-700 hover:border-slate-500 transition-all shadow-xl group relative">
+            <!-- ALERTA INACTIVIDAD MODO TV -->
+            {% if is_tv_mode and item.idle_mins > 30 and is_today %}
+                <div class="absolute inset-0 bg-red-600/10 animate-pulse pointer-events-none z-[5]"></div>
+                <div class="absolute top-0 right-0 p-2 z-[20]">
+                     <span class="flex h-3 w-3">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,1)]"></span>
+                    </span>
+                </div>
+                <div class="absolute bottom-4 left-1/2 -translate-x-1/2 z-[20] bg-red-600 text-white text-[9px] px-3 py-1 rounded-full font-black shadow-2xl animate-bounce flex items-center gap-1.5 whitespace-nowrap">
+                    <i class="fas fa-exclamation-triangle"></i> {{ item.idle_mins|floatformat:0 }} MIN. INACTIVO
+                </div>
+            {% endif %}
              <div class="bg-slate-900/50 px-5 py-4 border-b border-slate-700/50 flex justify-between items-start">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-xl bg-indigo-600/20 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-all">
@@ -611,5 +670,161 @@
             btnDetalle.className = active;
         }
     }
+
+    // --- ESTILOS DINÁMICOS MODO TV ---
+    {% if is_tv_mode %}
+    (function() {
+        const style = document.createElement('style');
+        style.textContent = `
+            body { background-color: #0f172a !important; overflow: hidden !important; }
+            aside { display: none !important; }
+            header { display: none !important; }
+            main { padding: 0.5rem !important; height: 100vh !important; display: flex !important; flex-direction: column !important; }
+            
+            /* Contenedor Principal */
+            .tab-content { flex: 1; overflow: hidden; padding-top: 0.25rem; }
+            
+            /* Compactar Header OEE */
+            .bg-slate-900.rounded-xl.shadow-2xl.overflow-hidden.mb-6 { margin-bottom: 0.5rem !important; }
+            .bg-blue-600.px-6.py-4 { padding: 0.5rem 1rem !important; } /* Barra Titulo azul */
+            .px-10.py-5 { padding: 0.5rem !important; } /* Contenedor Gauges */
+            
+            /* Escalar Gauges */
+            .w-40.h-20 { width: 8rem !important; height: 4rem !important; } /* 32/16 tailwind equiv aprox 128px */
+            .w-40.h-40 { width: 8rem !important; height: 8rem !important; border-width: 8px !important; }
+            .text-2xl { font-size: 1.25rem !important; } /* Texto % gauge */
+            
+            /* Gráficos más bajos */
+            #chart-trend, #chart-pareto { height: 160px !important; min-height: 0 !important; }
+            .h-56 { height: 10rem !important; } /* Contenedor grafico original */
+            
+            /* Grids más compactos */
+            .gap-6 { gap: 0.75rem !important; }
+            .p-5 { padding: 0.75rem !important; }
+            .p-6 { padding: 1rem !important; }
+            
+            /* Ajuste Detalle Individual para Paginas de 8 */
+            /* Ajuste Detalle Individual para Paginas de 8 */
+            /* Ajuste Detalle Individual - CLASE FORZADA VIA JS */
+            .tv-grid-override {
+                display: flex !important;
+                flex-wrap: wrap !important;
+                gap: 1.5rem !important; /* Gap un poco mas grande para aire */
+                justify-content: flex-start !important;
+                align-content: flex-start !important;
+                width: 100% !important;
+                height: 100% !important;
+                padding: 0.5rem !important;
+            }
+            .tv-grid-override > div {
+                flex: 0 0 23% !important; 
+                max-width: 23% !important; 
+                margin-bottom: 0 !important;
+                display: none; /* Oculto por defecto, se activa con clase */
+            }
+            
+            /* Clase para mostrar cards activas */
+            .tv-page-active { display: flex !important; flex-direction: column !important; }
+            
+            /* Animaciones */
+            #tab-global, #tab-detalle { animation: fadeIn 0.5s ease-in-out; }
+            @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        `;
+        document.head.appendChild(style);
+
+        // FORZAR REMOCION DE GRID TAILWIND
+        const container = document.querySelector('#tab-detalle > div');
+        if(container) {
+            // Reemplazamos TODAS las clases por nuestra clase maestra
+            container.className = 'tv-grid-override';
+        }
+
+        // LÓGICA DE ROTACIÓN Y PAGINACIÓN
+        // Selector actualizado para usar la nueva clase o el hijo directo
+        const cards = document.querySelectorAll('.tv-grid-override > div');
+        const CARDS_PER_PAGE = 8;
+        const totalPages = Math.ceil(cards.length / CARDS_PER_PAGE);
+        let currentStep = -1; // -1 = Resumen Global, 0..N = Paginas de detalle
+
+        function showPage(pageIndex) {
+            cards.forEach((card, index) => {
+                if (pageIndex === -1) {
+                    card.classList.remove('tv-page-active'); // Ocultar todo si es resumen
+                } else {
+                    const start = pageIndex * CARDS_PER_PAGE;
+                    const end = start + CARDS_PER_PAGE;
+                    if (index >= start && index < end) {
+                        card.classList.add('tv-page-active');
+                    } else {
+                        card.classList.remove('tv-page-active');
+                    }
+                }
+            });
+        }
+
+        setInterval(() => {
+            currentStep++;
+            // Ciclo: Global -> Pag 0 -> Pag 1 -> ... -> Global
+            if (currentStep >= totalPages) {
+                currentStep = -1;
+            }
+
+            if (currentStep === -1) {
+                switchTab('tab-global');
+            } else {
+                switchTab('tab-detalle');
+                showPage(currentStep);
+            }
+        }, 20000);
+        
+        // Refresh total de datos cada 5 minutos
+        setTimeout(() => { location.reload(); }, 300000);
+    })();
+    
+    // FULLSCREEN TOGGLE LOGIC
+    const fsToggle = document.getElementById('tv-fullscreen-toggle');
+    if(fsToggle) {
+        fsToggle.addEventListener('click', () => {
+             if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(e => {
+                    console.error(`Error attempting to enable fullscreen: ${e.message} (${e.name})`);
+                });
+                fsToggle.innerHTML = '<i class="fas fa-compress"></i>';
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                    fsToggle.innerHTML = '<i class="fas fa-expand"></i>';
+                }
+            }
+        });
+    }
+    {% endif %}
+
+    // --- GRÁFICOS APEX ---
+    document.addEventListener('DOMContentLoaded', function() {
+        const trendData = JSON.parse('{{ history_trend|safe }}');
+        const paretoData = JSON.parse('{{ pareto_data|safe }}');
+
+        if(document.getElementById('chart-trend')) {
+            new ApexCharts(document.getElementById('chart-trend'), {
+                series: [{ name: 'OEE Global', data: trendData.map(i => i.oee) }],
+                chart: { height: '100%', type: 'line', toolbar: { show: false }, foreColor: '#94a3b8' },
+                stroke: { curve: 'smooth', width: 4 },
+                xaxis: { categories: trendData.map(i => i.day) },
+                yaxis: { max: 100 },
+                grid: { borderColor: '#334155' }
+            }).render();
+        }
+
+        if(document.getElementById('chart-pareto')) {
+            new ApexCharts(document.getElementById('chart-pareto'), {
+                series: [{ name: 'Horas', data: paretoData.map(i => i.value) }],
+                chart: { height: '100%', type: 'bar', toolbar: { show: false }, foreColor: '#94a3b8' },
+                plotOptions: { bar: { borderRadius: 4, distributed: true, horizontal: true } },
+                xaxis: { categories: paretoData.map(i => i.label) },
+                legend: { show: false }
+            }).render();
+        }
+    });
 </script>
 {% endblock %}
