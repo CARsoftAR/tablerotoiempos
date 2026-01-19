@@ -1294,9 +1294,8 @@ def obtener_auditoria(request):
                        any(k in raw_art_d for k in descanso_keywords) or
                        any(k in raw_obs for k in descanso_keywords))
 
-        special_audit_keywords = ['MATRICER', 'TAREAS GENERALES', 'AJUSTES', 'REBABADO', 'GRABADO']
+        special_audit_keywords = ['MATRICER', 'TAREAS GENERALES', 'AJUSTES', 'REBABADO', 'GRABADO', 'ARMADO']
         is_matriceria = any(k in raw_art_d or k in raw_op_d for k in special_audit_keywords)
-        is_armado = ('ARMADO' in raw_art_d or 'ARMADO' in raw_op_d) and not is_matriceria
         id_orden = reg_obj.id_orden
         
         this_std = std_mins
@@ -1327,29 +1326,18 @@ def obtener_auditoria(request):
             total_rejected_qty += qty
         elif not is_descanso:
             total_qty += qty
-            # Para auditoría, sincronizamos lógica de deduplicación
             if is_matriceria:
                 total_std_mins += duracion
                 this_std = duracion # Para el visual del log
-            elif qty > 0 or (is_armado and std_mins > 0):
-                # Caso Normal / Armado: Sumar estándar de la fila
-                total_std_mins += std_mins
-                this_std = std_mins
             elif qty > 0:
-                # Caso Normal: Sumar estándar de la fila
                 total_std_mins += std_mins
                 this_std = std_mins
             else:
                 this_std = 0
-            
-            if not reg_obj.es_interrupcion:
-                total_prod_mins += duracion
-                art_name = reg_obj.articulod or "Sin Nombre"
-                if art_name not in articulos_resumen:
-                    articulos_resumen[art_name] = {'qty': 0, 'std_sum': 0}
-                articulos_resumen[art_name]['qty'] += qty
-                if is_matriceria or qty > 0:
-                    articulos_resumen[art_name]['std_sum'] += this_std
+        
+        # Sincronización de Tiempo Operativo (Downtime vs Process)
+        if not is_descanso and not reg_obj.es_interrupcion:
+            total_prod_mins += duracion
 
     now_arg = timezone.localtime(timezone.now())
     is_viewing_today = (d1 == now_arg.date())
@@ -1380,13 +1368,16 @@ def obtener_auditoria(request):
             nombre_display = MaquinaConfig.objects.get(id_maquina=uid).nombre
     except: pass
 
+    # DETERMINAR SI ES HOY PARA EL TEXTO
+    is_actually_today = (d1 == timezone.localtime(timezone.now()).date())
+
     analysis_conversational = f"<span class='report-main-title'>ANÁLISIS DE DESEMPEÑO INTELIGENTE</span>\n"
     analysis_conversational += f"<div class='mb-6 p-5 bg-indigo-500/10 rounded-2xl border-l-4 border-indigo-500 shadow-inner'>\n"
     analysis_conversational += f"  <span class='text-lg font-black text-white italic'>\"¡Sí! El valor de <span class='text-indigo-400'>{oee:.1f}%</span> que ves ahora es un valor muy real y correcto para la situación actual de {nombre_display}.\"</span>\n"
     analysis_conversational += f"</div>\n\n"
 
     analysis_conversational += "<span class='text-indigo-400 font-black text-xl uppercase tracking-tighter'>¿POR QUÉ ESE VALOR ES EL CORRECTO?</span>\n"
-    analysis_conversational += f"Si miramos los datos de hoy de <span class='text-white font-bold'>{nombre_display} ({uid})</span>, el sistema está haciendo lo siguiente:\n\n"
+    analysis_conversational += f"Si miramos los datos del <span class='text-white font-bold'>{d1.strftime('%d/%m/%Y')}</span> de <span class='text-white font-bold'>{nombre_display} ({uid})</span>, el sistema está haciendo lo siguiente:\n\n"
     
     # 1. MATRICERÍA / TAREAS ESPECIALES (Solo si aplica)
     if has_mat_audit or has_special_tasks:
@@ -1410,8 +1401,10 @@ def obtener_auditoria(request):
 
 
     # 3. DISPONIBILIDAD
-    if is_viewing_today:
-        analysis_conversational += f"<span class='text-indigo-300 font-black'>• DISPONIBILIDAD REAL ({availability:.1f}%):</span> El sistema es <span class='text-white italic underline font-bold'>INTELIGENTE</span>: compara el tiempo trabajado contra el tiempo transcurrido hoy (07:00 AM hasta ahora).\n\n"
+    if is_actually_today:
+        analysis_conversational += f"<span class='text-indigo-300 font-black'>• DISPONIBILIDAD REAL ({availability:.1f}%):</span> El sistema es <span class='text-white italic underline font-bold'>INTELIGENTE</span>: compara el tiempo trabajado contra el tiempo transcurrido hoy (07:00 AM hasta este momento).\n\n"
+    else:
+        analysis_conversational += f"<span class='text-slate-400 font-black'>• DISPONIBILIDAD TOTAL ({availability:.1f}%):</span> Al tratarse de un día pasado, comparamos el tiempo trabajado contra el turno completo de <span class='text-white font-bold'>9 horas</span>.\n\n"
 
     # REPORTE 2: MÉTRICAS DETALLADAS (El que pedía el usuario)
     analysis_detailed = f"<span class='report-main-title'>MÉTRICAS TÉCNICAS DE CONTROL</span>\n\n"
