@@ -1,0 +1,1245 @@
+{% load static l10n %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tablero Geográfico Premium</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@300;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --neon-green: #00ff41;
+            --neon-red: #ff003c;
+            --neon-blue: #00f3ff;
+            --neon-gray: #4a4a4a;
+            --glass-bg: rgba(10, 20, 30, 0.6);
+            --glass-border: rgba(0, 243, 255, 0.2);
+            --grid-color: rgba(0, 243, 255, 0.1);
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #050a10;
+            color: #e0faff;
+            font-family: 'Rajdhani', sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* FONDO BLUEPRINT - CLEAN GRID */
+        .blueprint-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #050a10;
+            z-index: -2;
+        }
+
+        /* HEADER */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 30px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--glass-border);
+            height: 60px;
+            position: relative;
+            z-index: 10;
+        }
+
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 24px;
+            margin: 0;
+            color: var(--neon-blue);
+            text-shadow: 0 0 10px var(--neon-blue);
+            letter-spacing: 2px;
+        }
+
+        /* SIDEBAR (GLASSMORPHISM) */
+        .sidebar {
+            position: absolute;
+            right: 0;
+            top: 61px;
+            bottom: 0;
+            width: 300px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(15px);
+            border-left: 1px solid var(--glass-border);
+            padding: 20px;
+            overflow-y: auto;
+            z-index: 10;
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar.hidden {
+            transform: translateX(100%);
+        }
+
+        .kpi-card {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+
+        .kpi-title {
+            color: var(--neon-blue);
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .kpi-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: white;
+        }
+
+        /* MAP AREA & 3D EFFECT */
+        .map-container {
+            position: absolute;
+            top: 60px;
+            left: 0;
+            right: 0; /* Full width initially */
+            bottom: 0;
+            overflow: hidden;
+            perspective: 2000px; /* 3D Perspective */
+            transition: right 0.3s ease;
+            background-color: #000;
+            background-image: url("/static/img/factory_layout_real.jpg");
+            background-size: contain;
+            background-position: center;
+            background-repeat: no-repeat;
+            filter: brightness(1.2) contrast(1.2);
+        }
+        
+        .map-container.sidebar-open {
+            right: 300px;
+        }
+
+        .plant-floor {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            transition: transform 0.5s ease;
+            background: transparent;
+        }
+
+        /* MACHINE MARKER - NEON UPGRADE */
+        .machine-marker {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform: translate(-50%, -50%);
+            background: rgba(10, 20, 30, 0.6);
+            backdrop-filter: blur(8px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            z-index: 5;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+        }
+
+        .machine-marker:hover {
+            transform: translate(-50%, -50%) scale(1.15);
+            z-index: 100;
+        }
+
+        /* INTENSE NEON GLOWS: Enhanced spread */
+        .status-running {
+            border-color: var(--neon-green);
+            box-shadow: 
+                0 0 20px rgba(0, 255, 157, 0.4),
+                0 0 40px rgba(0, 255, 157, 0.2),
+                inset 0 0 20px rgba(0, 255, 157, 0.4);
+            animation: neon-breath-green 3s ease-in-out infinite alternate;
+        }
+
+        .status-stopped, .status-offline {
+            border-color: var(--neon-red);
+            box-shadow: 
+                0 0 20px rgba(255, 50, 50, 0.4),
+                0 0 40px rgba(255, 50, 50, 0.2),
+                inset 0 0 20px rgba(255, 50, 50, 0.4);
+            animation: neon-breath-red 3s ease-in-out infinite alternate;
+        }
+
+        /* NEON BREATH ANIMATIONS */
+        @keyframes neon-breath-green {
+            0% { box-shadow: 0 0 15px rgba(0, 255, 157, 0.3), 0 0 30px rgba(0, 255, 157, 0.2), inset 0 0 15px rgba(0, 255, 157, 0.4); border-color: rgba(0, 255, 157, 0.6); }
+            100% { box-shadow: 0 0 35px rgba(0, 255, 157, 0.9), 0 0 70px rgba(0, 255, 157, 0.5), inset 0 0 30px rgba(0, 255, 157, 0.7); border-color: var(--neon-green); }
+        }
+
+        @keyframes neon-breath-red {
+            0% { box-shadow: 0 0 15px rgba(255, 50, 50, 0.3), 0 0 30px rgba(255, 50, 50, 0.2), inset 0 0 15px rgba(255, 50, 50, 0.4); border-color: rgba(255, 50, 50, 0.6); }
+            100% { box-shadow: 0 0 35px rgba(255, 50, 50, 0.9), 0 0 70px rgba(255, 50, 50, 0.5), inset 0 0 30px rgba(255, 50, 50, 0.7); border-color: var(--neon-red); }
+        }
+
+        /* ENHANCED LABELS */
+        .machine-label {
+            position: absolute;
+            top: 130%;
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: nowrap;
+            background: rgba(0, 10, 20, 0.8);
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 700;
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            pointer-events: none;
+            letter-spacing: 1px;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            transition: all 0.3s ease;
+        }
+
+        .status-running .machine-label {
+            color: var(--neon-green);
+            text-shadow: 0 0 8px var(--neon-green);
+            border-color: rgba(0, 255, 157, 0.3);
+        }
+
+        .status-stopped .machine-label, .status-offline .machine-label {
+            color: var(--neon-red);
+            text-shadow: 0 0 8px var(--neon-red);
+            border-color: rgba(255, 50, 50, 0.3);
+        }
+
+        /* DESIGN MODE OVERLAY */
+        .design-mode-indicator {
+            display: none;
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 165, 0, 0.2);
+            border: 1px solid orange;
+            color: orange;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            z-index: 20;
+        }
+
+        /* ANTI-GHOSTING FOR UNPLACED MACHINES - Refined */
+        .machine-marker[style*="left: 0%"][style*="top: 0%"],
+        .machine-marker.is-hidden {
+            display: none !important;
+        }
+        
+        .btn {
+            background: rgba(0, 243, 255, 0.05);
+            border: 1px solid var(--neon-blue);
+            color: var(--neon-blue);
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 13px;
+            font-weight: bold;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            background: var(--neon-blue);
+            color: black;
+            box-shadow: 0 0 8px var(--neon-blue);
+        }
+
+        .btn-warning { border-color: #ffc107; color: #ffc107; }
+        .btn-warning:hover { background: #ffc107; color: black; box-shadow: 0 0 8px #ffc107; }
+        .btn-danger { border-color: #ff4136; color: #ff4136; }
+        .btn-danger:hover { background: #ff4136; color: black; box-shadow: 0 0 8px #ff4136; }
+
+        .controls {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        
+        .btn-active {
+            background: var(--neon-blue);
+            color: black;
+            box-shadow: 0 0 10px var(--neon-blue);
+        }
+
+        /* TOOLTIP */
+        .tooltip {
+            position: absolute;
+            background: rgba(10, 20, 30, 0.95);
+            border: 1px solid var(--neon-blue);
+            padding: 10px;
+            border-radius: 8px;
+            z-index: 1000;
+            display: none;
+            min-width: 150px;
+            pointer-events: none;
+        }
+        .tooltip-title { color: var(--neon-blue); font-weight: bold; border-bottom: 1px solid #333; margin-bottom: 5px; padding-bottom: 3px; }
+        .tooltip-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 2px; }
+
+        /* FULLSCREEN / UI TOGGLE */
+        .ui-hidden .top-bar {
+            transform: translateY(-100%);
+            transition: transform 0.3s ease;
+        }
+        .ui-hidden .sidebar {
+            transform: translateX(100%);
+        }
+        .ui-hidden .map-container {
+            top: 0 !important;
+            right: 0 !important;
+            left: 0 !important;
+            bottom: 0 !important;
+            z-index: 100 !important;
+        }
+        
+        .floating-toggle {
+            position: fixed;
+            bottom: 20px;
+            right: 320px;
+            z-index: 5000;
+            background: rgba(10, 20, 30, 0.9);
+            border: 1px solid var(--neon-blue);
+            color: var(--neon-blue);
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 0 5px rgba(0, 243, 255, 0.2);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .floating-toggle:hover {
+            transform: scale(1.1);
+            background: var(--neon-blue);
+            color: black;
+            box-shadow: 0 0 10px var(--neon-blue);
+        }
+        .ui-hidden .floating-toggle {
+            opacity: 0.5;
+            right: 20px;
+        }
+        .ui-hidden .floating-toggle:hover {
+            opacity: 1;
+        }
+        
+        /* DRAGGING PERFORMANCE */
+        .machine-marker.dragging {
+            transition: none !important;
+            z-index: 6000 !important;
+            cursor: grabbing !important;
+            opacity: 0.9;
+        }
+        .machine-marker.dragging::after {
+            animation: none !important;
+        }
+
+        .top-bar, .sidebar { transition: transform 0.3s ease; }
+        .map-container { transition: all 0.3s ease; }
+        /* SIDEBAR ITEMS */
+        .sidebar-machine-item {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid #333;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .sidebar-machine-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: #555;
+        }
+
+        .btn-toggle-eye {
+            background: transparent;
+            border: none;
+            color: var(--neon-blue);
+            cursor: pointer;
+            padding: 5px;
+            display: flex;
+            align-items: center;
+            opacity: 0.6;
+            transition: all 0.2s;
+        }
+        .btn-toggle-eye:hover { opacity: 1; transform: scale(1.1); }
+        .btn-toggle-eye.off { color: #555; }
+
+        /* TOAST NOTIFICATIONS */
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            z-index: 9999;
+        }
+        .toast {
+            background: rgba(10, 20, 30, 0.95);
+            border: 1px solid var(--neon-blue);
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin-top: 10px;
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: slide-in 0.3s ease-out forwards;
+        }
+        @keyframes slide-in {
+            from { transform: translateX(-100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .toast.success { border-color: var(--neon-green); box-shadow: 0 0 15px rgba(0, 255, 65, 0.3); }
+        .toast.error { border-color: var(--neon-red); box-shadow: 0 0 15px rgba(255, 0, 60, 0.3); }
+    </style>
+</head>
+<body>
+
+    <div class="floating-toggle" onclick="toggleUI()" title="Mostrar/Ocultar Paneles">
+        <svg id="toggleIcon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+    </div>
+
+    <div class="blueprint-bg"></div>
+
+    <div class="top-bar">
+        <h1>FACTORY<span style="color:white">MAP</span> <span style="font-size:12px; opacity:0.7">PREMIUM v1.0</span></h1>
+        
+        <div class="controls">
+            <button class="btn" id="btnToggle3D" onclick="toggle3D()">2D / 3D</button>
+            <button class="btn" id="btnDesign" onclick="toggleDesignMode()">MODO DISEÑO</button>
+            <button class="btn btn-warning" onclick="redistributeMachines()">DISTRIBUIR AUTO</button>
+            <button class="btn btn-danger" onclick="resetPositions()">RESET</button>
+            <button class="btn" id="btnToggleSidebar" onclick="toggleSidebar()">PANEL</button>
+            <button class="btn" onclick="location.reload()">ACTUALIZAR</button>
+        </div>
+    </div>
+
+    <div class="design-mode-indicator" id="designIndicator">MODO DISEÑO ACTIVADO: ARRASTRA LAS MÁQUINAS</div>
+
+    <div class="map-container sidebar-open" id="mapContainer">
+        <div class="plant-floor" id="plantFloor">
+            <!-- MACHINES ON MAP: Showing ALL machines, those with 0,0 will appear in center or can be dragged -->
+            {% for m in machines %}
+                {% with shape_class=m.type|default:'GENERICO' %}
+                <div class="machine-marker status-{{ m.status|lower }} shape-{{ shape_class }} {% if m.x == 0 and m.y == 0 %}initial-pos{% endif %}" 
+                     id="marker-{{ m.pk }}" 
+                     style="left: {% if m.x != 0 %}{{ m.x|unlocalize }}{% else %}50{% endif %}%; 
+                            top: {% if m.y != 0 %}{{ m.y|unlocalize }}{% else %}50{% endif %}%; 
+                            width: {{ m.w|unlocalize }}%; 
+                            height: {{ m.h|unlocalize }}%; 
+                            transform: rotate({{ m.r|unlocalize }}deg);
+                            border-width: {{ m.border_weight|unlocalize }}px;"
+                     data-id="{{ m.id }}"
+                     data-pk="{{ m.pk }}"
+                     data-safe-id="marker-{{ m.pk }}"
+                     data-name="{{ m.name }}"
+                     data-status="{{ m.status }}"
+                     data-type="{{ m.type }}"
+                     data-w="{{ m.w|default:4|unlocalize }}"
+                     data-h="{{ m.h|default:4|unlocalize }}"
+                     data-r="{{ m.r|default:0|unlocalize }}"
+                     data-label-size="{{ m.label_size|default:13|unlocalize }}"
+                     data-border-weight="{{ m.border_weight|default:2|unlocalize }}"
+                     onmousedown="onMarkerMouseDown(event, this)">
+                    
+                    <div class="machine-content">
+                        <div class="machine-label" style="font-size: {{ m.label_size|unlocalize }}px;">{{ m.name }}</div>
+                        <div class="machine-icon-small"></div>
+                    </div>
+                </div>
+                {% endwith %}
+            {% endfor %}
+        </div>
+    </div>
+    
+    <!-- EDIT PANEL (Only Visible in Design Mode when a machine is selected) -->
+    <div id="editPanel" class="edit-panel" style="display:none;">
+        <h4 id="editPanelHeader" onmousedown="startDraggingPanel(event)" style="cursor: move; user-select: none;">
+            <i class="fas fa-arrows-alt" style="margin-right: 8px; font-size: 14px; opacity: 0.7;"></i>
+            Editar Máquina
+        </h4>
+        <div class="form-group">
+            <label>Tipo (Forma)</label>
+            <select id="editType" onchange="updateSelectedMachine('type', this.value)">
+                <option value="GENERICO">Genérico (Círculo)</option>
+                <option value="CNC">CNC (Cuadrado)</option>
+                <option value="TORNO">Torno (Rectángulo)</option>
+                <option value="AGUJEREADORA">Agujereadora (Rectángulo)</option>
+                <option value="ROBOT">Robot (Círculo)</option>
+                <option value="PRENSA">Prensa (Rectángulo)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Ancho (%) <span id="valW"></span></label>
+            <input type="range" id="editW" min="1" max="20" step="0.1" oninput="updateSelectedMachine('w', this.value)">
+        </div>
+        <div class="form-group">
+            <label>Alto (%) <span id="valH"></span></label>
+            <input type="range" id="editH" min="1" max="20" step="0.1" oninput="updateSelectedMachine('h', this.value)">
+        </div>
+        <div class="form-group">
+            <label>Rotación (°) <span id="valR"></span></label>
+            <input type="range" id="editR" min="0" max="360" step="2" oninput="updateSelectedMachine('r', this.value)">
+        </div>
+        <div class="form-group">
+            <label>Tamaño Letra (px) <span id="valLabelSize"></span></label>
+            <input type="range" id="editLabelSize" min="8" max="30" step="1" oninput="updateSelectedMachine('labelSize', this.value)">
+        </div>
+        <div class="form-group">
+            <label>Grosor Línea (px) <span id="valBorderWeight"></span></label>
+            <input type="range" id="editBorderWeight" min="1" max="10" step="0.5" oninput="updateSelectedMachine('borderWeight', this.value)">
+        </div>
+        <button class="btn" style="width:100%; margin-top:10px; background:var(--neon-green)" onclick="saveSelectedMachine()">GUARDAR CAMBIOS</button>
+        <button class="btn" style="width:100%; margin-top:5px; background:#444" onclick="deselectMachine()">CERRAR</button>
+    </div>
+
+    <style>
+        .edit-panel {
+            position: absolute;
+            top: 80px;
+            right: 320px; /* Left of sidebar */
+            width: 220px;
+            background: rgba(0, 10, 20, 0.95);
+            border: 1px solid var(--neon-blue);
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 1001;
+            color: #fff;
+        }
+        .edit-panel h4 { margin: 0 0 10px 0; color: var(--neon-blue); border-bottom: 1px solid #333; padding-bottom: 5px; }
+        .edit-panel .form-group { margin-bottom: 10px; }
+        .edit-panel label { display: block; font-size: 12px; margin-bottom: 3px; color: #aaa; }
+        .edit-panel select, .edit-panel input { width: 100%; background: #222; border: 1px solid #444; color: white; padding: 4px; border-radius: 4px; }
+        
+        /* SHAPES - Enhanced for visual distinction */
+        
+        /* Círculos - Genérico y Robot */
+        .machine-marker.shape-GENERICO, 
+        .machine-marker.shape-ROBOT { 
+            border-radius: 50%; 
+            aspect-ratio: 1/1;
+        }
+        
+        /* Cuadrado - CNC */
+        .machine-marker.shape-CNC { 
+            border-radius: 8px;
+            aspect-ratio: 1/1;
+        }
+        
+        /* Rectángulo Horizontal - Torno */
+        .machine-marker.shape-TORNO { 
+            border-radius: 4px;
+            /* Width will be larger than height via inline styles */
+        }
+        
+        /* Rectángulo Vertical - Agujereadora */
+        .machine-marker.shape-AGUJEREADORA { 
+            border-radius: 4px;
+            /* Height will be larger than width via inline styles */
+        }
+        
+        /* Rectángulo Ancho - Prensa */
+        .machine-marker.shape-PRENSA { 
+            border-radius: 6px;
+            /* Wider rectangle */
+        }
+        
+        .machine-marker {
+            /* width/height set inline */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            overflow: visible;
+            flex-direction: column;
+            position: absolute; /* CRITICAL: Must be absolute to move */
+            cursor: move;
+            z-index: 100;
+        }
+        
+        /* Highlight selected */
+        .machine-marker.selected {
+            border-color: #fff;
+            box-shadow: 0 0 15px #fff;
+            z-index: 100;
+        }
+
+        .machine-content {
+            pointer-events: none;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+        
+        /* Icon based on content */
+        .machine-icon-small {
+            width: 24px;
+            height: 24px;
+            margin-top: 5px;
+            opacity: 0.8;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+        
+        /* Specific SVG Icons for types */
+        .shape-CNC .machine-icon-small { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Cpath d='M9 9l6 6M15 9l-6 6'/%3E%3C/svg%3E"); }
+        .shape-TORNO .machine-icon-small { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='M2 12h20M5 7v10M19 7v10'/%3E%3C/svg%3E"); }
+        .shape-ROBOT .machine-icon-small { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 8v8M8 12h8'/%3E%3C/svg%3E"); }
+        .shape-PRENSA .machine-icon-small { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='M4 20h16M7 4h10M12 4v16'/%3E%3C/svg%3E"); }
+        .shape-AGUJEREADORA .machine-icon-small { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='M12 3v18M8 15l4 4 4-4'/%3E%3C/svg%3E"); }
+
+        .machine-icon { display: none; } 
+    </style>
+
+    <div class="sidebar">
+        <!-- KPI Cards remain -->
+        <div class="kpi-card">
+            <div class="kpi-title">Producción Global</div>
+            <div class="kpi-value text-green">85%</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-title">Máquinas Activas</div>
+            <div class="kpi-value">{{ machines|length }}</div>
+        </div>
+        
+        <!-- Legend remains -->
+        <h3 style="color:var(--neon-blue); margin-top:30px; border-bottom:1px solid #333; padding-bottom:10px;">REFERENCIAS</h3>
+        <div style="margin-top:15px; font-size:14px; margin-bottom: 30px;">
+            <div style="display:flex; align-items:center; margin-bottom:10px;"><div style="width:12px; height:12px; background:var(--neon-green); border-radius:50%; margin-right:10px; box-shadow:0 0 8px var(--neon-green)"></div> PRODUCIENDO</div>
+            <div style="display:flex; align-items:center; margin-bottom:10px;"><div style="width:12px; height:12px; background:var(--neon-red); border-radius:50%; margin-right:10px; box-shadow:0 0 8px var(--neon-red)"></div> PARADA / OFFLINE</div>
+        </div>
+
+        <h3 style="color:var(--neon-blue); border-bottom:1px solid #333; padding-bottom:10px;">LISTADO DE MÁQUINAS</h3>
+        <div id="sidebarMachineList" style="margin-top: 15px;">
+            {% for m in machines %}
+                <div class="sidebar-machine-item" 
+                     draggable="true" 
+                     ondragstart="dragFromSidebar(event)"
+                     data-id="{{ m.id }}"
+                     data-name="{{ m.name }}"
+                     data-status="{{ m.status }}"
+                     data-type="{{ m.type }}">
+                    <div style="display:flex; align-items:center;">
+                        <div style="width:10px; height:10px; border-radius:50%; background: {% if m.status == 'RUNNING' %}var(--neon-green){% else %}var(--neon-red){% endif %}; box-shadow: 0 0 5px inherit; margin-right:10px;"></div>
+                        <span style="color:white; font-size:14px;">{{ m.name }}</span>
+                    </div>
+                    <button class="btn-toggle-eye {% if m.x == 0 and m.y == 0 %}off{% endif %}" onclick="toggleMarker('{{ m.id }}', 'marker-{{ m.pk }}', this)" title="Mostrar/Ocultar en mapa">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                    </button>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- TOOLTIP -->
+    <div class="tooltip" id="tooltip"></div>
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        let isDesignMode = false;
+        let is3D = false;
+        let isSidebarVisible = true;
+        let isUIVisible = true;
+        let draggedElement = null;
+        let selectedMachine = null;
+        
+        // Panel Dragging State
+        let isDraggingPanel = false;
+        let pOffset = { x: 0, y: 0 };
+
+        const tooltip = document.getElementById('tooltip');
+        const container = document.getElementById('mapContainer');
+        const plantFloor = document.getElementById('plantFloor');
+        const editPanel = document.getElementById('editPanel');
+        const sidebar = document.querySelector('.sidebar');
+        const toggleIcon = document.getElementById('toggleIcon');
+
+        function toggleUI() {
+            console.log("Toggle UI - isUIVisible:", isUIVisible);
+            isUIVisible = !isUIVisible;
+            if (isUIVisible) {
+                document.body.classList.remove('ui-hidden');
+                toggleIcon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
+            } else {
+                document.body.classList.add('ui-hidden');
+                toggleIcon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>';
+            }
+        }
+
+        function toggleSidebar() {
+            isSidebarVisible = !isSidebarVisible;
+            if (isSidebarVisible) {
+                sidebar.classList.remove('hidden');
+                container.classList.add('sidebar-open');
+                document.getElementById('btnToggleSidebar').classList.remove('btn-active');
+            } else {
+                sidebar.classList.add('hidden');
+                container.classList.remove('sidebar-open');
+                document.getElementById('btnToggleSidebar').classList.add('btn-active');
+            }
+        }
+
+        // Inputs
+        const editType = document.getElementById('editType');
+        const editW = document.getElementById('editW');
+        const editH = document.getElementById('editH');
+        const editR = document.getElementById('editR');
+
+        function toggleDesignMode() {
+            isDesignMode = !isDesignMode;
+            console.log("Design Mode:", isDesignMode);
+            document.getElementById('designIndicator').style.display = isDesignMode ? 'block' : 'none';
+            document.getElementById('btnDesign').classList.toggle('btn-active');
+            
+            // Enable/Disable sidebar dragging
+            const items = document.querySelectorAll('.sidebar-machine-item');
+            items.forEach(item => {
+                if(isDesignMode) item.style.cursor = 'grab';
+                else item.style.cursor = 'default';
+            });
+
+            if(!isDesignMode) {
+                deselectMachine();
+                tooltip.style.display = 'none';
+            }
+        }
+
+        function toggle3D() {
+            is3D = !is3D;
+            if (is3D) {
+                plantFloor.style.transform = "rotateX(30deg) scale(0.9) translateY(-50px)";
+                container.style.overflow = "visible"; // Allow logic to overflow if needed, or keep hidden
+                document.getElementById('btnToggle3D').classList.add('btn-active');
+            } else {
+                plantFloor.style.transform = "none";
+                container.style.overflow = "hidden";
+                document.getElementById('btnToggle3D').classList.remove('btn-active');
+            }
+        }
+        
+        // --- SELECTION & EDITING ---
+        function onMarkerMouseDown(e, element) {
+            console.log("Marker MouseDown", element.getAttribute('data-name'), "Design Mode:", isDesignMode);
+            if (!isDesignMode) return;
+            // Prevent drag start if just clicking to select
+            // Actually allow drag, but also select logic
+            e.stopPropagation(); // Don't bubble to map
+            
+            selectMachine(element);
+            startDrag(e, element);
+        }
+
+        function selectMachine(element) {
+            if (selectedMachine) {
+                selectedMachine.classList.remove('selected');
+            }
+            selectedMachine = element;
+            selectedMachine.classList.add('selected');
+            
+            // Populate Panel
+            editPanel.style.display = 'block';
+            
+            // Read data
+            const type = element.getAttribute('data-type') || 'GENERICO';
+            const w = parseFloat(element.getAttribute('data-w')) || 4;
+            const h = parseFloat(element.getAttribute('data-h')) || 4;
+            const r = parseFloat(element.getAttribute('data-r')) || 0;
+            const labelSize = parseFloat(element.getAttribute('data-label-size')) || 13;
+            const borderWeight = parseFloat(element.getAttribute('data-border-weight')) || 2;
+            
+            editType.value = type;
+            editW.value = w;
+            editH.value = h;
+            editR.value = r;
+            document.getElementById('editLabelSize').value = labelSize;
+            document.getElementById('editBorderWeight').value = borderWeight;
+            
+            document.getElementById('valW').innerText = w + '%';
+            document.getElementById('valH').innerText = h + '%';
+            document.getElementById('valR').innerText = r + '°';
+            document.getElementById('valLabelSize').innerText = labelSize + 'px';
+            document.getElementById('valBorderWeight').innerText = borderWeight + 'px';
+        }
+        
+        function deselectMachine() {
+            if(selectedMachine) {
+                selectedMachine.classList.remove('selected');
+                selectedMachine = null;
+            }
+            editPanel.style.display = 'none';
+        }
+
+        function updateSelectedMachine(prop, value) {
+            if(!selectedMachine) return;
+            
+            if (prop === 'type') {
+                selectedMachine.setAttribute('data-type', value);
+                // Remove old shape class
+                selectedMachine.className = selectedMachine.className.replace(/shape-\w+/g, '');
+                selectedMachine.classList.add('shape-' + value);
+                // Auto-set dims based on type if needed? Or just let user?
+                if (value === 'CNC') { 
+                   // Square hint, but let user slider override
+                }
+            } else if (prop === 'w') {
+                selectedMachine.style.width = value + '%';
+                selectedMachine.setAttribute('data-w', value);
+                document.getElementById('valW').innerText = value + '%';
+            } else if (prop === 'h') {
+                selectedMachine.style.height = value + '%';
+                selectedMachine.setAttribute('data-h', value);
+                document.getElementById('valH').innerText = value + '%';
+            } else if (prop === 'r') {
+                selectedMachine.style.transform = `rotate(${value}deg)`;
+                selectedMachine.setAttribute('data-r', value);
+                 document.getElementById('valR').innerText = value + '°';
+            } else if (prop === 'labelSize') {
+                const label = selectedMachine.querySelector('.machine-label');
+                if (label) label.style.fontSize = value + 'px';
+                selectedMachine.setAttribute('data-label-size', value);
+                document.getElementById('valLabelSize').innerText = value + 'px';
+            } else if (prop === 'borderWeight') {
+                selectedMachine.style.borderWidth = value + 'px';
+                selectedMachine.setAttribute('data-border-weight', value);
+                document.getElementById('valBorderWeight').innerText = value + 'px';
+            }
+        }
+        
+        // --- PANEL DRAGGING LOGIC ---
+        function startDraggingPanel(e) {
+            isDraggingPanel = true;
+            const rect = editPanel.getBoundingClientRect();
+            pOffset.x = e.clientX - rect.left;
+            pOffset.y = e.clientY - rect.top;
+            
+            document.addEventListener('mousemove', dragPanel);
+            document.addEventListener('mouseup', stopDraggingPanel);
+            
+            editPanel.style.transition = 'none'; // Smoothness
+            e.preventDefault();
+        }
+
+        function dragPanel(e) {
+            if (!isDraggingPanel) return;
+            
+            let x = e.clientX - pOffset.x;
+            let y = e.clientY - pOffset.y;
+            
+            // Constrain to window? Optional
+            editPanel.style.left = x + 'px';
+            editPanel.style.top = y + 'px';
+            editPanel.style.right = 'auto'; // Override the default CSS
+        }
+
+        function stopDraggingPanel() {
+            isDraggingPanel = true; // Wait, mistake in thinking, should be false
+            isDraggingPanel = false;
+            editPanel.style.transition = ''; // Restore transition
+            document.removeEventListener('mousemove', dragPanel);
+            document.removeEventListener('mouseup', stopDraggingPanel);
+        }
+        
+        function saveSelectedMachine() {
+            if (!selectedMachine) return;
+            const id = selectedMachine.getAttribute('data-id');
+            const data = {
+                id: id,
+                w: selectedMachine.getAttribute('data-w'),
+                h: selectedMachine.getAttribute('data-h'),
+                r: selectedMachine.getAttribute('data-r'),
+                type: selectedMachine.getAttribute('data-type'),
+                labelSize: selectedMachine.getAttribute('data-label-size'),
+                borderWeight: selectedMachine.getAttribute('data-border-weight')
+            };
+            
+            saveData(data);
+            // Optionally close
+            // deselectMachine();
+        }
+
+        // TOOLTIP LOGIC
+        // Use event delegation for dynamically added elements
+        container.addEventListener('mousemove', (e) => {
+            if (isDesignMode) return;
+            const marker = e.target.closest('.machine-marker');
+            if (marker) {
+                const name = marker.getAttribute('data-name');
+                const status = marker.getAttribute('data-status');
+                
+                tooltip.style.display = 'block';
+                tooltip.style.left = (e.clientX + 15) + 'px';
+                tooltip.style.top = (e.clientY + 15) + 'px';
+                tooltip.innerHTML = `
+                    <div class="tooltip-title">${name}</div>
+                    <div class="tooltip-row"><span>Estado:</span> <span style="color:${getColor(status)}">${status}</span></div>
+                `;
+            }
+        });
+
+        container.addEventListener('mouseout', (e) => {
+             if (e.target.closest('.machine-marker')) {
+                tooltip.style.display = 'none';
+             }
+        });
+
+        function getColor(status) {
+            if (status === 'RUNNING') return 'var(--neon-green)';
+            // All other statuses are now Red
+            return 'var(--neon-red)';
+        }
+
+        function startDrag(e, element) {
+            console.log("startDrag called for", element.getAttribute('data-name'));
+            if (!isDesignMode) return;
+            e.preventDefault();
+            
+            draggedElement = element;
+            draggedElement.classList.add('dragging');
+            document.addEventListener('mousemove', onDrag);
+            document.addEventListener('mouseup', endDrag);
+        }
+
+        function onDrag(e) {
+            if (!draggedElement) return;
+            moveElement(e.clientX, e.clientY, draggedElement);
+        }
+
+        function moveElement(clientX, clientY, element) {
+            const rect = container.getBoundingClientRect();
+            let x = clientX - rect.left;
+            let y = clientY - rect.top;
+            
+            // Normalize for %
+            if (x < 0) x = 0; if (y < 0) y = 0;
+            if (x > rect.width) x = rect.width; if (y > rect.height) y = rect.height;
+
+            const xPercent = (x / rect.width) * 100;
+            const yPercent = (y / rect.height) * 100;
+
+            console.log("Moving to:", xPercent, yPercent);
+            element.style.left = xPercent + '%';
+            element.style.top = yPercent + '%';
+        }
+
+        function endDrag(e) {
+            if (!draggedElement) return;
+            draggedElement.classList.remove('dragging');
+            const id = draggedElement.getAttribute('data-id');
+            const left = draggedElement.style.left.replace('%', '');
+            const top = draggedElement.style.top.replace('%', '');
+            
+            saveData({ id: id, x: left, y: top });
+            
+            draggedElement = null;
+            document.removeEventListener('mousemove', onDrag);
+            document.removeEventListener('mouseup', endDrag);
+        }
+
+        // --- SIDEBAR DRAG (New markers) ---
+        function dragFromSidebar(ev) {
+            if (!isDesignMode) {
+                ev.preventDefault();
+                return;
+            }
+            ev.dataTransfer.setData("text/plain", JSON.stringify({
+                id: ev.target.getAttribute('data-id'),
+                name: ev.target.getAttribute('data-name'),
+                status: ev.target.getAttribute('data-status'),
+                type: ev.target.getAttribute('data-type') || 'GENERICO'
+            }));
+            ev.dataTransfer.effectAllowed = "move";
+        }
+
+        function allowDrop(ev) {
+            if (!isDesignMode) return;
+            ev.preventDefault(); // Necessary to allow dropping
+            ev.dataTransfer.dropEffect = "move";
+        }
+
+        function dropMachine(ev) {
+            if (!isDesignMode) return;
+            ev.preventDefault();
+
+            const dataStr = ev.dataTransfer.getData("text/plain");
+            if (!dataStr) return; // Might be internal drag
+            
+            const data = JSON.parse(dataStr);
+            
+            // Find Sidebar Item to remove
+            const sidebarItem = document.querySelector(`.sidebar-machine-item[data-id="${data.id}"]`);
+            if (sidebarItem) sidebarItem.remove();
+
+            // Create New Marker
+            const marker = document.createElement('div');
+            // Default shape defaults
+            const shapeClass = 'shape-' + (data.type || 'GENERICO');
+            
+            marker.className = `machine-marker status-${data.status.toLowerCase()} ${shapeClass}`;
+            marker.id = `machine-${data.id}`;
+            
+            // Set size based on type for distinctive shapes
+            let width, height;
+            const machineType = (data.type || 'GENERICO').toUpperCase();
+            
+            switch(machineType) {
+                case 'TORNO':
+                    width = 6;  // Wider
+                    height = 3; // Shorter (horizontal rectangle)
+                    break;
+                case 'AGUJEREADORA':
+                    width = 3;  // Narrower
+                    height = 6; // Taller (vertical rectangle)
+                    break;
+                case 'PRENSA':
+                    width = 7;  // Very wide
+                    height = 3; // Short (wide rectangle)
+                    break;
+                case 'CNC':
+                    width = 4;  // Square
+                    height = 4;
+                    break;
+                case 'ROBOT':
+                case 'GENERICO':
+                default:
+                    width = 4;  // Circle/default
+                    height = 4;
+                    break;
+            }
+            
+            marker.style.width = width + '%';
+            marker.style.height = height + '%';
+            marker.style.transform = 'rotate(0deg)';
+            
+            marker.setAttribute('data-id', data.id);
+            marker.setAttribute('data-name', data.name);
+            marker.setAttribute('data-status', data.status);
+            marker.setAttribute('data-type', data.type || 'GENERICO');
+            marker.setAttribute('data-w', width);
+            marker.setAttribute('data-h', height);
+            marker.setAttribute('data-r', '0');
+            marker.setAttribute('data-label-size', '13');
+            marker.setAttribute('data-border-weight', '2');
+            marker.onmousedown = function(e) { onMarkerMouseDown(e, this); }; // Attach event
+            
+            // Position it
+            plantFloor.appendChild(marker);
+            
+            // Set initial position based on drop
+            // Logic similar to moveElement but for drop event
+            const rect = container.getBoundingClientRect();
+            let x = ev.clientX - rect.left;
+            let y = ev.clientY - rect.top;
+            
+            const xPercent = (x / rect.width) * 100;
+            const yPercent = (y / rect.height) * 100;
+            
+            marker.style.left = xPercent + '%';
+            marker.style.top = yPercent + '%';
+
+            marker.innerHTML = `
+                <div class="machine-content">
+                    <div class="machine-label">${data.name}</div>
+                </div>
+            `;
+
+            // Save Initial (with defaults)
+            saveData({ id: data.id, x: xPercent, y: yPercent, w: 4, h: 4, r: 0, type: data.type });
+        }
+
+        function saveData(payload) {
+            fetch('/dashboard/api/update-position/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify(payload)
+            }).then(res => res.json())
+              .then(data => {
+                  console.log('Saved', data);
+                  if (data.status === 'success') {
+                      showToast('Configuración guardada correctamente', 'success');
+                  } else {
+                      showToast('Error al guardar: ' + (data.message || 'Error desconocido'), 'error');
+                  }
+              })
+              .catch(err => {
+                  console.error(err);
+                  showToast('Error de comunicación con el servidor', 'error');
+              });
+        }
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            
+            const icon = type === 'success' ? '✓' : '⚠';
+            toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(20px)';
+                setTimeout(() => toast.remove(), 500);
+            }, 3000);
+        }
+
+        // Counter for auto-positioning machines in a grid
+        let machinePositionCounter = 0;
+        
+        function toggleMarker(id, safeId, btn) {
+            const marker = document.getElementById(safeId);
+            if (!marker) {
+                alert("Esta máquina aún no ha sido ubicada en el mapa. Arrástrala desde la lista.");
+                return;
+            }
+            
+            if (marker.style.display === 'none') {
+                // Check if machine is at 0,0 (never positioned)
+                const currentLeft = parseFloat(marker.style.left) || 0;
+                const currentTop = parseFloat(marker.style.top) || 0;
+                
+                if (currentLeft <= 1 && currentTop <= 1) {
+                    // Position in a grid pattern (3 columns)
+                    const col = machinePositionCounter % 3;  // 0, 1, or 2
+                    const row = Math.floor(machinePositionCounter / 3);
+                    
+                    const xPercent = 25 + (col * 20);  // 25%, 45%, 65%
+                    const yPercent = 20 + (row * 20);  // 20%, 40%, 60%, etc.
+                    
+                    marker.style.left = xPercent + '%';
+                    marker.style.top = yPercent + '%';
+                    
+                    machinePositionCounter++;
+                    
+                    // Save the new position
+                    saveData({ 
+                        id: id, 
+                        x: xPercent, 
+                        y: yPercent,
+                        w: marker.getAttribute('data-w') || 4,
+                        h: marker.getAttribute('data-h') || 4,
+                        r: marker.getAttribute('data-r') || 0
+                    });
+                }
+                
+                marker.style.display = 'flex';
+                btn.classList.remove('off');
+            } else {
+                marker.style.display = 'none';
+                btn.classList.add('off');
+            }
+        }
+
+        function redistributeMachines() {
+            // Get all visible machine markers
+            const allMarkers = document.querySelectorAll('.machine-marker');
+            const visibleMarkers = Array.from(allMarkers).filter(m => m.style.display !== 'none');
+            
+            if (visibleMarkers.length === 0) {
+                alert('No hay máquinas visibles para distribuir. Activa algunas máquinas primero.');
+                return;
+            }
+            
+            // Redistribute in grid pattern
+            visibleMarkers.forEach((marker, index) => {
+                const col = index % 3;  // 0, 1, or 2
+                const row = Math.floor(index / 3);
+                
+                const xPercent = 25 + (col * 20);  // 25%, 45%, 65%
+                const yPercent = 20 + (row * 20);  // 20%, 40%, 60%, etc.
+                
+                marker.style.left = xPercent + '%';
+                marker.style.top = yPercent + '%';
+                
+                // Save the new position
+                const id = marker.getAttribute('data-id');
+                const w = (marker.getAttribute('data-w') || "4").toString().replace(',', '.');
+                const h = (marker.getAttribute('data-h') || "4").toString().replace(',', '.');
+                const r = (marker.getAttribute('data-r') || "0").toString().replace(',', '.');
+                
+                saveData({ 
+                    id: id, 
+                    x: xPercent, 
+                    y: yPercent,
+                    w: w,
+                    h: h,
+                    r: r
+                });
+            });
+            
+            showToast(`${visibleMarkers.length} máquinas redistribuidas`, 'success');
+        }
+
+        function resetPositions() {
+            if (!confirm('¿Seguro que quieres resetear TODAS las posiciones?')) return;
+            
+            const allMarkers = document.querySelectorAll('.machine-marker');
+            allMarkers.forEach(marker => {
+                const id = marker.getAttribute('data-id');
+                const x = 50;
+                const y = 50;
+                
+                marker.style.left = x + '%';
+                marker.style.top = y + '%';
+                // No ocultamos, las dejamos en el centro
+                marker.style.display = 'flex'; 
+
+                saveData({ 
+                    id: id, x: x, y: y, 
+                    w: (marker.getAttribute('data-w') || "4").toString().replace(',', '.'),
+                    h: (marker.getAttribute('data-h') || "4").toString().replace(',', '.'),
+                    r: (marker.getAttribute('data-r') || "0").toString().replace(',', '.')
+                });
+            });
+            
+            const allEyes = document.querySelectorAll('.btn-toggle-eye');
+            allEyes.forEach(eye => eye.classList.add('off'));
+            
+            showToast('Posiciones reseteadas. Recargando...', 'success');
+            setTimeout(() => location.reload(), 1500);
+        }
+
+    </script>
+</body>
+</html>

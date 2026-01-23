@@ -39,6 +39,10 @@
                 <i class="fas fa-chart-line w-6 text-center"></i>
                 Producción
             </a>
+            <a href="{% url 'plant_map' %}" class="flex items-center gap-3 px-3 py-3 rounded-lg {% if request.resolver_match.url_name == 'plant_map' %}bg-cyan-600 shadow-lg shadow-cyan-900/50 text-white{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %} font-medium group transition-all">
+                <i class="fas fa-map-marked-alt w-6 text-center group-hover:text-cyan-400 transition-colors"></i>
+                Mapa de Planta
+            </a>
             <a href="{% url 'estadisticas' %}" class="flex items-center gap-3 px-3 py-3 rounded-lg {% if 'estadisticas' in request.resolver_match.url_name %}bg-purple-600 shadow-lg shadow-purple-900/50 text-white{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %} font-medium group transition-all">
                 <i class="fas fa-chart-pie w-6 text-center group-hover:text-purple-400 transition-colors"></i>
                 Estadísticas

@@ -1,0 +1,682 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tablero Geográfico Premium</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@300;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --neon-green: #00ff41;
+            --neon-red: #ff003c;
+            --neon-blue: #00f3ff;
+            --neon-gray: #4a4a4a;
+            --glass-bg: rgba(10, 20, 30, 0.6);
+            --glass-border: rgba(0, 243, 255, 0.2);
+            --grid-color: rgba(0, 243, 255, 0.1);
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #050a10;
+            color: #e0faff;
+            font-family: 'Rajdhani', sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* FONDO BLUEPRINT */
+        .blueprint-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #050a10;
+            background-image: url('{% static "img/Gemini_Generated maquinas.png" %}');
+            background-size: 100% 100%;
+            background-position: center;
+            background-repeat: no-repeat;
+            z-index: -2;
+        }
+
+        .blueprint-glow {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            /* Vignette más suave para dejar pasar el brillo */
+            background: radial-gradient(circle at 50% 50%, rgba(0, 255, 255, 0.05) 0%, rgba(5, 10, 16, 0.4) 90%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* HEADER */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 30px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--glass-border);
+            height: 60px;
+            position: relative;
+            z-index: 10;
+        }
+
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 24px;
+            margin: 0;
+            color: var(--neon-blue);
+            text-shadow: 0 0 10px var(--neon-blue);
+            letter-spacing: 2px;
+        }
+
+        /* SIDEBAR (GLASSMORPHISM) */
+        .sidebar {
+            position: absolute;
+            right: 0;
+            top: 61px;
+            bottom: 0;
+            width: 300px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(15px);
+            border-left: 1px solid var(--glass-border);
+            padding: 20px;
+            overflow-y: auto;
+            z-index: 10;
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar.hidden {
+            transform: translateX(100%);
+        }
+
+        .kpi-card {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+
+        .kpi-title {
+            color: var(--neon-blue);
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .kpi-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: white;
+        }
+
+        /* MAP AREA & 3D EFFECT */
+        .map-container {
+            position: absolute;
+            top: 60px;
+            left: 0;
+            right: 0; /* Full width initially */
+            bottom: 0;
+            overflow: hidden;
+            perspective: 2000px; /* 3D Perspective */
+            transition: right 0.3s ease;
+        }
+        
+        .map-container.sidebar-open {
+            right: 300px;
+        }
+
+        .plant-floor {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            /* Inclinacion para efecto 3D si se desea, pero para drag & drop mejor 2D plano o tilt leve */
+            /* transform: rotateX(20deg) scale(0.9); */ 
+            transition: transform 0.5s ease;
+        }
+
+        /* MACHINE MARKER - NEON UPGRADE */
+        .machine-marker {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform: translate(-50%, -50%);
+            background: rgba(10, 20, 30, 0.4);
+            backdrop-filter: blur(4px);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .machine-marker:hover {
+            transform: translate(-50%, -50%) scale(1.15);
+            z-index: 100;
+        }
+
+        /* INTENSE NEON GLOWS */
+        .status-running {
+            border-color: var(--neon-green);
+            box-shadow: 
+                0 0 10px rgba(0, 255, 157, 0.3),
+                0 0 20px rgba(0, 255, 157, 0.2),
+                inset 0 0 15px rgba(0, 255, 157, 0.4);
+            animation: neon-breath-green 3s ease-in-out infinite alternate;
+        }
+
+        .status-stopped {
+            border-color: var(--neon-red);
+            box-shadow: 
+                0 0 10px rgba(255, 50, 50, 0.3),
+                0 0 20px rgba(255, 50, 50, 0.2),
+                inset 0 0 15px rgba(255, 50, 50, 0.4);
+            animation: neon-breath-red 3s ease-in-out infinite alternate;
+        }
+
+        .status-offline {
+            border-color: #555;
+            box-shadow: none;
+            opacity: 0.5;
+            filter: grayscale(1);
+        }
+
+        /* NEON BREATH ANIMATIONS */
+        @keyframes neon-breath-green {
+            0% { box-shadow: 0 0 10px rgba(0, 255, 157, 0.3), 0 0 20px rgba(0, 255, 157, 0.2), inset 0 0 15px rgba(0, 255, 157, 0.4); border-color: rgba(0, 255, 157, 0.6); }
+            100% { box-shadow: 0 0 25px rgba(0, 255, 157, 0.8), 0 0 50px rgba(0, 255, 157, 0.4), inset 0 0 25px rgba(0, 255, 157, 0.6); border-color: var(--neon-green); }
+        }
+
+        @keyframes neon-breath-red {
+            0% { box-shadow: 0 0 10px rgba(255, 50, 50, 0.3), 0 0 20px rgba(255, 50, 50, 0.2), inset 0 0 15px rgba(255, 50, 50, 0.4); border-color: rgba(255, 50, 50, 0.6); }
+            100% { box-shadow: 0 0 25px rgba(255, 50, 50, 0.8), 0 0 50px rgba(255, 50, 50, 0.4), inset 0 0 25px rgba(255, 50, 50, 0.6); border-color: var(--neon-red); }
+        }
+
+        /* ENHANCED LABELS */
+        .machine-label {
+            position: absolute;
+            top: 130%;
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: nowrap;
+            background: rgba(0, 10, 20, 0.8);
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 700;
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            pointer-events: none;
+            letter-spacing: 1px;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            transition: all 0.3s ease;
+        }
+
+        .status-running .machine-label {
+            color: var(--neon-green);
+            text-shadow: 0 0 8px var(--neon-green);
+            border-color: rgba(0, 255, 157, 0.3);
+        }
+
+        .status-stopped .machine-label {
+            color: var(--neon-red);
+            text-shadow: 0 0 8px var(--neon-red);
+            border-color: rgba(255, 50, 50, 0.3);
+        }
+
+        /* DESIGN MODE OVERLAY */
+        .design-mode-indicator {
+            display: none;
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 165, 0, 0.2);
+            border: 1px solid orange;
+            color: orange;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            z-index: 20;
+        }
+
+        /* CONTROLS */
+        .controls {
+            display: flex;
+            gap: 15px;
+        }
+
+        .btn {
+            background: rgba(0, 243, 255, 0.05);
+            border: 1px solid var(--neon-blue);
+            color: var(--neon-blue);
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 11px;
+            font-weight: bold;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+
+        .btn:hover {
+            background: var(--neon-blue);
+            color: black;
+            box-shadow: 0 0 8px var(--neon-blue);
+        }
+
+        .btn-warning { border-color: #ffc107; color: #ffc107; }
+        .btn-warning:hover { background: #ffc107; color: black; box-shadow: 0 0 8px #ffc107; }
+        .btn-danger { border-color: #ff4136; color: #ff4136; }
+        .btn-danger:hover { background: #ff4136; color: black; box-shadow: 0 0 8px #ff4136; }
+
+        .controls {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        
+        .btn-active {
+            background: var(--neon-blue);
+            color: black;
+            box-shadow: 0 0 10px var(--neon-blue);
+        }
+
+        /* TOOLTIP */
+        .tooltip {
+            position: absolute;
+            background: rgba(10, 20, 30, 0.95);
+            border: 1px solid var(--neon-blue);
+            padding: 10px;
+            border-radius: 8px;
+            z-index: 1000;
+            display: none;
+            min-width: 150px;
+            pointer-events: none;
+        }
+        .tooltip-title { color: var(--neon-blue); font-weight: bold; border-bottom: 1px solid #333; margin-bottom: 5px; padding-bottom: 3px; }
+        .tooltip-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 2px; }
+
+        /* FULLSCREEN / UI TOGGLE */
+        .ui-hidden .top-bar {
+            transform: translateY(-100%);
+            transition: transform 0.3s ease;
+        }
+        .ui-hidden .sidebar {
+            transform: translateX(100%);
+        }
+        .ui-hidden .map-container {
+            top: 0 !important;
+            right: 0 !important;
+        }
+        
+        .floating-toggle {
+            position: fixed;
+            bottom: 20px;
+            right: 320px;
+            z-index: 5000;
+            background: rgba(10, 20, 30, 0.9);
+            border: 1px solid var(--neon-blue);
+            color: var(--neon-blue);
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 0 5px rgba(0, 243, 255, 0.2);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .floating-toggle:hover {
+            transform: scale(1.1);
+            background: var(--neon-blue);
+            color: black;
+            box-shadow: 0 0 10px var(--neon-blue);
+        }
+        .ui-hidden .floating-toggle {
+            opacity: 0.5;
+            right: 20px;
+        }
+        .ui-hidden .floating-toggle:hover {
+            opacity: 1;
+        }
+        
+        /* DRAGGING PERFORMANCE */
+        .top-bar, .sidebar { transition: transform 0.3s ease; }
+        .map-container { transition: all 0.3s ease; }
+
+        /* ANTI-GHOSTING FOR UNPLACED MACHINES */
+        .machine-marker[style*="left: 0%"], 
+        .machine-marker[style*="top: 0%"],
+        .machine-marker[style*="left: 0.0%"],
+        .machine-marker[style*="top: 0.0%"],
+        .machine-marker[style*="left: 0.1%"],
+        .machine-marker[style*="top: 0.1%"],
+        .machine-marker[style*="left: 1%"],
+        .machine-marker[style*="top: 1%"] {
+            display: none !important;
+        }
+        
+        /* Hide anything in top-left corner area */
+        .plant-floor > .machine-marker:first-child {
+            display: none !important;
+        }
+
+        .btn-toggle-eye {
+            background: transparent;
+            border: none;
+            color: var(--neon-blue);
+            cursor: pointer;
+            padding: 5px;
+            display: flex;
+            align-items: center;
+            opacity: 0.6;
+            transition: all 0.2s;
+        }
+        .btn-toggle-eye:hover { opacity: 1; transform: scale(1.1); }
+        .btn-toggle-eye.off { color: #555; }
+
+        .sidebar-machine-item {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid #333;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.2s;
+        }
+        .sidebar-machine-item:hover { background: rgba(255, 255, 255, 0.1); }
+    </style>
+</head>
+<body>
+
+    <div class="floating-toggle" onclick="toggleUI()" title="Mostrar/Ocultar Paneles">
+        <svg id="toggleIcon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+    </div>
+
+    <div class="blueprint-bg"></div>
+
+    <div class="top-bar">
+        <h1>FACTORY<span style="color:white">MAP</span> <span style="font-size:12px; opacity:0.7">PREMIUM v1.0</span></h1>
+        
+        <div class="controls">
+            <button class="btn" id="btnToggle3D" onclick="toggle3D()">2D / 3D</button>
+            <button class="btn" id="btnDesign" onclick="toggleDesignMode()">MODO DISEÑO</button>
+            <button class="btn btn-warning" onclick="redistributeMachines()">DISTRIBUIR AUTO</button>
+            <button class="btn btn-danger" onclick="resetPositions()">RESET</button>
+            <button class="btn" id="btnToggleSidebar" onclick="toggleSidebar()">PANEL</button>
+            <button class="btn" onclick="location.reload()">ACTUALIZAR</button>
+        </div>
+    </div>
+
+    <div class="design-mode-indicator" id="designIndicator">MODO DISEÑO ACTIVADO: ARRASTRA LAS MÁQUINAS</div>
+
+    <div class="map-container sidebar-open" id="mapContainer">
+        <div class="plant-floor" id="plantFloor">
+            <!-- MACHINES ON MAP: Only show machines with real positions (> 1%) -->
+            {% for m in machines %}
+                {% if m.x and m.x > 1 and m.y and m.y > 1 %}
+                <div class="machine-marker status-{{ m.status|lower }}" 
+                     id="machine-{{ m.id }}" 
+                     style="left: {{ m.x }}%; top: {{ m.y }}%;"
+                     data-id="{{ m.id }}"
+                     data-name="{{ m.name }}"
+                     data-status="{{ m.status }}"
+                     onmousedown="onMarkerMouseDown(event, this)">
+                    <div class="machine-content">
+                        <div class="machine-label">{{ m.name }}</div>
+                    </div>
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="sidebar">
+        <div class="kpi-card">
+            <div class="kpi-title">Producción Global</div>
+            <div class="kpi-value text-green">85%</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-title">Máquinas Activas</div>
+            <div class="kpi-value">{{ machines|length }}</div>
+        </div>
+        
+        <h3 style="color:var(--neon-blue); border-bottom:1px solid #333; padding-bottom:10px;">LISTADO DE MÁQUINAS</h3>
+        <div id="sidebarMachineList" style="margin-top: 15px;">
+            {% for m in machines %}
+                <div class="sidebar-machine-item" 
+                     data-id="{{ m.id }}"
+                     data-name="{{ m.name }}"
+                     data-status="{{ m.status }}">
+                    <div style="display:flex; align-items:center;">
+                        <div style="width:10px; height:10px; border-radius:50%; background: {% if m.status == 'RUNNING' %}var(--neon-green){% elif m.status == 'STOPPED' %}var(--neon-red){% else %}var(--neon-gray){% endif %}; box-shadow: 0 0 5px inherit; margin-right:10px;"></div>
+                        <span style="color:white; font-size:14px;">{{ m.name }}</span>
+                    </div>
+                    <button class="btn-toggle-eye {% if m.x == 0 and m.y == 0 %}off{% endif %}" onclick="toggleMarker('{{ m.id }}', this)" title="Mostrar/Ocultar en mapa">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                    </button>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- TOOLTIP -->
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+        let isDesignMode = false;
+        let is3D = false;
+        let draggedElement = null;
+
+        const tooltip = document.getElementById('tooltip');
+        const container = document.getElementById('mapContainer');
+
+        function toggleDesignMode() {
+            isDesignMode = !isDesignMode;
+            document.getElementById('designIndicator').style.display = isDesignMode ? 'block' : 'none';
+            document.getElementById('btnDesign').classList.toggle('btn-active');
+            
+            // Disable tooltip in design mode
+            if(isDesignMode) tooltip.style.display = 'none';
+        }
+
+        function toggle3D() {
+            is3D = !is3D;
+            const floor = document.getElementById('plantFloor');
+            if (is3D) {
+                floor.style.transform = "rotateX(30deg) scale(0.9) translateY(-50px)";
+                document.getElementById('btnToggle3D').classList.add('btn-active');
+            } else {
+                floor.style.transform = "none";
+                document.getElementById('btnToggle3D').classList.remove('btn-active');
+            }
+        }
+
+        // TOOLTIP LOGIC
+        document.querySelectorAll('.machine-marker').forEach(marker => {
+            marker.addEventListener('mousemove', (e) => {
+                if (isDesignMode) return;
+                
+                const name = marker.getAttribute('data-name');
+                const status = marker.getAttribute('data-status');
+                
+                tooltip.style.display = 'block';
+                tooltip.style.left = (e.clientX + 15) + 'px';
+                tooltip.style.top = (e.clientY + 15) + 'px';
+                tooltip.innerHTML = `
+                    <div class="tooltip-title">${name}</div>
+                    <div class="tooltip-row"><span>Estado:</span> <span style="color:${getColor(status)}">${status}</span></div>
+                `;
+            });
+
+            marker.addEventListener('mouseleave', () => {
+                tooltip.style.display = 'none';
+            });
+        });
+
+        function getColor(status) {
+            if (status === 'RUNNING') return 'var(--neon-green)';
+            if (status === 'STOPPED') return 'var(--neon-red)';
+            return 'var(--neon-gray)';
+        }
+
+        // DRAG AND DROP LOGIC
+        function startDrag(e, element) {
+            if (!isDesignMode) return;
+            e.preventDefault();
+            draggedElement = element;
+            
+            document.addEventListener('mousemove', onDrag);
+            document.addEventListener('mouseup', endDrag);
+        }
+
+        function onDrag(e) {
+            if (!draggedElement) return;
+            
+            // Calculate percentage based on container size
+            const rect = container.getBoundingClientRect();
+            let x = e.clientX - rect.left;
+            let y = e.clientY - rect.top;
+            
+            // Constrain
+            if (x < 0) x = 0;
+            if (y < 0) y = 0;
+            if (x > rect.width) x = rect.width;
+            if (y > rect.height) y = rect.height;
+
+            const xPercent = (x / rect.width) * 100;
+            const yPercent = (y / rect.height) * 100;
+
+            draggedElement.style.left = xPercent + '%';
+            draggedElement.style.top = yPercent + '%';
+        }
+
+        function endDrag(e) {
+            if (!draggedElement) return;
+
+            // Save position
+            const id = draggedElement.getAttribute('data-id');
+            const left = draggedElement.style.left.replace('%', '');
+            const top = draggedElement.style.top.replace('%', '');
+
+            savePosition(id, left, top);
+
+            draggedElement = null;
+            document.removeEventListener('mousemove', onDrag);
+            document.removeEventListener('mouseup', endDrag);
+        }
+
+        function savePosition(id, x, y) {
+            fetch('/dashboard/api/update-position/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ id: id, x: x, y: y })
+            }).then(res => res.json())
+              .then(data => {
+                  console.log('Position saved', data);
+              })
+              .catch(err => console.error(err));
+        }
+
+        // Counter for auto-positioning machines in a grid
+        let machinePositionCounter = 0;
+        
+        function toggleMarker(id, btn) {
+            const marker = document.getElementById(`machine-${id}`);
+            if (!marker) return;
+            
+            if (marker.style.display === 'none') {
+                const currentLeft = parseFloat(marker.style.left) || 0;
+                const currentTop = parseFloat(marker.style.top) || 0;
+                
+                if (currentLeft <= 1 && currentTop <= 1) {
+                    const col = machinePositionCounter % 3;
+                    const row = Math.floor(machinePositionCounter / 3);
+                    const xPercent = 25 + (col * 20);
+                    const yPercent = 20 + (row * 20);
+                    marker.style.left = xPercent + '%';
+                    marker.style.top = yPercent + '%';
+                    machinePositionCounter++;
+                    savePosition(id, xPercent, yPercent);
+                }
+                marker.style.display = 'flex';
+                btn.classList.remove('off');
+            } else {
+                marker.style.display = 'none';
+                btn.classList.add('off');
+            }
+        }
+
+        function redistributeMachines() {
+            const allMarkers = document.querySelectorAll('.machine-marker');
+            const visibleMarkers = Array.from(allMarkers).filter(m => m.style.display !== 'none');
+            
+            if (visibleMarkers.length === 0) {
+                alert('No hay máquinas visibles. Activa algunas con el ojo (👁️).');
+                return;
+            }
+            
+            visibleMarkers.forEach((marker, index) => {
+                const col = index % 3;
+                const row = Math.floor(index / 3);
+                const xPercent = 25 + (col * 20);
+                const yPercent = 20 + (row * 20);
+                
+                marker.style.left = xPercent + '%';
+                marker.style.top = yPercent + '%';
+                
+                const id = marker.getAttribute('data-id');
+                savePosition(id, xPercent, yPercent);
+            });
+            alert('Máquinas distribuidas en cuadrícula.');
+        }
+
+        function resetPositions() {
+            if (!confirm('¿Seguro que quieres resetear TODAS las posiciones? Se moverán a la esquina y se ocultarán.')) return;
+            
+            const allMarkers = document.querySelectorAll('.machine-marker');
+            allMarkers.forEach(marker => {
+                const id = marker.getAttribute('data-id');
+                // Set to ~0 to trigger our unplaced logic later
+                savePosition(id, 0.5, 0.5);
+                marker.style.left = '0.5%';
+                marker.style.top = '0.5%';
+                marker.style.display = 'none';
+            });
+            
+            const allEyes = document.querySelectorAll('.btn-toggle-eye');
+            allEyes.forEach(eye => eye.classList.add('off'));
+            
+            alert('Posiciones reseteadas. Usa el ojo (👁️) para volver a colocarlas.');
+            location.reload();
+        }
+    </script>
+</body>
+</html>

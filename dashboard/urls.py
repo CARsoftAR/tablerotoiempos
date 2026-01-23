@@ -30,4 +30,8 @@ urlpatterns = [
     
     # API Alertas
     path('api/check-alerts/', views.check_alerts, name='check_alerts'),
+    
+    # Mapa de Planta Premium (Geográfico)
+    path('mapa-planta/', views.plant_map, name='plant_map'),
+    path('api/update-position/', views.update_machine_position, name='update_machine_position'),
 ]

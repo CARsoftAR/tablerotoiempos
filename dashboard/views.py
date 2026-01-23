@@ -2031,3 +2031,117 @@ def check_alerts(request):
             pass
 
     return JsonResponse({'alerts': alerts})
+
+# --- VISTA PREMIUM MAPA DE PLANTA 3D ---
+from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import csrf_exempt
+
+def plant_map(request):
+    """
+    Vista para el Tablero Geográfico Premium (Blueprint 3D Design)
+    """
+    machines = MaquinaConfig.objects.all()
+    
+    machine_data = []
+    
+    # Fecha de hoy para estado
+    now = timezone.localtime(timezone.now())
+    # Rango de busqueda corto (ultimas 24h)
+    desde = now - datetime.timedelta(hours=24)
+    
+    for m in machines:
+        status = 'OFFLINE' # Default Gray (Gris)
+        
+        # Buscar ultimo registro
+        # Optimización: Podríamos cachear esto, pero para ~50 máquinas está bien.
+        last_log = VTMan.objects.filter(id_maquina=m.id_maquina, fecha__gte=desde).order_by('-fecha', '-hora_inicio').first()
+        
+        if last_log:
+            # Lógica de estados según usuario: Verde (Produciendo), Rojo (Parada No Prog), Gris (Apagada)
+            
+            # 1. Determinar el tiempo real de la última actividad
+            last_time = last_log.hora_fin or last_log.hora_inicio or last_log.fecha
+            
+            if last_time:
+                # 2. Corrección de Timezone (DB SQL Server vs Server Django)
+                # El servidor DB parece estar 3 horas atrás (UTC naive o mal configurado)
+                # FIX: Sumar 3 horas para igualar a hora Argentina
+                if timezone.is_naive(last_time):
+                    last_time = timezone.make_aware(last_time)
+                
+                last_time_adjusted = last_time + datetime.timedelta(hours=3)
+                
+                # 3. Calcular diferencia con AHORA
+                diff = (now - last_time_adjusted).total_seconds() / 60
+                
+                if diff > 120: 
+                     status = 'OFFLINE'
+                else:
+                    if last_log.es_proceso:
+                        status = 'RUNNING' # Verde
+                    elif last_log.es_no_programado:
+                        status = 'STOPPED' # Rojo
+                    elif str(last_log.observaciones).upper() == 'ONLINE':
+                         status = 'RUNNING' # Asumimos corriendo si da señal de vida
+                    else:
+                         status = 'STOPPED' # Cualquier otra cosa (interrupcion, etc) como rojo por precaución
+        
+        machine_data.append({
+            'pk': m.pk,
+            'id': m.id_maquina,
+            'name': m.nombre,
+            'x': m.pos_x,
+            'y': m.pos_y,
+            'w': m.dim_width,
+            'h': m.dim_height,
+            'r': m.rotacion,
+            'type': m.tipo_maquina,
+            'status': status,
+            'label_size': m.label_size,
+            'border_weight': m.border_weight
+        })
+        
+    return render(request, 'dashboard/plant_map_premium.html', {'machines': machine_data})
+
+@csrf_exempt
+@require_POST
+def update_machine_position(request):
+    try:
+        data = json.loads(request.body)
+        machine_id = data.get('id')
+        
+        machine = get_object_or_404(MaquinaConfig, id_maquina=machine_id)
+        
+        def to_float(val):
+            if val is None: return 0.0
+            return float(str(val).replace(',', '.'))
+
+        changes = []
+        if 'x' in data: 
+            machine.pos_x = to_float(data['x'])
+            changes.append(f"X: {data['x']}")
+        if 'y' in data: 
+            machine.pos_y = to_float(data['y'])
+            changes.append(f"Y: {data['y']}")
+        
+        if 'w' in data: machine.dim_width = to_float(data['w'])
+        if 'h' in data: machine.dim_height = to_float(data['h'])
+        if 'r' in data: machine.rotacion = to_float(data['r'])
+        if 'type' in data: machine.tipo_maquina = data['type']
+        if 'labelSize' in data: machine.label_size = to_float(data['labelSize'])
+        if 'borderWeight' in data: machine.border_weight = to_float(data['borderWeight'])
+        
+        machine.save()
+
+        # Auditoría para Debug
+        AuditLog.objects.create(
+            usuario=request.user.username if request.user.is_authenticated else 'System/JS',
+            modelo='MaquinaConfig',
+            referencia_id=machine_id,
+            accion='UPDATE',
+            detalle=f"Posición/Layout actualizada: {', '.join(changes)}"
+        )
+        
+        return JsonResponse({'status': 'success'})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)

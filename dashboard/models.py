@@ -58,7 +58,30 @@ class MaquinaConfig(models.Model):
     # Sin 'use_db', irá a 'default' que es MySQL
     id_maquina = models.CharField(max_length=50, unique=True, verbose_name="ID de Máquina (Código)")
     nombre = models.CharField(max_length=100, verbose_name="Nombre Descriptivo")
-    activa = models.BooleanField(default=True, verbose_name="Activa en Tablero")
+    proceso_predeterminado = models.CharField(max_length=100, null=True, blank=True, verbose_name="Proceso Default")
+    activa = models.BooleanField(default=True, verbose_name="Activa")
+
+    # Layout y Diseño
+    TIPO_MAQUINA_CHOICES = [
+        ('GENERICO', 'Genérico (Círculo)'),
+        ('CNC', 'CNC (Cuadrado)'),
+        ('TORNO', 'Torno (Rectángulo)'),
+        ('AGUJEREADORA', 'Agujereadora (Rectángulo)'),
+        ('ROBOT', 'Robot (Círculo)'),
+        ('PRENSA', 'Prensa (Rectángulo)'),
+    ]
+    tipo_maquina = models.CharField(max_length=20, choices=TIPO_MAQUINA_CHOICES, default='GENERICO', verbose_name="Tipo de Máquina")
+    
+    # Coordenadas y Dimensiones (Porcentajes 0-100)
+    pos_x = models.FloatField(default=0.0, verbose_name="Posición X (%)")
+    pos_y = models.FloatField(default=0.0, verbose_name="Posición Y (%)")
+    
+    dim_width = models.FloatField(default=4.0, verbose_name="Ancho (%)")
+    dim_height = models.FloatField(default=4.0, verbose_name="Alto (%)")
+    rotacion = models.FloatField(default=0.0, verbose_name="Rotación (Grados)")
+    
+    label_size = models.FloatField(default=13.0, verbose_name="Tamaño Letra (px)")
+    border_weight = models.FloatField(default=2.0, verbose_name="Grosor Línea (px)")
     
     # Horarios Lun-Vie
     horario_inicio_sem = models.TimeField(verbose_name="Inicio Lun-Vie", default="07:00")
