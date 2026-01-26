@@ -2039,52 +2039,63 @@ from django.views.decorators.csrf import csrf_exempt
 def plant_map(request):
     """
     Vista para el Tablero Geográfico Premium (Blueprint 3D Design)
+    Calcula OEE y estados en tiempo real para cada máquina.
     """
+    # 1. Obtener KPIs del día de hoy mediante la lógica del dashboard principal
+    prod_ctx = dashboard_produccion(request, return_context=True, force_date='today')
+    
+    # Mapeo id_maquina -> KPI para acceso rápido
+    kpi_map = {k['id']: k for k in prod_ctx.get('kpis', [])}
+    global_stats = prod_ctx.get('resumen', {})
+    
+    # 2. Obtener máquinas configuradas
     machines = MaquinaConfig.objects.all()
+    operarios_db = OperarioConfig.objects.all()
+    nombres_operarios = {o.legajo: o.nombre for o in operarios_db}
     
     machine_data = []
     
-    # Fecha de hoy para estado
     now = timezone.localtime(timezone.now())
-    # Rango de busqueda corto (ultimas 24h)
     desde = now - datetime.timedelta(hours=24)
     
     for m in machines:
-        status = 'OFFLINE' # Default Gray (Gris)
-        
-        # Buscar ultimo registro
-        # Optimización: Podríamos cachear esto, pero para ~50 máquinas está bien.
+        status = 'OFFLINE' 
+        op_name = "N/A"
         last_log = VTMan.objects.filter(id_maquina=m.id_maquina, fecha__gte=desde).order_by('-fecha', '-hora_inicio').first()
         
+        # Obtener KPIs individuales si existen
+        kpi = kpi_map.get(m.id_maquina, {})
+        m_oee = kpi.get('oee', 0)
+        m_perf = kpi.get('performance', 0)
+        m_avail = kpi.get('availability', 0)
+        m_qty = kpi.get('actual_qty', 0)
+        
         if last_log:
-            # Lógica de estados según usuario: Verde (Produciendo), Rojo (Parada No Prog), Gris (Apagada)
-            
-            # 1. Determinar el tiempo real de la última actividad
+            uid = str(last_log.id_concepto or "").strip()
+            if uid and uid != 'None':
+                op_name = nombres_operarios.get(uid, f"Operario {uid}")
+            else:
+                op_name = last_log.op_usuario or "S/A"
+
             last_time = last_log.hora_fin or last_log.hora_inicio or last_log.fecha
-            
             if last_time:
-                # 2. Corrección de Timezone (DB SQL Server vs Server Django)
-                # El servidor DB parece estar 3 horas atrás (UTC naive o mal configurado)
-                # FIX: Sumar 3 horas para igualar a hora Argentina
                 if timezone.is_naive(last_time):
                     last_time = timezone.make_aware(last_time)
                 
                 last_time_adjusted = last_time + datetime.timedelta(hours=3)
-                
-                # 3. Calcular diferencia con AHORA
                 diff = (now - last_time_adjusted).total_seconds() / 60
                 
-                if diff > 120: 
+                if diff > 45: 
                      status = 'OFFLINE'
                 else:
                     if last_log.es_proceso:
-                        status = 'RUNNING' # Verde
+                        status = 'RUNNING'
                     elif last_log.es_no_programado:
-                        status = 'STOPPED' # Rojo
+                        status = 'STOPPED'
                     elif str(last_log.observaciones).upper() == 'ONLINE':
-                         status = 'RUNNING' # Asumimos corriendo si da señal de vida
+                         status = 'RUNNING'
                     else:
-                         status = 'STOPPED' # Cualquier otra cosa (interrupcion, etc) como rojo por precaución
+                         status = 'STOPPED' 
         
         machine_data.append({
             'pk': m.pk,
@@ -2098,10 +2109,26 @@ def plant_map(request):
             'type': m.tipo_maquina,
             'status': status,
             'label_size': m.label_size,
-            'border_weight': m.border_weight
+            'border_weight': m.border_weight,
+            'operario': op_name,
+            'operacion': last_log.operacion if last_log else "SIN ACTIVIDAD",
+            'orden': last_log.id_orden if last_log else "N/A",
+            'inicio': last_log.hora_inicio.strftime('%H:%M') if last_log and last_log.hora_inicio else "--:--",
+            'fin': last_log.hora_fin.strftime('%H:%M') if last_log and last_log.hora_fin else "--:--",
+            # Datos estadísticos
+            'oee': m_oee,
+            'performance': m_perf,
+            'availability': m_avail,
+            'qty': m_qty,
         })
         
-    return render(request, 'dashboard/plant_map_premium.html', {'machines': machine_data})
+    context = {
+        'machines': machine_data,
+        'global_stats': global_stats,
+        'total_count': machines.count(),
+        'active_count': sum(1 for m in machine_data if m['status'] != 'OFFLINE'),
+    }
+    return render(request, 'dashboard/plant_map_premium.html', context)
 
 @csrf_exempt
 @require_POST

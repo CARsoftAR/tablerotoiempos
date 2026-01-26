@@ -1,1245 +1,808 @@
+{% extends 'base.html' %}
 {% load static l10n %}
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tablero Geográfico Premium</title>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@300;500;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --neon-green: #00ff41;
-            --neon-red: #ff003c;
-            --neon-blue: #00f3ff;
-            --neon-gray: #4a4a4a;
-            --glass-bg: rgba(10, 20, 30, 0.6);
-            --glass-border: rgba(0, 243, 255, 0.2);
-            --grid-color: rgba(0, 243, 255, 0.1);
-        }
 
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #050a10;
-            color: #e0faff;
-            font-family: 'Rajdhani', sans-serif;
-            overflow: hidden;
-            height: 100vh;
-            width: 100vw;
-        }
+{% block title %}Mapa de Planta - ABBAMAT{% endblock %}
 
-        /* FONDO BLUEPRINT - CLEAN GRID */
-        .blueprint-bg {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: #050a10;
-            z-index: -2;
-        }
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+{% endblock %}
 
-        /* HEADER */
-        .top-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 15px 30px;
-            background: var(--glass-bg);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid var(--glass-border);
-            height: 60px;
-            position: relative;
-            z-index: 10;
-        }
+{% block content %}
+<style>
+    :root {
+        --brand-primary: #4f46e5;
+        --brand-secondary: #0891b2;
+        --status-running: #10b981;
+        --status-stopped: #ef4444;
+        --status-offline: #64748b;
+        --map-bg: #0f172a;
+    }
 
-        h1 {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 24px;
-            margin: 0;
-            color: var(--neon-blue);
-            text-shadow: 0 0 10px var(--neon-blue);
-            letter-spacing: 2px;
-        }
+    /* Override body if needed? No, base.html handles it. 
+       We want the map to fill the available space in the content area. */
+    .map-container-wrapper {
+        position: relative;
+        height: calc(100vh - 160px); /* Adjust based on topbar and padding */
+        background: var(--map-bg);
+        border-radius: 1rem;
+        overflow: hidden;
+        border: 1px solid #e2e8f0;
+        box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+    }
 
-        /* SIDEBAR (GLASSMORPHISM) */
-        .sidebar {
-            position: absolute;
-            right: 0;
-            top: 61px;
-            bottom: 0;
-            width: 300px;
-            background: var(--glass-bg);
-            backdrop-filter: blur(15px);
-            border-left: 1px solid var(--glass-border);
-            padding: 20px;
-            overflow-y: auto;
-            z-index: 10;
-            transition: transform 0.3s ease;
-        }
+    /* HEADER INTERNO DEL MAPA */
+    .map-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.5rem;
+        background: white;
+        border-bottom: 1px solid #e2e8f0;
+        margin: -2rem -2rem 1.5rem -2rem; /* Compensate for p-8 in base.html */
+        position: sticky;
+        top: -2rem;
+        z-index: 40;
+    }
 
-        .sidebar.hidden {
-            transform: translateX(100%);
-        }
+    .map-title {
+        display: flex;
+        items-center;
+        gap: 0.75rem;
+    }
 
-        .kpi-card {
-            background: rgba(0,0,0,0.3);
-            border: 1px solid var(--glass-border);
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.5);
-        }
+    .map-title h2 {
+        font-family: 'Outfit', sans-serif;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin: 0;
+    }
 
-        .kpi-title {
-            color: var(--neon-blue);
-            font-size: 14px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 5px;
-        }
+    .btn-system {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        font-weight: 600;
+        transition: all 0.2s;
+        border: 1px solid transparent;
+        cursor: pointer;
+    }
 
-        .kpi-value {
-            font-size: 24px;
-            font-weight: 700;
-            color: white;
-        }
+    .btn-ghost {
+        color: #64748b;
+        background: transparent;
+    }
+    .btn-ghost:hover {
+        background: #f1f5f9;
+        color: #1e293b;
+    }
 
-        /* MAP AREA & 3D EFFECT */
-        .map-container {
-            position: absolute;
-            top: 60px;
-            left: 0;
-            right: 0; /* Full width initially */
-            bottom: 0;
-            overflow: hidden;
-            perspective: 2000px; /* 3D Perspective */
-            transition: right 0.3s ease;
-            background-color: #000;
-            background-image: url("/static/img/factory_layout_real.jpg");
-            background-size: contain;
-            background-position: center;
-            background-repeat: no-repeat;
-            filter: brightness(1.2) contrast(1.2);
-        }
-        
-        .map-container.sidebar-open {
-            right: 300px;
-        }
+    .btn-primary-system {
+        background: var(--brand-primary);
+        color: white;
+    }
+    .btn-primary-system:hover {
+        background: #4338ca;
+        box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
+    }
 
-        .plant-floor {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            transform-style: preserve-3d;
-            transition: transform 0.5s ease;
-            background: transparent;
-        }
+    .btn-outline {
+        border-color: #cbd5e1;
+        color: #475569;
+        background: white;
+    }
+    .btn-outline:hover {
+        border-color: #94a3b8;
+        background: #f8fafc;
+    }
 
-        /* MACHINE MARKER - NEON UPGRADE */
-        .machine-marker {
-            position: absolute;
-            width: 60px;
-            height: 60px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            transform: translate(-50%, -50%);
-            background: rgba(10, 20, 30, 0.6);
-            backdrop-filter: blur(8px);
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            z-index: 5;
-            box-shadow: 0 0 15px rgba(0,0,0,0.5);
-        }
+    /* MAPA CORE STYLES */
+    .map-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: var(--map-bg);
+        background-image: url("/static/img/factory_layout_real.jpg");
+        background-size: contain;
+        background-position: center;
+        background-repeat: no-repeat;
+        perspective: 2000px;
+        transition: right 0.3s ease;
+    }
 
-        .machine-marker:hover {
-            transform: translate(-50%, -50%) scale(1.15);
-            z-index: 100;
-        }
+    .map-container.sidebar-open {
+        right: 320px;
+    }
 
-        /* INTENSE NEON GLOWS: Enhanced spread */
-        .status-running {
-            border-color: var(--neon-green);
-            box-shadow: 
-                0 0 20px rgba(0, 255, 157, 0.4),
-                0 0 40px rgba(0, 255, 157, 0.2),
-                inset 0 0 20px rgba(0, 255, 157, 0.4);
-            animation: neon-breath-green 3s ease-in-out infinite alternate;
-        }
+    .plant-floor {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        transform-style: preserve-3d;
+        transition: transform 0.5s ease;
+    }
 
-        .status-stopped, .status-offline {
-            border-color: var(--neon-red);
-            box-shadow: 
-                0 0 20px rgba(255, 50, 50, 0.4),
-                0 0 40px rgba(255, 50, 50, 0.2),
-                inset 0 0 20px rgba(255, 50, 50, 0.4);
-            animation: neon-breath-red 3s ease-in-out infinite alternate;
-        }
+    /* MACHINE MARKER - SYSTEM STYLE */
+    .machine-marker {
+        position: absolute;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        transform: translate(-50%, -50%);
+        background: rgba(15, 23, 42, 0.7);
+        backdrop-filter: blur(4px);
+        border: 2px solid rgba(255, 255, 255, 0.2);
+        z-index: 5;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+    }
 
-        /* NEON BREATH ANIMATIONS */
-        @keyframes neon-breath-green {
-            0% { box-shadow: 0 0 15px rgba(0, 255, 157, 0.3), 0 0 30px rgba(0, 255, 157, 0.2), inset 0 0 15px rgba(0, 255, 157, 0.4); border-color: rgba(0, 255, 157, 0.6); }
-            100% { box-shadow: 0 0 35px rgba(0, 255, 157, 0.9), 0 0 70px rgba(0, 255, 157, 0.5), inset 0 0 30px rgba(0, 255, 157, 0.7); border-color: var(--neon-green); }
-        }
+    .machine-marker:hover {
+        transform: translate(-50%, -50%) scale(1.1);
+        z-index: 50;
+        border-color: white;
+    }
 
-        @keyframes neon-breath-red {
-            0% { box-shadow: 0 0 15px rgba(255, 50, 50, 0.3), 0 0 30px rgba(255, 50, 50, 0.2), inset 0 0 15px rgba(255, 50, 50, 0.4); border-color: rgba(255, 50, 50, 0.6); }
-            100% { box-shadow: 0 0 35px rgba(255, 50, 50, 0.9), 0 0 70px rgba(255, 50, 50, 0.5), inset 0 0 30px rgba(255, 50, 50, 0.7); border-color: var(--neon-red); }
-        }
+    .status-running { border-color: var(--status-running); box-shadow: 0 0 15px rgba(16, 185, 129, 0.4); }
+    .status-stopped { border-color: var(--status-stopped); box-shadow: 0 0 15px rgba(239, 68, 68, 0.4); }
+    .status-offline { border-color: var(--status-offline); opacity: 0.7; }
 
-        /* ENHANCED LABELS */
-        .machine-label {
-            position: absolute;
-            top: 130%;
-            left: 50%;
-            transform: translateX(-50%);
-            white-space: nowrap;
-            background: rgba(0, 10, 20, 0.8);
-            padding: 4px 12px;
-            border-radius: 4px;
-            font-size: 13px;
-            font-weight: 700;
-            color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            pointer-events: none;
-            letter-spacing: 1px;
-            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
-            transition: all 0.3s ease;
-        }
+    .machine-label {
+        position: absolute;
+        top: 110%;
+        left: 50%;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        background: #1e293b;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 700;
+        pointer-events: none;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
 
-        .status-running .machine-label {
-            color: var(--neon-green);
-            text-shadow: 0 0 8px var(--neon-green);
-            border-color: rgba(0, 255, 157, 0.3);
-        }
+    /* SIDEBAR SYSTEM STYLE */
+    .map-sidebar {
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        width: 320px;
+        background: white;
+        border-left: 1px solid #e2e8f0;
+        padding: 1.5rem;
+        overflow-y: auto;
+        z-index: 30;
+        transition: transform 0.3s ease;
+    }
 
-        .status-stopped .machine-label, .status-offline .machine-label {
-            color: var(--neon-red);
-            text-shadow: 0 0 8px var(--neon-red);
-            border-color: rgba(255, 50, 50, 0.3);
-        }
+    .map-sidebar.hidden {
+        transform: translateX(100%);
+    }
 
-        /* DESIGN MODE OVERLAY */
-        .design-mode-indicator {
-            display: none;
-            position: fixed;
-            top: 70px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255, 165, 0, 0.2);
-            border: 1px solid orange;
-            color: orange;
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-weight: bold;
-            z-index: 20;
-        }
+    .sidebar-kpi-card {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.75rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
 
-        /* ANTI-GHOSTING FOR UNPLACED MACHINES - Refined */
-        .machine-marker[style*="left: 0%"][style*="top: 0%"],
-        .machine-marker.is-hidden {
-            display: none !important;
-        }
-        
-        .btn {
-            background: rgba(0, 243, 255, 0.05);
-            border: 1px solid var(--neon-blue);
-            color: var(--neon-blue);
-            padding: 8px 15px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-family: 'Rajdhani', sans-serif;
-            font-size: 13px;
-            font-weight: bold;
-            transition: all 0.3s;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
+    .sidebar-kpi-label {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.25rem;
+    }
 
-        .btn:hover {
-            background: var(--neon-blue);
-            color: black;
-            box-shadow: 0 0 8px var(--neon-blue);
-        }
+    .sidebar-kpi-value {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: #1e293b;
+    }
 
-        .btn-warning { border-color: #ffc107; color: #ffc107; }
-        .btn-warning:hover { background: #ffc107; color: black; box-shadow: 0 0 8px #ffc107; }
-        .btn-danger { border-color: #ff4136; color: #ff4136; }
-        .btn-danger:hover { background: #ff4136; color: black; box-shadow: 0 0 8px #ff4136; }
+    /* TOOLTIP & MODAL RESET */
+    .tooltip {
+        position: absolute;
+        background: #1e293b;
+        color: white;
+        padding: 12px;
+        border-radius: 8px;
+        z-index: 2000;
+        display: none;
+        min-width: 220px;
+        pointer-events: none;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+        font-size: 13px;
+    }
+    
+    .tooltip-title { font-weight: 800; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px; }
+    .tooltip-status { font-size: 9px; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; }
+    .tooltip-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+    .tooltip-label { color: #94a3b8; font-weight: 600; }
 
-        .controls {
-            display: flex;
-            gap: 5px;
-            flex-wrap: wrap;
-            justify-content: flex-end;
-        }
-        
-        .btn-active {
-            background: var(--neon-blue);
-            color: black;
-            box-shadow: 0 0 10px var(--neon-blue);
-        }
+    /* MODAL OVERLAY */
+    .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.75);
+        backdrop-filter: blur(4px);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 100;
+    }
 
-        /* TOOLTIP */
-        .tooltip {
-            position: absolute;
-            background: rgba(10, 20, 30, 0.95);
-            border: 1px solid var(--neon-blue);
-            padding: 10px;
-            border-radius: 8px;
-            z-index: 1000;
-            display: none;
-            min-width: 150px;
-            pointer-events: none;
-        }
-        .tooltip-title { color: var(--neon-blue); font-weight: bold; border-bottom: 1px solid #333; margin-bottom: 5px; padding-bottom: 3px; }
-        .tooltip-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 2px; }
+    .modal-dialog {
+        background: white;
+        width: 100%;
+        max-width: 450px;
+        border-radius: 1.5rem;
+        overflow: hidden;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    }
 
-        /* FULLSCREEN / UI TOGGLE */
-        .ui-hidden .top-bar {
-            transform: translateY(-100%);
-            transition: transform 0.3s ease;
-        }
-        .ui-hidden .sidebar {
-            transform: translateX(100%);
-        }
-        .ui-hidden .map-container {
-            top: 0 !important;
-            right: 0 !important;
-            left: 0 !important;
-            bottom: 0 !important;
-            z-index: 100 !important;
-        }
-        
-        .floating-toggle {
-            position: fixed;
-            bottom: 20px;
-            right: 320px;
-            z-index: 5000;
-            background: rgba(10, 20, 30, 0.9);
-            border: 1px solid var(--neon-blue);
-            color: var(--neon-blue);
-            width: 45px;
-            height: 45px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            backdrop-filter: blur(5px);
-            box-shadow: 0 0 5px rgba(0, 243, 255, 0.2);
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-        .floating-toggle:hover {
-            transform: scale(1.1);
-            background: var(--neon-blue);
-            color: black;
-            box-shadow: 0 0 10px var(--neon-blue);
-        }
-        .ui-hidden .floating-toggle {
-            opacity: 0.5;
-            right: 20px;
-        }
-        .ui-hidden .floating-toggle:hover {
-            opacity: 1;
-        }
-        
-        /* DRAGGING PERFORMANCE */
-        .machine-marker.dragging {
-            transition: none !important;
-            z-index: 6000 !important;
-            cursor: grabbing !important;
-            opacity: 0.9;
-        }
-        .machine-marker.dragging::after {
-            animation: none !important;
-        }
+    .modal-header {
+        padding: 1.5rem;
+        background: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
 
-        .top-bar, .sidebar { transition: transform 0.3s ease; }
-        .map-container { transition: all 0.3s ease; }
-        /* SIDEBAR ITEMS */
-        .sidebar-machine-item {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid #333;
-            padding: 8px 12px;
-            margin-bottom: 8px;
-            border-radius: 4px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        .sidebar-machine-item:hover {
-            background: rgba(255, 255, 255, 0.1);
-            border-color: #555;
-        }
+    .modal-body {
+        padding: 1.5rem;
+    }
 
-        .btn-toggle-eye {
-            background: transparent;
-            border: none;
-            color: var(--neon-blue);
-            cursor: pointer;
-            padding: 5px;
-            display: flex;
-            align-items: center;
-            opacity: 0.6;
-            transition: all 0.2s;
-        }
-        .btn-toggle-eye:hover { opacity: 1; transform: scale(1.1); }
-        .btn-toggle-eye.off { color: #555; }
+    .modal-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+    }
 
-        /* TOAST NOTIFICATIONS */
-        .toast-container {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            z-index: 9999;
-        }
-        .toast {
-            background: rgba(10, 20, 30, 0.95);
-            border: 1px solid var(--neon-blue);
-            color: #fff;
-            padding: 12px 20px;
-            border-radius: 8px;
-            margin-top: 10px;
-            box-shadow: 0 0 15px rgba(0, 243, 255, 0.3);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            animation: slide-in 0.3s ease-out forwards;
-        }
-        @keyframes slide-in {
-            from { transform: translateX(-100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-        .toast.success { border-color: var(--neon-green); box-shadow: 0 0 15px rgba(0, 255, 65, 0.3); }
-        .toast.error { border-color: var(--neon-red); box-shadow: 0 0 15px rgba(255, 0, 60, 0.3); }
-    </style>
-</head>
-<body>
+    .modal-label {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #64748b;
+        text-transform: uppercase;
+        margin-bottom: 0.25rem;
+    }
 
-    <div class="floating-toggle" onclick="toggleUI()" title="Mostrar/Ocultar Paneles">
-        <svg id="toggleIcon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+    .modal-value {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #1e293b;
+    }
+
+    /* DESIGN PANEL */
+    .design-panel {
+        position: absolute;
+        top: 1rem;
+        left: 1rem;
+        width: 240px;
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.75rem;
+        padding: 1rem;
+        z-index: 45;
+        box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+    }
+
+    .design-panel h4 { font-weight: 700; margin-bottom: 0.75rem; color: #1e293b; border-bottom: 1px solid #f1f5f9; padding-bottom: 0.5rem; }
+    .form-group { margin-bottom: 0.75rem; }
+    .form-group label { display: block; font-size: 0.7rem; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 0.25rem; }
+    .form-group input, .form-group select { width: 100%; padding: 0.4rem; border: 1px solid #e2e8f0; border-radius: 0.4rem; font-size: 0.8rem; }
+
+    /* SHAPES */
+    .shape-GENERICO, .shape-ROBOT { border-radius: 9999px; }
+    .shape-CNC { border-radius: 0.5rem; }
+    .shape-TORNO, .shape-AGUJEREADORA, .shape-PRENSA { border-radius: 0.25rem; }
+
+</style>
+
+<!-- TOP CONTROL BAR -->
+<div class="map-header">
+    <div class="map-title">
+        <a href="{% url 'dashboard_produccion' %}" class="btn-system btn-ghost" title="Volver al Menú Principal">
+            <i class="fas fa-arrow-left"></i>
+            <span>Volver</span>
+        </a>
+        <div class="h-6 w-px bg-slate-200"></div>
+        <h2>MAPA DE PLANTA 3D</h2>
     </div>
 
-    <div class="blueprint-bg"></div>
-
-    <div class="top-bar">
-        <h1>FACTORY<span style="color:white">MAP</span> <span style="font-size:12px; opacity:0.7">PREMIUM v1.0</span></h1>
-        
-        <div class="controls">
-            <button class="btn" id="btnToggle3D" onclick="toggle3D()">2D / 3D</button>
-            <button class="btn" id="btnDesign" onclick="toggleDesignMode()">MODO DISEÑO</button>
-            <button class="btn btn-warning" onclick="redistributeMachines()">DISTRIBUIR AUTO</button>
-            <button class="btn btn-danger" onclick="resetPositions()">RESET</button>
-            <button class="btn" id="btnToggleSidebar" onclick="toggleSidebar()">PANEL</button>
-            <button class="btn" onclick="location.reload()">ACTUALIZAR</button>
-        </div>
+    <div class="flex items-center gap-2">
+        <button class="btn-system btn-outline" id="btnToggle3D" onclick="toggle3D()">
+            <i class="fas fa-cube"></i> 2D/3D
+        </button>
+        <button class="btn-system btn-outline" id="btnDesign" onclick="toggleDesignMode()">
+            <i class="fas fa-edit"></i> Modo Diseño
+        </button>
+        <div class="h-6 w-px bg-slate-200 mx-1"></div>
+        <button class="btn-system btn-primary-system" onclick="location.reload()">
+            <i class="fas fa-sync-alt"></i> Actualizar
+        </button>
+        <button class="btn-system btn-ghost" onclick="toggleSidebar()">
+            <i class="fas fa-columns"></i>
+        </button>
     </div>
+</div>
 
-    <div class="design-mode-indicator" id="designIndicator">MODO DISEÑO ACTIVADO: ARRASTRA LAS MÁQUINAS</div>
+<div class="map-container-wrapper">
+    <!-- BLUEPRINT DESIGN INDICATOR -->
+    <div id="designIndicator" class="hidden absolute top-4 left-1/2 -translate-x-1/2 bg-amber-500 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-lg z-[50] animate-pulse">
+        MODO DISEÑO ACTIVADO: ARRASTRA LAS MÁQUINAS
+    </div>
 
     <div class="map-container sidebar-open" id="mapContainer">
         <div class="plant-floor" id="plantFloor">
-            <!-- MACHINES ON MAP: Showing ALL machines, those with 0,0 will appear in center or can be dragged -->
-            {% for m in machines %}
+             {% for m in machines %}
                 {% with shape_class=m.type|default:'GENERICO' %}
-                <div class="machine-marker status-{{ m.status|lower }} shape-{{ shape_class }} {% if m.x == 0 and m.y == 0 %}initial-pos{% endif %}" 
+                <div class="machine-marker status-{{ m.status|lower }} shape-{{ shape_class }}" 
                      id="marker-{{ m.pk }}" 
-                     style="left: {% if m.x != 0 %}{{ m.x|unlocalize }}{% else %}50{% endif %}%; 
-                            top: {% if m.y != 0 %}{{ m.y|unlocalize }}{% else %}50{% endif %}%; 
-                            width: {{ m.w|unlocalize }}%; 
-                            height: {{ m.h|unlocalize }}%; 
-                            transform: rotate({{ m.r|unlocalize }}deg);
-                            border-width: {{ m.border_weight|unlocalize }}px;"
+                     style="left: {% if m.x != 0 %}{{ m.x|unlocalize }}{% else %}50{% endif %}%; top: {% if m.y != 0 %}{{ m.y|unlocalize }}{% else %}50{% endif %}%; width: {{ m.w|unlocalize }}%; height: {{ m.h|unlocalize }}%; transform: rotate({{ m.r|unlocalize }}deg); border-width: {{ m.border_weight|unlocalize }}px;"
                      data-id="{{ m.id }}"
                      data-pk="{{ m.pk }}"
-                     data-safe-id="marker-{{ m.pk }}"
                      data-name="{{ m.name }}"
                      data-status="{{ m.status }}"
                      data-type="{{ m.type }}"
-                     data-w="{{ m.w|default:4|unlocalize }}"
-                     data-h="{{ m.h|default:4|unlocalize }}"
-                     data-r="{{ m.r|default:0|unlocalize }}"
-                     data-label-size="{{ m.label_size|default:13|unlocalize }}"
-                     data-border-weight="{{ m.border_weight|default:2|unlocalize }}"
+                     data-w="{{ m.w|unlocalize }}"
+                     data-h="{{ m.h|unlocalize }}"
+                     data-r="{{ m.r|unlocalize }}"
+                     data-label-size="{{ m.label_size|unlocalize }}"
+                     data-border-weight="{{ m.border_weight|unlocalize }}"
+                     data-operario="{{ m.operario }}"
+                     data-operacion="{{ m.operacion }}"
+                     data-orden="{{ m.orden }}"
+                     data-inicio="{{ m.inicio }}"
+                     data-fin="{{ m.fin }}"
+                     data-oee="{{ m.oee|floatformat:1 }}"
+                     data-performance="{{ m.performance|floatformat:1 }}"
+                     data-qty="{{ m.qty|floatformat:0 }}"
                      onmousedown="onMarkerMouseDown(event, this)">
                     
-                    <div class="machine-content">
-                        <div class="machine-label" style="font-size: {{ m.label_size|unlocalize }}px;">{{ m.name }}</div>
-                        <div class="machine-icon-small"></div>
-                    </div>
+                    <div class="machine-label" style="font-size: {{ m.label_size|unlocalize }}px;">{{ m.name }}</div>
                 </div>
                 {% endwith %}
             {% endfor %}
         </div>
     </div>
-    
-    <!-- EDIT PANEL (Only Visible in Design Mode when a machine is selected) -->
-    <div id="editPanel" class="edit-panel" style="display:none;">
-        <h4 id="editPanelHeader" onmousedown="startDraggingPanel(event)" style="cursor: move; user-select: none;">
-            <i class="fas fa-arrows-alt" style="margin-right: 8px; font-size: 14px; opacity: 0.7;"></i>
-            Editar Máquina
+
+    <!-- SIDEBAR -->
+    <div class="map-sidebar" id="mapSidebar">
+        <h3 class="text-sm font-bold text-slate-800 uppercase tracking-widest mb-6 border-b pb-2">Estadísticas Hoy</h3>
+        
+        <div class="sidebar-kpi-card">
+            <div class="sidebar-kpi-label">OEE Global</div>
+            <div class="sidebar-kpi-value {% if global_stats.promedio_oee >= 85 %}text-emerald-600{% elif global_stats.promedio_oee >= 70 %}text-amber-500{% else %}text-rose-600{% endif %}">
+                {{ global_stats.promedio_oee }}%
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 mb-6">
+            <div class="sidebar-kpi-card mb-0">
+                <div class="sidebar-kpi-label">Disp.</div>
+                <div class="text-lg font-bold text-slate-700">{{ global_stats.avg_availability }}%</div>
+            </div>
+            <div class="sidebar-kpi-card mb-0">
+                <div class="sidebar-kpi-label">Rend.</div>
+                <div class="text-lg font-bold text-slate-700">{{ global_stats.avg_performance }}%</div>
+            </div>
+        </div>
+
+        <div class="sidebar-kpi-card">
+            <div class="sidebar-kpi-label">Máquinas Activas</div>
+            <div class="text-xl font-bold text-indigo-600">{{ active_count }} <span class="text-slate-400 font-medium">/ {{ total_count }}</span></div>
+        </div>
+
+        <h3 class="text-sm font-bold text-slate-800 uppercase tracking-widest mt-10 mb-4 border-b pb-2">Referencias</h3>
+        <div class="space-y-3">
+            <div class="flex items-center gap-3">
+                <div class="w-3 h-3 bg-emerald-500 rounded-full shadow-sm"></div>
+                <span class="text-xs font-bold text-slate-600 uppercase">Produciendo</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="w-3 h-3 bg-rose-500 rounded-full shadow-sm"></div>
+                <span class="text-xs font-bold text-slate-600 uppercase">Parada / Falla</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="w-3 h-3 bg-slate-400 rounded-full shadow-sm"></div>
+                <span class="text-xs font-bold text-slate-600 uppercase">Fuera de Línea</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- DESIGN MODE PANEL -->
+    <div id="editPanel" class="design-panel hidden">
+        <h4 id="editPanelHeader" onmousedown="startDraggingPanel(event)" class="cursor-move flex items-center justify-between">
+            <span>Configurar</span>
+            <i class="fas fa-arrows-alt text-[10px] text-slate-400"></i>
         </h4>
         <div class="form-group">
-            <label>Tipo (Forma)</label>
+            <label>Forma</label>
             <select id="editType" onchange="updateSelectedMachine('type', this.value)">
-                <option value="GENERICO">Genérico (Círculo)</option>
-                <option value="CNC">CNC (Cuadrado)</option>
-                <option value="TORNO">Torno (Rectángulo)</option>
-                <option value="AGUJEREADORA">Agujereadora (Rectángulo)</option>
-                <option value="ROBOT">Robot (Círculo)</option>
-                <option value="PRENSA">Prensa (Rectángulo)</option>
+                <option value="GENERICO">Círculo</option>
+                <option value="CNC">Cuadrado</option>
+                <option value="TORNO">Rectángulo Horizontal</option>
+                <option value="AGUJEREADORA">Rectángulo Vertical</option>
+                <option value="ROBOT">Robot</option>
+                <option value="PRENSA">Prensa</option>
             </select>
         </div>
         <div class="form-group">
-            <label>Ancho (%) <span id="valW"></span></label>
-            <input type="range" id="editW" min="1" max="20" step="0.1" oninput="updateSelectedMachine('w', this.value)">
+            <label>Ancho (%)</label>
+            <input type="range" id="editW" min="1" max="25" step="0.5" oninput="updateSelectedMachine('w', this.value)">
         </div>
         <div class="form-group">
-            <label>Alto (%) <span id="valH"></span></label>
-            <input type="range" id="editH" min="1" max="20" step="0.1" oninput="updateSelectedMachine('h', this.value)">
+            <label>Alto (%)</label>
+            <input type="range" id="editH" min="1" max="25" step="0.5" oninput="updateSelectedMachine('h', this.value)">
         </div>
         <div class="form-group">
-            <label>Rotación (°) <span id="valR"></span></label>
-            <input type="range" id="editR" min="0" max="360" step="2" oninput="updateSelectedMachine('r', this.value)">
+            <label>Rotación (°)</label>
+            <input type="range" id="editR" min="0" max="360" step="5" oninput="updateSelectedMachine('r', this.value)">
         </div>
-        <div class="form-group">
-            <label>Tamaño Letra (px) <span id="valLabelSize"></span></label>
-            <input type="range" id="editLabelSize" min="8" max="30" step="1" oninput="updateSelectedMachine('labelSize', this.value)">
+        <div class="space-y-2 mt-4">
+            <button class="btn-system btn-primary-system w-full" onclick="saveSelectedMachine()">Guardar</button>
+            <button class="btn-system btn-outline w-full" onclick="deselectMachine()">Cerrar</button>
         </div>
-        <div class="form-group">
-            <label>Grosor Línea (px) <span id="valBorderWeight"></span></label>
-            <input type="range" id="editBorderWeight" min="1" max="10" step="0.5" oninput="updateSelectedMachine('borderWeight', this.value)">
-        </div>
-        <button class="btn" style="width:100%; margin-top:10px; background:var(--neon-green)" onclick="saveSelectedMachine()">GUARDAR CAMBIOS</button>
-        <button class="btn" style="width:100%; margin-top:5px; background:#444" onclick="deselectMachine()">CERRAR</button>
     </div>
+</div>
 
-    <style>
-        .edit-panel {
-            position: absolute;
-            top: 80px;
-            right: 320px; /* Left of sidebar */
-            width: 220px;
-            background: rgba(0, 10, 20, 0.95);
-            border: 1px solid var(--neon-blue);
-            box-shadow: 0 0 20px rgba(0,0,0,0.8);
-            padding: 15px;
-            border-radius: 8px;
-            z-index: 1001;
-            color: #fff;
-        }
-        .edit-panel h4 { margin: 0 0 10px 0; color: var(--neon-blue); border-bottom: 1px solid #333; padding-bottom: 5px; }
-        .edit-panel .form-group { margin-bottom: 10px; }
-        .edit-panel label { display: block; font-size: 12px; margin-bottom: 3px; color: #aaa; }
-        .edit-panel select, .edit-panel input { width: 100%; background: #222; border: 1px solid #444; color: white; padding: 4px; border-radius: 4px; }
-        
-        /* SHAPES - Enhanced for visual distinction */
-        
-        /* Círculos - Genérico y Robot */
-        .machine-marker.shape-GENERICO, 
-        .machine-marker.shape-ROBOT { 
-            border-radius: 50%; 
-            aspect-ratio: 1/1;
-        }
-        
-        /* Cuadrado - CNC */
-        .machine-marker.shape-CNC { 
-            border-radius: 8px;
-            aspect-ratio: 1/1;
-        }
-        
-        /* Rectángulo Horizontal - Torno */
-        .machine-marker.shape-TORNO { 
-            border-radius: 4px;
-            /* Width will be larger than height via inline styles */
-        }
-        
-        /* Rectángulo Vertical - Agujereadora */
-        .machine-marker.shape-AGUJEREADORA { 
-            border-radius: 4px;
-            /* Height will be larger than width via inline styles */
-        }
-        
-        /* Rectángulo Ancho - Prensa */
-        .machine-marker.shape-PRENSA { 
-            border-radius: 6px;
-            /* Wider rectangle */
-        }
-        
-        .machine-marker {
-            /* width/height set inline */
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            overflow: visible;
-            flex-direction: column;
-            position: absolute; /* CRITICAL: Must be absolute to move */
-            cursor: move;
-            z-index: 100;
-        }
-        
-        /* Highlight selected */
-        .machine-marker.selected {
-            border-color: #fff;
-            box-shadow: 0 0 15px #fff;
-            z-index: 100;
-        }
+<!-- TOOLTIP -->
+<div id="tooltip" class="tooltip"></div>
 
-        .machine-content {
-            pointer-events: none;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
-        }
-        
-        /* Icon based on content */
-        .machine-icon-small {
-            width: 24px;
-            height: 24px;
-            margin-top: 5px;
-            opacity: 0.8;
-            background-size: contain;
-            background-repeat: no-repeat;
-            background-position: center;
-        }
-        
-        /* Specific SVG Icons for types */
-        .shape-CNC .machine-icon-small { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Cpath d='M9 9l6 6M15 9l-6 6'/%3E%3C/svg%3E"); }
-        .shape-TORNO .machine-icon-small { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='M2 12h20M5 7v10M19 7v10'/%3E%3C/svg%3E"); }
-        .shape-ROBOT .machine-icon-small { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 8v8M8 12h8'/%3E%3C/svg%3E"); }
-        .shape-PRENSA .machine-icon-small { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='M4 20h16M7 4h10M12 4v16'/%3E%3C/svg%3E"); }
-        .shape-AGUJEREADORA .machine-icon-small { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='M12 3v18M8 15l4 4 4-4'/%3E%3C/svg%3E"); }
-
-        .machine-icon { display: none; } 
-    </style>
-
-    <div class="sidebar">
-        <!-- KPI Cards remain -->
-        <div class="kpi-card">
-            <div class="kpi-title">Producción Global</div>
-            <div class="kpi-value text-green">85%</div>
+<!-- DETAILS MODAL -->
+<div class="modal-overlay" id="detailModal">
+    <div class="modal-dialog">
+        <div class="modal-header">
+            <div class="modal-icon-container" id="mIconBg">
+                <i class="fas fa-microchip modal-icon" id="mIcon"></i>
+            </div>
+            <div>
+                <h3 class="text-xl font-bold text-slate-800 leading-none mb-1" id="mName">Nombre Máquina</h3>
+                <span class="text-[10px] font-black uppercase tracking-widest text-slate-400" id="mId">MAC00</span>
+            </div>
         </div>
-        <div class="kpi-card">
-            <div class="kpi-title">Máquinas Activas</div>
-            <div class="kpi-value">{{ machines|length }}</div>
-        </div>
-        
-        <!-- Legend remains -->
-        <h3 style="color:var(--neon-blue); margin-top:30px; border-bottom:1px solid #333; padding-bottom:10px;">REFERENCIAS</h3>
-        <div style="margin-top:15px; font-size:14px; margin-bottom: 30px;">
-            <div style="display:flex; align-items:center; margin-bottom:10px;"><div style="width:12px; height:12px; background:var(--neon-green); border-radius:50%; margin-right:10px; box-shadow:0 0 8px var(--neon-green)"></div> PRODUCIENDO</div>
-            <div style="display:flex; align-items:center; margin-bottom:10px;"><div style="width:12px; height:12px; background:var(--neon-red); border-radius:50%; margin-right:10px; box-shadow:0 0 8px var(--neon-red)"></div> PARADA / OFFLINE</div>
-        </div>
-
-        <h3 style="color:var(--neon-blue); border-bottom:1px solid #333; padding-bottom:10px;">LISTADO DE MÁQUINAS</h3>
-        <div id="sidebarMachineList" style="margin-top: 15px;">
-            {% for m in machines %}
-                <div class="sidebar-machine-item" 
-                     draggable="true" 
-                     ondragstart="dragFromSidebar(event)"
-                     data-id="{{ m.id }}"
-                     data-name="{{ m.name }}"
-                     data-status="{{ m.status }}"
-                     data-type="{{ m.type }}">
-                    <div style="display:flex; align-items:center;">
-                        <div style="width:10px; height:10px; border-radius:50%; background: {% if m.status == 'RUNNING' %}var(--neon-green){% else %}var(--neon-red){% endif %}; box-shadow: 0 0 5px inherit; margin-right:10px;"></div>
-                        <span style="color:white; font-size:14px;">{{ m.name }}</span>
-                    </div>
-                    <button class="btn-toggle-eye {% if m.x == 0 and m.y == 0 %}off{% endif %}" onclick="toggleMarker('{{ m.id }}', 'marker-{{ m.pk }}', this)" title="Mostrar/Ocultar en mapa">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                            <circle cx="12" cy="12" r="3"></circle>
-                        </svg>
-                    </button>
+        <div class="modal-body">
+            <div class="modal-grid">
+                <div>
+                    <div class="modal-label">Estado</div>
+                    <div class="modal-value" id="mStatusText">Procesando</div>
                 </div>
-            {% endfor %}
+                <div>
+                    <div class="modal-label">OEE / Rend.</div>
+                    <div class="modal-value" id="mStats">0% / 0%</div>
+                </div>
+                <div>
+                    <div class="modal-label">Operario</div>
+                    <div class="modal-value" id="mOperario">---</div>
+                </div>
+                <div>
+                    <div class="modal-label">Piezas Hoy</div>
+                    <div class="modal-value text-indigo-600" id="mQty">0</div>
+                </div>
+                <div class="col-span-2">
+                    <div class="modal-label">Orden / Operación</div>
+                    <div class="modal-value" id="mOperacion">---</div>
+                </div>
+            </div>
+            
+            <div class="mt-8">
+                <button class="btn-system btn-primary-system w-full py-3" onclick="closeModal()">Cerrar</button>
+            </div>
         </div>
     </div>
+</div>
 
-    <!-- TOOLTIP -->
-    <div class="tooltip" id="tooltip"></div>
-    <div class="toast-container" id="toastContainer"></div>
+<div id="toastContainer" class="fixed bottom-4 left-4 z-[9999] flex flex-col gap-2"></div>
 
-    <script>
-        let isDesignMode = false;
-        let is3D = false;
-        let isSidebarVisible = true;
-        let isUIVisible = true;
-        let draggedElement = null;
-        let selectedMachine = null;
+<script>
+    // --- APP STATE & CONFIG ---
+    let isDesignMode = false;
+    let is3D = true;
+    let selectedMarker = null;
+    let isDragging = false;
+    let isDraggingPanel = false;
+    let dragStartX, dragStartY;
+    let currentDragX, currentDragY;
+    let mapRect;
+
+    // --- INITIALIZATION ---
+    document.addEventListener('DOMContentLoaded', () => {
+        mapRect = document.getElementById('mapContainer').getBoundingClientRect();
+        window.addEventListener('resize', () => {
+            mapRect = document.getElementById('mapContainer').getBoundingClientRect();
+        });
         
-        // Panel Dragging State
-        let isDraggingPanel = false;
-        let pOffset = { x: 0, y: 0 };
+        initTooltips();
+    });
 
-        const tooltip = document.getElementById('tooltip');
+    // --- UI CONTROLS ---
+    function toggleSidebar() {
+        const sidebar = document.getElementById('mapSidebar');
         const container = document.getElementById('mapContainer');
-        const plantFloor = document.getElementById('plantFloor');
-        const editPanel = document.getElementById('editPanel');
-        const sidebar = document.querySelector('.sidebar');
-        const toggleIcon = document.getElementById('toggleIcon');
+        sidebar.classList.toggle('hidden');
+        container.classList.toggle('sidebar-open');
+    }
 
-        function toggleUI() {
-            console.log("Toggle UI - isUIVisible:", isUIVisible);
-            isUIVisible = !isUIVisible;
-            if (isUIVisible) {
-                document.body.classList.remove('ui-hidden');
-                toggleIcon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
-            } else {
-                document.body.classList.add('ui-hidden');
-                toggleIcon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>';
-            }
+    function toggle3D() {
+        is3D = !is3D;
+        const floor = document.getElementById('plantFloor');
+        const btn = document.getElementById('btnToggle3D');
+        if (is3D) {
+            floor.style.transform = 'rotateX(40deg) rotateZ(-10deg) translateY(-50px)';
+            btn.classList.add('bg-indigo-100');
+        } else {
+            floor.style.transform = 'none';
+            btn.classList.remove('bg-indigo-100');
         }
+    }
 
-        function toggleSidebar() {
-            isSidebarVisible = !isSidebarVisible;
-            if (isSidebarVisible) {
-                sidebar.classList.remove('hidden');
-                container.classList.add('sidebar-open');
-                document.getElementById('btnToggleSidebar').classList.remove('btn-active');
-            } else {
-                sidebar.classList.add('hidden');
-                container.classList.remove('sidebar-open');
-                document.getElementById('btnToggleSidebar').classList.add('btn-active');
-            }
+    function toggleDesignMode() {
+        isDesignMode = !isDesignMode;
+        const indicator = document.getElementById('designIndicator');
+        const btn = document.getElementById('btnDesign');
+        const markers = document.querySelectorAll('.machine-marker');
+        
+        if (isDesignMode) {
+            indicator.classList.remove('hidden');
+            btn.classList.add('bg-amber-100', 'border-amber-500', 'text-amber-700');
+            showToast("Modo Diseño ACTIVADO", "warning");
+        } else {
+            indicator.classList.add('hidden');
+            btn.classList.remove('bg-amber-100', 'border-amber-500', 'text-amber-700');
+            deselectMachine();
+            showToast("Modo Diseño DESACTIVADO", "success");
         }
+    }
 
-        // Inputs
-        const editType = document.getElementById('editType');
-        const editW = document.getElementById('editW');
-        const editH = document.getElementById('editH');
-        const editR = document.getElementById('editR');
-
-        function toggleDesignMode() {
-            isDesignMode = !isDesignMode;
-            console.log("Design Mode:", isDesignMode);
-            document.getElementById('designIndicator').style.display = isDesignMode ? 'block' : 'none';
-            document.getElementById('btnDesign').classList.toggle('btn-active');
-            
-            // Enable/Disable sidebar dragging
-            const items = document.querySelectorAll('.sidebar-machine-item');
-            items.forEach(item => {
-                if(isDesignMode) item.style.cursor = 'grab';
-                else item.style.cursor = 'default';
-            });
-
-            if(!isDesignMode) {
-                deselectMachine();
-                tooltip.style.display = 'none';
-            }
-        }
-
-        function toggle3D() {
-            is3D = !is3D;
-            if (is3D) {
-                plantFloor.style.transform = "rotateX(30deg) scale(0.9) translateY(-50px)";
-                container.style.overflow = "visible"; // Allow logic to overflow if needed, or keep hidden
-                document.getElementById('btnToggle3D').classList.add('btn-active');
-            } else {
-                plantFloor.style.transform = "none";
-                container.style.overflow = "hidden";
-                document.getElementById('btnToggle3D').classList.remove('btn-active');
-            }
+    // --- DRAG AND DROP (DESIGN MODE) ---
+    function onMarkerMouseDown(e, marker) {
+        if (!isDesignMode) {
+            if (e.button === 0) openModal(marker);
+            return;
         }
         
-        // --- SELECTION & EDITING ---
-        function onMarkerMouseDown(e, element) {
-            console.log("Marker MouseDown", element.getAttribute('data-name'), "Design Mode:", isDesignMode);
-            if (!isDesignMode) return;
-            // Prevent drag start if just clicking to select
-            // Actually allow drag, but also select logic
-            e.stopPropagation(); // Don't bubble to map
-            
-            selectMachine(element);
-            startDrag(e, element);
-        }
-
-        function selectMachine(element) {
-            if (selectedMachine) {
-                selectedMachine.classList.remove('selected');
-            }
-            selectedMachine = element;
-            selectedMachine.classList.add('selected');
-            
-            // Populate Panel
-            editPanel.style.display = 'block';
-            
-            // Read data
-            const type = element.getAttribute('data-type') || 'GENERICO';
-            const w = parseFloat(element.getAttribute('data-w')) || 4;
-            const h = parseFloat(element.getAttribute('data-h')) || 4;
-            const r = parseFloat(element.getAttribute('data-r')) || 0;
-            const labelSize = parseFloat(element.getAttribute('data-label-size')) || 13;
-            const borderWeight = parseFloat(element.getAttribute('data-border-weight')) || 2;
-            
-            editType.value = type;
-            editW.value = w;
-            editH.value = h;
-            editR.value = r;
-            document.getElementById('editLabelSize').value = labelSize;
-            document.getElementById('editBorderWeight').value = borderWeight;
-            
-            document.getElementById('valW').innerText = w + '%';
-            document.getElementById('valH').innerText = h + '%';
-            document.getElementById('valR').innerText = r + '°';
-            document.getElementById('valLabelSize').innerText = labelSize + 'px';
-            document.getElementById('valBorderWeight').innerText = borderWeight + 'px';
-        }
+        e.preventDefault();
+        selectMachine(marker);
         
-        function deselectMachine() {
-            if(selectedMachine) {
-                selectedMachine.classList.remove('selected');
-                selectedMachine = null;
-            }
-            editPanel.style.display = 'none';
-        }
-
-        function updateSelectedMachine(prop, value) {
-            if(!selectedMachine) return;
-            
-            if (prop === 'type') {
-                selectedMachine.setAttribute('data-type', value);
-                // Remove old shape class
-                selectedMachine.className = selectedMachine.className.replace(/shape-\w+/g, '');
-                selectedMachine.classList.add('shape-' + value);
-                // Auto-set dims based on type if needed? Or just let user?
-                if (value === 'CNC') { 
-                   // Square hint, but let user slider override
-                }
-            } else if (prop === 'w') {
-                selectedMachine.style.width = value + '%';
-                selectedMachine.setAttribute('data-w', value);
-                document.getElementById('valW').innerText = value + '%';
-            } else if (prop === 'h') {
-                selectedMachine.style.height = value + '%';
-                selectedMachine.setAttribute('data-h', value);
-                document.getElementById('valH').innerText = value + '%';
-            } else if (prop === 'r') {
-                selectedMachine.style.transform = `rotate(${value}deg)`;
-                selectedMachine.setAttribute('data-r', value);
-                 document.getElementById('valR').innerText = value + '°';
-            } else if (prop === 'labelSize') {
-                const label = selectedMachine.querySelector('.machine-label');
-                if (label) label.style.fontSize = value + 'px';
-                selectedMachine.setAttribute('data-label-size', value);
-                document.getElementById('valLabelSize').innerText = value + 'px';
-            } else if (prop === 'borderWeight') {
-                selectedMachine.style.borderWidth = value + 'px';
-                selectedMachine.setAttribute('data-border-weight', value);
-                document.getElementById('valBorderWeight').innerText = value + 'px';
-            }
-        }
+        isDragging = true;
+        selectedMarker = marker;
+        marker.classList.add('scale-110', 'z-[100]', 'border-white');
         
-        // --- PANEL DRAGGING LOGIC ---
-        function startDraggingPanel(e) {
-            isDraggingPanel = true;
-            const rect = editPanel.getBoundingClientRect();
-            pOffset.x = e.clientX - rect.left;
-            pOffset.y = e.clientY - rect.top;
-            
-            document.addEventListener('mousemove', dragPanel);
-            document.addEventListener('mouseup', stopDraggingPanel);
-            
-            editPanel.style.transition = 'none'; // Smoothness
-            e.preventDefault();
-        }
-
-        function dragPanel(e) {
-            if (!isDraggingPanel) return;
-            
-            let x = e.clientX - pOffset.x;
-            let y = e.clientY - pOffset.y;
-            
-            // Constrain to window? Optional
-            editPanel.style.left = x + 'px';
-            editPanel.style.top = y + 'px';
-            editPanel.style.right = 'auto'; // Override the default CSS
-        }
-
-        function stopDraggingPanel() {
-            isDraggingPanel = true; // Wait, mistake in thinking, should be false
-            isDraggingPanel = false;
-            editPanel.style.transition = ''; // Restore transition
-            document.removeEventListener('mousemove', dragPanel);
-            document.removeEventListener('mouseup', stopDraggingPanel);
-        }
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
         
-        function saveSelectedMachine() {
-            if (!selectedMachine) return;
-            const id = selectedMachine.getAttribute('data-id');
-            const data = {
-                id: id,
-                w: selectedMachine.getAttribute('data-w'),
-                h: selectedMachine.getAttribute('data-h'),
-                r: selectedMachine.getAttribute('data-r'),
-                type: selectedMachine.getAttribute('data-type'),
-                labelSize: selectedMachine.getAttribute('data-label-size'),
-                borderWeight: selectedMachine.getAttribute('data-border-weight')
-            };
-            
-            saveData(data);
-            // Optionally close
-            // deselectMachine();
+        document.addEventListener('mousemove', onMarkerMouseMove);
+        document.addEventListener('mouseup', onMarkerMouseUp);
+    }
+
+    function onMarkerMouseMove(e) {
+        if (!isDragging || !selectedMarker) return;
+        
+        const dx = e.clientX - dragStartX;
+        const dy = e.clientY - dragStartY;
+        
+        const rect = document.getElementById('mapContainer').getBoundingClientRect();
+        
+        // Calculate percentages
+        let xPerc = ((e.clientX - rect.left) / rect.width) * 100;
+        let yPerc = ((e.clientY - rect.top) / rect.height) * 100;
+        
+        // Bounds
+        xPerc = Math.max(2, Math.min(98, xPerc));
+        yPerc = Math.max(2, Math.min(98, yPerc));
+        
+        selectedMarker.style.left = xPerc.toFixed(2) + '%';
+        selectedMarker.style.top = yPerc.toFixed(2) + '%';
+    }
+
+    function onMarkerMouseUp() {
+        isDragging = false;
+        if (selectedMarker) {
+            selectedMarker.classList.remove('scale-110', 'border-white');
         }
+        document.removeEventListener('mousemove', onMarkerMouseMove);
+        document.removeEventListener('mouseup', onMarkerMouseUp);
+    }
 
-        // TOOLTIP LOGIC
-        // Use event delegation for dynamically added elements
-        container.addEventListener('mousemove', (e) => {
-            if (isDesignMode) return;
-            const marker = e.target.closest('.machine-marker');
-            if (marker) {
-                const name = marker.getAttribute('data-name');
-                const status = marker.getAttribute('data-status');
-                
-                tooltip.style.display = 'block';
-                tooltip.style.left = (e.clientX + 15) + 'px';
-                tooltip.style.top = (e.clientY + 15) + 'px';
-                tooltip.innerHTML = `
-                    <div class="tooltip-title">${name}</div>
-                    <div class="tooltip-row"><span>Estado:</span> <span style="color:${getColor(status)}">${status}</span></div>
-                `;
-            }
-        });
+    // --- MACHINE SELECTION & EDITING ---
+    function selectMachine(marker) {
+        if (selectedMarker) selectedMarker.style.boxShadow = '';
+        selectedMarker = marker;
+        selectedMarker.style.boxShadow = '0 0 20px white';
+        
+        const panel = document.getElementById('editPanel');
+        panel.classList.remove('hidden');
+        
+        // Fill form
+        document.getElementById('editType').value = marker.dataset.type || 'GENERICO';
+        document.getElementById('editW').value = marker.dataset.w;
+        document.getElementById('editH').value = marker.dataset.h;
+        document.getElementById('editR').value = marker.dataset.r;
+    }
 
-        container.addEventListener('mouseout', (e) => {
-             if (e.target.closest('.machine-marker')) {
-                tooltip.style.display = 'none';
-             }
-        });
+    function deselectMachine() {
+        if (selectedMarker) selectedMarker.style.boxShadow = '';
+        selectedMarker = null;
+        document.getElementById('editPanel').classList.add('hidden');
+    }
 
-        function getColor(status) {
-            if (status === 'RUNNING') return 'var(--neon-green)';
-            // All other statuses are now Red
-            return 'var(--neon-red)';
+    function updateSelectedMachine(prop, val) {
+        if (!selectedMarker) return;
+        
+        if (prop === 'type') {
+            selectedMarker.className = `machine-marker status-${selectedMarker.dataset.status.toLowerCase()} shape-${val}`;
+            selectedMarker.dataset.type = val;
+        } else if (prop === 'w') {
+            selectedMarker.style.width = val + '%';
+            selectedMarker.dataset.w = val;
+        } else if (prop === 'h') {
+            selectedMarker.style.height = val + '%';
+            selectedMarker.dataset.h = val;
+        } else if (prop === 'r') {
+            selectedMarker.style.transform = `translate(-50%, -50%) rotate(${val}deg)`;
+            selectedMarker.dataset.r = val;
         }
+    }
 
-        function startDrag(e, element) {
-            console.log("startDrag called for", element.getAttribute('data-name'));
-            if (!isDesignMode) return;
-            e.preventDefault();
-            
-            draggedElement = element;
-            draggedElement.classList.add('dragging');
-            document.addEventListener('mousemove', onDrag);
-            document.addEventListener('mouseup', endDrag);
-        }
+    async function saveSelectedMachine() {
+        if (!selectedMarker) return;
+        
+        const data = {
+            id: selectedMarker.dataset.id,
+            x: parseFloat(selectedMarker.style.left),
+            y: parseFloat(selectedMarker.style.top),
+            w: selectedMarker.dataset.w,
+            h: selectedMarker.dataset.h,
+            r: selectedMarker.dataset.r,
+            type: selectedMarker.dataset.type
+        };
 
-        function onDrag(e) {
-            if (!draggedElement) return;
-            moveElement(e.clientX, e.clientY, draggedElement);
-        }
-
-        function moveElement(clientX, clientY, element) {
-            const rect = container.getBoundingClientRect();
-            let x = clientX - rect.left;
-            let y = clientY - rect.top;
-            
-            // Normalize for %
-            if (x < 0) x = 0; if (y < 0) y = 0;
-            if (x > rect.width) x = rect.width; if (y > rect.height) y = rect.height;
-
-            const xPercent = (x / rect.width) * 100;
-            const yPercent = (y / rect.height) * 100;
-
-            console.log("Moving to:", xPercent, yPercent);
-            element.style.left = xPercent + '%';
-            element.style.top = yPercent + '%';
-        }
-
-        function endDrag(e) {
-            if (!draggedElement) return;
-            draggedElement.classList.remove('dragging');
-            const id = draggedElement.getAttribute('data-id');
-            const left = draggedElement.style.left.replace('%', '');
-            const top = draggedElement.style.top.replace('%', '');
-            
-            saveData({ id: id, x: left, y: top });
-            
-            draggedElement = null;
-            document.removeEventListener('mousemove', onDrag);
-            document.removeEventListener('mouseup', endDrag);
-        }
-
-        // --- SIDEBAR DRAG (New markers) ---
-        function dragFromSidebar(ev) {
-            if (!isDesignMode) {
-                ev.preventDefault();
-                return;
-            }
-            ev.dataTransfer.setData("text/plain", JSON.stringify({
-                id: ev.target.getAttribute('data-id'),
-                name: ev.target.getAttribute('data-name'),
-                status: ev.target.getAttribute('data-status'),
-                type: ev.target.getAttribute('data-type') || 'GENERICO'
-            }));
-            ev.dataTransfer.effectAllowed = "move";
-        }
-
-        function allowDrop(ev) {
-            if (!isDesignMode) return;
-            ev.preventDefault(); // Necessary to allow dropping
-            ev.dataTransfer.dropEffect = "move";
-        }
-
-        function dropMachine(ev) {
-            if (!isDesignMode) return;
-            ev.preventDefault();
-
-            const dataStr = ev.dataTransfer.getData("text/plain");
-            if (!dataStr) return; // Might be internal drag
-            
-            const data = JSON.parse(dataStr);
-            
-            // Find Sidebar Item to remove
-            const sidebarItem = document.querySelector(`.sidebar-machine-item[data-id="${data.id}"]`);
-            if (sidebarItem) sidebarItem.remove();
-
-            // Create New Marker
-            const marker = document.createElement('div');
-            // Default shape defaults
-            const shapeClass = 'shape-' + (data.type || 'GENERICO');
-            
-            marker.className = `machine-marker status-${data.status.toLowerCase()} ${shapeClass}`;
-            marker.id = `machine-${data.id}`;
-            
-            // Set size based on type for distinctive shapes
-            let width, height;
-            const machineType = (data.type || 'GENERICO').toUpperCase();
-            
-            switch(machineType) {
-                case 'TORNO':
-                    width = 6;  // Wider
-                    height = 3; // Shorter (horizontal rectangle)
-                    break;
-                case 'AGUJEREADORA':
-                    width = 3;  // Narrower
-                    height = 6; // Taller (vertical rectangle)
-                    break;
-                case 'PRENSA':
-                    width = 7;  // Very wide
-                    height = 3; // Short (wide rectangle)
-                    break;
-                case 'CNC':
-                    width = 4;  // Square
-                    height = 4;
-                    break;
-                case 'ROBOT':
-                case 'GENERICO':
-                default:
-                    width = 4;  // Circle/default
-                    height = 4;
-                    break;
-            }
-            
-            marker.style.width = width + '%';
-            marker.style.height = height + '%';
-            marker.style.transform = 'rotate(0deg)';
-            
-            marker.setAttribute('data-id', data.id);
-            marker.setAttribute('data-name', data.name);
-            marker.setAttribute('data-status', data.status);
-            marker.setAttribute('data-type', data.type || 'GENERICO');
-            marker.setAttribute('data-w', width);
-            marker.setAttribute('data-h', height);
-            marker.setAttribute('data-r', '0');
-            marker.setAttribute('data-label-size', '13');
-            marker.setAttribute('data-border-weight', '2');
-            marker.onmousedown = function(e) { onMarkerMouseDown(e, this); }; // Attach event
-            
-            // Position it
-            plantFloor.appendChild(marker);
-            
-            // Set initial position based on drop
-            // Logic similar to moveElement but for drop event
-            const rect = container.getBoundingClientRect();
-            let x = ev.clientX - rect.left;
-            let y = ev.clientY - rect.top;
-            
-            const xPercent = (x / rect.width) * 100;
-            const yPercent = (y / rect.height) * 100;
-            
-            marker.style.left = xPercent + '%';
-            marker.style.top = yPercent + '%';
-
-            marker.innerHTML = `
-                <div class="machine-content">
-                    <div class="machine-label">${data.name}</div>
-                </div>
-            `;
-
-            // Save Initial (with defaults)
-            saveData({ id: data.id, x: xPercent, y: yPercent, w: 4, h: 4, r: 0, type: data.type });
-        }
-
-        function saveData(payload) {
-            fetch('/dashboard/api/update-position/', {
+        try {
+            const res = await fetch('{% url "update_machine_position" %}', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}'
-                },
-                body: JSON.stringify(payload)
-            }).then(res => res.json())
-              .then(data => {
-                  console.log('Saved', data);
-                  if (data.status === 'success') {
-                      showToast('Configuración guardada correctamente', 'success');
-                  } else {
-                      showToast('Error al guardar: ' + (data.message || 'Error desconocido'), 'error');
-                  }
-              })
-              .catch(err => {
-                  console.error(err);
-                  showToast('Error de comunicación con el servidor', 'error');
-              });
-        }
-
-        function showToast(message, type = 'success') {
-            const container = document.getElementById('toastContainer');
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-            
-            const icon = type === 'success' ? '✓' : '⚠';
-            toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
-            
-            container.appendChild(toast);
-            
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                toast.style.transform = 'translateY(20px)';
-                setTimeout(() => toast.remove(), 500);
-            }, 3000);
-        }
-
-        // Counter for auto-positioning machines in a grid
-        let machinePositionCounter = 0;
-        
-        function toggleMarker(id, safeId, btn) {
-            const marker = document.getElementById(safeId);
-            if (!marker) {
-                alert("Esta máquina aún no ha sido ubicada en el mapa. Arrástrala desde la lista.");
-                return;
-            }
-            
-            if (marker.style.display === 'none') {
-                // Check if machine is at 0,0 (never positioned)
-                const currentLeft = parseFloat(marker.style.left) || 0;
-                const currentTop = parseFloat(marker.style.top) || 0;
-                
-                if (currentLeft <= 1 && currentTop <= 1) {
-                    // Position in a grid pattern (3 columns)
-                    const col = machinePositionCounter % 3;  // 0, 1, or 2
-                    const row = Math.floor(machinePositionCounter / 3);
-                    
-                    const xPercent = 25 + (col * 20);  // 25%, 45%, 65%
-                    const yPercent = 20 + (row * 20);  // 20%, 40%, 60%, etc.
-                    
-                    marker.style.left = xPercent + '%';
-                    marker.style.top = yPercent + '%';
-                    
-                    machinePositionCounter++;
-                    
-                    // Save the new position
-                    saveData({ 
-                        id: id, 
-                        x: xPercent, 
-                        y: yPercent,
-                        w: marker.getAttribute('data-w') || 4,
-                        h: marker.getAttribute('data-h') || 4,
-                        r: marker.getAttribute('data-r') || 0
-                    });
-                }
-                
-                marker.style.display = 'flex';
-                btn.classList.remove('off');
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (res.ok) {
+                showToast("Cambios guardados correctamente", "success");
             } else {
-                marker.style.display = 'none';
-                btn.classList.add('off');
+                showToast("Error al guardar en el servidor", "error");
             }
+        } catch (e) {
+            showToast("Error de conexión", "error");
         }
+    }
 
-        function redistributeMachines() {
-            // Get all visible machine markers
-            const allMarkers = document.querySelectorAll('.machine-marker');
-            const visibleMarkers = Array.from(allMarkers).filter(m => m.style.display !== 'none');
-            
-            if (visibleMarkers.length === 0) {
-                alert('No hay máquinas visibles para distribuir. Activa algunas máquinas primero.');
-                return;
-            }
-            
-            // Redistribute in grid pattern
-            visibleMarkers.forEach((marker, index) => {
-                const col = index % 3;  // 0, 1, or 2
-                const row = Math.floor(index / 3);
+    // --- TOOLTIPS ---
+    function initTooltips() {
+        const tooltip = document.getElementById('tooltip');
+        const markers = document.querySelectorAll('.machine-marker');
+        
+        markers.forEach(marker => {
+            marker.addEventListener('mouseenter', (e) => {
+                if (isDesignMode) return;
                 
-                const xPercent = 25 + (col * 20);  // 25%, 45%, 65%
-                const yPercent = 20 + (row * 20);  // 20%, 40%, 60%, etc.
-                
-                marker.style.left = xPercent + '%';
-                marker.style.top = yPercent + '%';
-                
-                // Save the new position
-                const id = marker.getAttribute('data-id');
-                const w = (marker.getAttribute('data-w') || "4").toString().replace(',', '.');
-                const h = (marker.getAttribute('data-h') || "4").toString().replace(',', '.');
-                const r = (marker.getAttribute('data-r') || "0").toString().replace(',', '.');
-                
-                saveData({ 
-                    id: id, 
-                    x: xPercent, 
-                    y: yPercent,
-                    w: w,
-                    h: h,
-                    r: r
-                });
+                const name = marker.dataset.name;
+                const status = marker.dataset.status;
+                const oee = marker.dataset.oee;
+                const perf = marker.dataset.performance;
+                const op = marker.dataset.operario;
+
+                tooltip.innerHTML = `
+                    <div class="tooltip-title">
+                        <span>${name}</span>
+                        <span class="tooltip-status bg-slate-700">${status}</span>
+                    </div>
+                    <div class="tooltip-row">
+                        <span class="tooltip-label">OEE / REND.</span>
+                        <span class="font-bold text-indigo-400">${oee}% / ${perf}%</span>
+                    </div>
+                    <div class="tooltip-row">
+                        <span class="tooltip-label">OPERARIO</span>
+                        <span>${op}</span>
+                    </div>
+                `;
+                tooltip.style.display = 'block';
             });
-            
-            showToast(`${visibleMarkers.length} máquinas redistribuidas`, 'success');
-        }
 
-        function resetPositions() {
-            if (!confirm('¿Seguro que quieres resetear TODAS las posiciones?')) return;
-            
-            const allMarkers = document.querySelectorAll('.machine-marker');
-            allMarkers.forEach(marker => {
-                const id = marker.getAttribute('data-id');
-                const x = 50;
-                const y = 50;
-                
-                marker.style.left = x + '%';
-                marker.style.top = y + '%';
-                // No ocultamos, las dejamos en el centro
-                marker.style.display = 'flex'; 
-
-                saveData({ 
-                    id: id, x: x, y: y, 
-                    w: (marker.getAttribute('data-w') || "4").toString().replace(',', '.'),
-                    h: (marker.getAttribute('data-h') || "4").toString().replace(',', '.'),
-                    r: (marker.getAttribute('data-r') || "0").toString().replace(',', '.')
-                });
+            marker.addEventListener('mousemove', (e) => {
+                tooltip.style.left = (e.pageX + 15) + 'px';
+                tooltip.style.top = (e.pageY + 15) + 'px';
             });
-            
-            const allEyes = document.querySelectorAll('.btn-toggle-eye');
-            allEyes.forEach(eye => eye.classList.add('off'));
-            
-            showToast('Posiciones reseteadas. Recargando...', 'success');
-            setTimeout(() => location.reload(), 1500);
+
+            marker.addEventListener('mouseleave', () => {
+                tooltip.style.display = 'none';
+            });
+        });
+    }
+
+    // --- MODAL ---
+    function openModal(marker) {
+        document.getElementById('mName').innerText = marker.dataset.name;
+        document.getElementById('mId').innerText = marker.dataset.id;
+        document.getElementById('mStatusText').innerText = marker.dataset.status;
+        document.getElementById('mStats').innerText = `${marker.dataset.oee}% / ${marker.dataset.performance}%`;
+        document.getElementById('mOperario').innerText = marker.dataset.operario;
+        document.getElementById('mQty').innerText = marker.dataset.qty;
+        document.getElementById('mOperacion').innerText = `${marker.dataset.orden} - ${marker.dataset.operacion}`;
+        
+        const isRunning = marker.dataset.status === 'RUNNING';
+        const iconBg = document.getElementById('mIconBg');
+        const icon = document.getElementById('mIcon');
+        
+        if (isRunning) {
+            iconBg.className = "w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center";
+            icon.className = "fas fa-play text-emerald-500 text-2xl";
+        } else {
+            iconBg.className = "w-16 h-16 rounded-full bg-rose-50 flex items-center justify-center";
+            icon.className = "fas fa-stop text-rose-500 text-2xl";
         }
 
-    </script>
-</body>
-</html>
+        document.getElementById('detailModal').style.display = 'flex';
+    }
+
+    function closeModal() {
+        document.getElementById('detailModal').style.display = 'none';
+    }
+
+    // --- UTILS ---
+    function showToast(msg, type = 'info') {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `px-4 py-3 rounded-lg shadow-xl text-white font-bold text-sm transform transition-all duration-300 translate-x-[-20px] opacity-0 flex items-center gap-3`;
+        
+        if (type === 'success') toast.classList.add('bg-emerald-600');
+        else if (type === 'warning') toast.classList.add('bg-amber-500');
+        else toast.classList.add('bg-indigo-600');
+        
+        toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'info-circle'}"></i> ${msg}`;
+        container.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.classList.remove('translate-x-[-20px]', 'opacity-0');
+        }, 10);
+        
+        setTimeout(() => {
+            toast.classList.add('translate-x-[20px]', 'opacity-0');
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+
+    // Draggable Panel logic
+    function startDraggingPanel(e) {
+        isDraggingPanel = true;
+        const panel = document.getElementById('editPanel');
+        const startX = e.clientX - panel.offsetLeft;
+        const startY = e.clientY - panel.offsetTop;
+        
+        function onMouseMove(e) {
+            if (!isDraggingPanel) return;
+            panel.style.left = (e.clientX - startX) + 'px';
+            panel.style.top = (e.clientY - startY) + 'px';
+            panel.style.right = 'auto';
+        }
+        
+        function onMouseUp() {
+            isDraggingPanel = false;
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        }
+        
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    }
+</script>
+{% endblock %}
