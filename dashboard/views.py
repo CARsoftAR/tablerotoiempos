@@ -220,7 +220,7 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
     # Acumuladores Globales
 
     for reg in registros_data:
-        mid = reg['id_maquina']
+        mid = str(reg['id_maquina']).strip() if reg.get('id_maquina') else None
         duracion = reg['tiempo_minutos'] or 0.0
         qty = reg['cantidad_producida'] or 0.0
         std_mins = (reg['tiempo_cotizado'] or 0.0) * 60.0
@@ -249,6 +249,22 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         
         # El 'ONLINE' a veces trae cantidad 1 para marcar actividad, pero no es producción real terminada
         is_online_record = (raw_obs == 'ONLINE')
+        
+        # DEFINICIÓN DE SESIÓN ACTIVA (Sincronización Estricta con ERP)
+        # La DB tiene un desfase de 3hs respecto a la hora local.
+        # Una sesión está activa si no tiene fin, si el fin es futuro (según reloj DB), o dice ONLINE.
+        now_local = timezone.localtime(timezone.now())
+        now_db_ref = now_local - datetime.timedelta(hours=3)
+        
+        h_fin = reg.get('hora_fin')
+        if h_fin and timezone.is_aware(h_fin):
+            h_fin = timezone.make_naive(h_fin)
+            
+        is_session_active = (
+            h_fin is None or 
+            h_fin > now_db_ref.replace(tzinfo=None) or 
+            is_online_record
+        )
 
         # Lógica especial para MATRICERÍA, TAREAS GENERALES y TAREAS MANUALES (Ajustes, Rebabado, etc.)
         # El estándar en estas tareas suele ser nulo en el ERP, así que las tratamos como 100% eficientes.
@@ -309,6 +325,10 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                     data['latest_obs'] = str(reg['observaciones']).strip().upper()
                 data['latest_date'] = reg['fecha']
                 data['current_order'] = reg['id_orden']
+                # Guardamos info de la sesión más reciente para el Mapa en Tiempo Real
+                data['latest_is_active'] = is_session_active
+                data['latest_is_interrupcion'] = (reg.get('es_interrupcion') == True or is_descanso)
+                data['latest_is_proceso'] = (reg.get('es_proceso') == True)
             
             # Siempre guardamos el último operario y artículo visto (ya que viene ordenado por hora_inicio)
             uid = str(reg.get('id_concepto') or '').strip()
@@ -554,7 +574,8 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         oee = (availability * performance * quality) / 10000.0
         
         # Estado
-        is_online = (mid in actual_online_ids) if is_viewing_today else False
+        # Una máquina está online si tiene una sesión activa ahora mismo según la lógica del ERP
+        is_online = data.get('latest_is_active', False)
 
         # Modificamos la función de formato para que use decimal si así se pide
         def format_time_display(hours_val):
@@ -632,6 +653,8 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             'latest_date': data['latest_date'],
             'current_order': data['current_order'],
             'is_active_production': t_op_hrs > 0.001,
+            'is_session_open': data.get('latest_is_active', False),
+            'is_currently_interrupted': data.get('latest_is_interrupcion', False),
             'idle_mins': round(idle_mins, 1),
             'audit_log': json.dumps(clean_log)
         })
@@ -2049,54 +2072,46 @@ def plant_map(request):
     global_stats = prod_ctx.get('resumen', {})
     
     # 2. Obtener máquinas configuradas
-    machines = MaquinaConfig.objects.all()
-    operarios_db = OperarioConfig.objects.all()
-    nombres_operarios = {o.legajo: o.nombre for o in operarios_db}
+    machines_config = MaquinaConfig.objects.all()
+    
+    # 3. Mapear datos PROCESADOS (Relacionamos Configuración de Mapa con Datos Reales ERP)
+    # Algunos registros traen el nombre como ID y otros el código interno (MACxx). 
+    # Creamos un buscador universal que admita cualquier forma de identificar la máquina.
+    kpi_lookup = {}
+    for k in prod_ctx.get('kpis', []):
+        kid = str(k.get('id' or '')).strip().upper()
+        kname = str(k.get('name' or '')).strip().upper()
+        if kid: kpi_lookup[kid] = k
+        if kname: kpi_lookup[kname] = k
     
     machine_data = []
     
-    now = timezone.localtime(timezone.now())
-    desde = now - datetime.timedelta(hours=24)
-    
-    for m in machines:
-        status = 'OFFLINE' 
+    for m in machines_config:
+        # Intentamos encontrar los datos en el tablero principal por ID, por Nombre o por Descripción
+        mid = str(m.id_maquina).strip().upper()
+        mname = str(m.nombre).strip().upper()
+        
+        data = kpi_lookup.get(mid) or kpi_lookup.get(mname)
+        
+        status = 'OFFLINE'
         op_name = "N/A"
-        last_log = VTMan.objects.filter(id_maquina=m.id_maquina, fecha__gte=desde).order_by('-fecha', '-hora_inicio').first()
+        proceso = "---"
+        detalle = "---"
         
-        # Obtener KPIs individuales si existen
-        kpi = kpi_map.get(m.id_maquina, {})
-        m_oee = kpi.get('oee', 0)
-        m_perf = kpi.get('performance', 0)
-        m_avail = kpi.get('availability', 0)
-        m_qty = kpi.get('actual_qty', 0)
-        
-        if last_log:
-            uid = str(last_log.id_concepto or "").strip()
-            if uid and uid != 'None':
-                op_name = nombres_operarios.get(uid, f"Operario {uid}")
-            else:
-                op_name = last_log.op_usuario or "S/A"
-
-            last_time = last_log.hora_fin or last_log.hora_inicio or last_log.fecha
-            if last_time:
-                if timezone.is_naive(last_time):
-                    last_time = timezone.make_aware(last_time)
-                
-                last_time_adjusted = last_time + datetime.timedelta(hours=3)
-                diff = (now - last_time_adjusted).total_seconds() / 60
-                
-                if diff > 45: 
-                     status = 'OFFLINE'
+        if data:
+            # VÍNCULO DIRECTO CON EL TABLERO DE TARJETAS (QUE YA FUNCIONA CORRECTAMENTE)
+            if data.get('is_online'):
+                if data.get('is_currently_interrupted') or data.get('mantenimiento'):
+                    status = 'STOPPED' # Rojo
                 else:
-                    if last_log.es_proceso:
-                        status = 'RUNNING'
-                    elif last_log.es_no_programado:
-                        status = 'STOPPED'
-                    elif str(last_log.observaciones).upper() == 'ONLINE':
-                         status = 'RUNNING'
-                    else:
-                         status = 'STOPPED' 
-        
+                    status = 'RUNNING' # Verde
+            else:
+                status = 'OFFLINE' # Gris
+                
+            op_name = data.get('operator_name', 'S/A')
+            proceso = data.get('last_reason', '---')
+            detalle = data.get('article_desc', '---')
+
         machine_data.append({
             'pk': m.pk,
             'id': m.id_maquina,
@@ -2111,23 +2126,26 @@ def plant_map(request):
             'label_size': m.label_size,
             'border_weight': m.border_weight,
             'operario': op_name,
-            'operacion': last_log.operacion if last_log else "SIN ACTIVIDAD",
-            'orden': last_log.id_orden if last_log else "N/A",
-            'inicio': last_log.hora_inicio.strftime('%H:%M') if last_log and last_log.hora_inicio else "--:--",
-            'fin': last_log.hora_fin.strftime('%H:%M') if last_log and last_log.hora_fin else "--:--",
-            # Datos estadísticos
-            'oee': m_oee,
-            'performance': m_perf,
-            'availability': m_avail,
-            'qty': m_qty,
+            'proceso': proceso,
+            'detalle': detalle,
+            'oee': data.get('oee', 0) if data else 0,
+            'performance': data.get('performance', 0) if data else 0,
+            'availability': data.get('availability', 0) if data else 0,
+            'qty': data.get('actual_qty', 0) if data else 0,
+            'inicio': data.get('hora_inicio', '--:--') if data else '--:--',
+            'fin': data.get('hora_fin', '--:--') if data else '--:--',
         })
         
     context = {
         'machines': machine_data,
         'global_stats': global_stats,
-        'total_count': machines.count(),
+        'total_count': machines_config.count(),
         'active_count': sum(1 for m in machine_data if m['status'] != 'OFFLINE'),
     }
+
+    if request.GET.get('format') == 'json':
+        return JsonResponse(context)
+
     return render(request, 'dashboard/plant_map_premium.html', context)
 
 @csrf_exempt

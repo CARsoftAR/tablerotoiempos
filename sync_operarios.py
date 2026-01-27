@@ -14,22 +14,29 @@ def sync_operarios():
     # Buscamos registros de los últimos 30 días para considerar al personal "activo"
     hace_30_dias = timezone.now() - timedelta(days=30)
     
-    # Obtenemos legajos únicos de la vista de SQL Server (En este ERP se guardan en IDCONCEPTO)
-    legajos_activos = VTMan.objects.filter(
+    # Obtenemos legajos y nombres únicos de la vista de SQL Server
+    # En este ERP, IDCONCEPTO es el legajo y CONCEPTO es el nombre
+    operarios_erp = VTMan.objects.filter(
         fecha__gte=hace_30_dias
-    ).values_list('id_concepto', flat=True).distinct()
+    ).values('id_concepto', 'concepto').distinct()
     
-    # Lista de operarios que NO son de producción o ya no están activos (solicitado por el usuario)
+    # Lista de operarios que NO son de producción o ya no están activos
     EXCLUDE_OPERARIOS = ['CRISTIAN', 'DALLAGASSA', 'DPADOVANI', 'JMOROCHI', 'JOSE', 'LEANDRO', 'MARIANO']
     
     count_new = 0
+    count_updated = 0
     count_deactivated = 0
     
-    for legajo in legajos_activos:
+    # Procesamos los resultados del ERP
+    for entry in operarios_erp:
+        legajo = entry['id_concepto']
+        nombre_erp = entry['concepto']
+        
         if not legajo:
             continue
             
         legajo = str(legajo).strip()
+        nombre_erp = str(nombre_erp).strip() if nombre_erp else f"Operario {legajo}"
         
         # Si está en la lista de excluidos, nos aseguramos de que no esté activo
         if legajo in EXCLUDE_OPERARIOS:
@@ -41,28 +48,39 @@ def sync_operarios():
                 count_deactivated += 1
             continue
         
-        # Si no existe en la tabla de configuración (MySQL), lo creamos
-        operario, created = OperarioConfig.objects.get_or_create(
-            legajo=legajo,
-            defaults={
-                'nombre': f"Operario {legajo}", # Placeholder
-                'sector': 'PRODUCCION',
-                'activo': True
-            }
-        )
+        # Buscamos si ya existe
+        operario = OperarioConfig.objects.filter(legajo=legajo).first()
         
-        if created:
-            print(f" [+] Nuevo operario detectado y agregado: {legajo}")
+        if not operario:
+            # Lo creamos con el nombre real del ERP
+            OperarioConfig.objects.create(
+                legajo=legajo,
+                nombre=nombre_erp,
+                sector='PRODUCCION',
+                activo=True
+            )
+            print(f" [+] Nuevo operario detectado: {nombre_erp} ({legajo})")
             count_new += 1
         else:
-            # Si ya existe, nos aseguramos de que esté marcado como activo (si no está en la lista negra)
+            # Si ya existe, actualizamos el nombre si era un placeholder o si cambió
+            cambio = False
+            if operario.nombre != nombre_erp and (operario.nombre == f"Operario {legajo}" or not operario.nombre):
+                print(f" [*] Actualizando nombre de {operario.nombre} a {nombre_erp}")
+                operario.nombre = nombre_erp
+                cambio = True
+            
             if not operario.activo:
                 operario.activo = True
-                operario.save()
+                cambio = True
                 print(f" [*] Operario {legajo} reactivado.")
+                
+            if cambio:
+                operario.save()
+                count_updated += 1
 
     print(f"\nSincronización finalizada.")
     print(f"- Se agregaron {count_new} nuevos operarios.")
+    print(f"- Se actualizaron {count_updated} operarios.")
     print(f"- Se desactivaron {count_deactivated} operarios excluidos.")
 
 if __name__ == "__main__":

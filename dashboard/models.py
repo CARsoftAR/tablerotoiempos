@@ -9,6 +9,7 @@ class VTMan(models.Model):
     id_orden = models.BigIntegerField(db_column='IDORDEN')
     
     id_concepto = models.CharField(db_column='IDCONCEPTO', max_length=50)
+    concepto = models.CharField(db_column='CONCEPTO', max_length=150, null=True, blank=True)
     hora_inicio = models.DateTimeField(db_column='HORA_D', null=True, blank=True)
     hora_fin = models.DateTimeField(db_column='HORA_H', null=True, blank=True)
     fecha = models.DateTimeField(db_column='FECHA', null=True, blank=True)
