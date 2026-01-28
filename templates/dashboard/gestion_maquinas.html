@@ -1,0 +1,256 @@
+{% extends 'base.html' %}
+
+{% block title %}Gestión de Máquinas{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
+        
+        <!-- Premium Header -->
+        <div class="relative px-8 py-6 bg-slate-900 overflow-hidden">
+            <!-- decorative background elements -->
+            <div class="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-blue-600 opacity-20 blur-3xl"></div>
+            <div class="absolute bottom-0 left-0 -ml-16 -mb-16 w-64 h-64 rounded-full bg-purple-600 opacity-20 blur-3xl"></div>
+            
+            <div class="relative flex flex-col md:flex-row justify-between items-center z-10">
+                <div>
+                    <h1 class="text-2xl font-bold text-white flex items-center gap-3">
+                        <i class="fas fa-server text-blue-400"></i> Gestión de Máquinas
+                    </h1>
+                     <p class="text-slate-400 text-sm mt-1 ml-1">Configura y administra las máquinas de producción</p>
+                </div>
+                
+                <div class="flex gap-3 mt-4 md:mt-0">
+                    <a href="{% url 'dashboard_produccion' %}" class="px-5 py-2.5 bg-slate-800 text-slate-300 border border-slate-700 rounded-lg hover:bg-slate-700 hover:text-white transition-all flex items-center gap-2 text-sm font-medium">
+                        <i class="fas fa-arrow-left"></i> Volver
+                    </a>
+                    <a href="{% url 'auditoria_cambios' %}" class="px-5 py-2.5 bg-slate-800 text-slate-300 border border-slate-700 rounded-lg hover:bg-slate-700 hover:text-white transition-all flex items-center gap-2 text-sm font-medium">
+                        <i class="fas fa-history"></i> Log Cambios
+                    </a>
+                    <a href="{% url 'crear_maquina' %}" class="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:shadow-lg hover:scale-105 transition-all flex items-center gap-2 text-sm font-bold shadow-md shadow-blue-500/20">
+                        <i class="fas fa-plus"></i> Nueva Máquina
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        {% if messages %}
+        <div class="fixed top-20 right-8 z-[110] flex flex-col gap-3 max-w-md animate-in fade-in slide-in-from-right-4 duration-300">
+            {% for message in messages %}
+                <div class="abbamat-toast p-4 rounded-xl flex items-center gap-3 shadow-2xl border backdrop-blur-md {{ message.tags|yesno:'bg-emerald-500/90 text-white border-emerald-400,bg-rose-500/90 text-white border-rose-400' }}" role="alert">
+                    <div class="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+                        <i class="fas {{ message.tags|yesno:'fa-check,fa-exclamation' }}"></i>
+                    </div>
+                    <div>
+                        <p class="font-bold text-sm">{{ message.tags|title }}</p>
+                        <p class="text-xs opacity-90">{{ message }}</p>
+                    </div>
+                    <button onclick="this.parentElement.remove()" class="ml-auto text-white/60 hover:text-white transition-colors">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            {% endfor %}
+        </div>
+        <script>
+            // Auto-hide messages after 5 seconds
+            setTimeout(() => {
+                const toasts = document.querySelectorAll('.abbamat-toast');
+                toasts.forEach(toast => {
+                    toast.classList.add('animate-out', 'fade-out', 'slide-out-to-right-4');
+                    setTimeout(() => toast.remove(), 300);
+                });
+            }, 5000);
+        </script>
+        {% endif %}
+
+        <!-- Premium Table -->
+        <div class="p-6">
+            <div class="overflow-hidden rounded-xl border border-slate-200 shadow-sm">
+                <table class="w-full text-left border-collapse table-fixed">
+                    <thead>
+                        <tr class="bg-slate-50/80 text-slate-500 text-xs uppercase tracking-wider font-bold border-b border-slate-200">
+                            <th class="px-6 py-4 w-[15%]">ID Máquina</th>
+                            <th class="px-6 py-4 w-[25%]">Nombre</th>
+                            <th class="px-6 py-4 w-[15%]">Estado</th>
+                            <th class="px-6 py-4 w-[30%]">Horarios Operativos</th>
+                            <th class="px-6 py-4 w-[15%] text-center">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 bg-white">
+                        {% for m in maquinas %}
+                        <tr class="hover:bg-slate-50/80 transition-colors group">
+                            <td class="px-6 py-5">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-xs group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
+                                        <i class="fas fa-microchip"></i>
+                                    </div>
+                                    <span class="font-mono text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded border border-slate-200">
+                                        {{ m.id_maquina }}
+                                    </span>
+                                </div>
+                            </td>
+                            <td class="px-6 py-5">
+                                <div class="font-bold text-slate-700 text-sm group-hover:text-blue-700 transition-colors">
+                                    {{ m.nombre }}
+                                </div>
+                            </td>
+                            <td class="px-6 py-5">
+                                {% if m.activa %}
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Activa
+                                    </span>
+                                {% else %}
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-50 text-slate-500 border border-slate-200">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Inactiva
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-5">
+                                <div class="space-y-1.5">
+                                    <div class="flex items-center gap-2 text-xs">
+                                        <span class="w-20 font-semibold text-slate-400 uppercase tracking-wider text-[10px]">Lun-Vie</span>
+                                        <span class="text-slate-600 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">{{ m.horario_inicio_sem }} - {{ m.horario_fin_sem }}</span>
+                                    </div>
+                                    {% if m.trabaja_sabado %}
+                                    <div class="flex items-center gap-2 text-xs">
+                                        <span class="w-20 font-semibold text-indigo-400 uppercase tracking-wider text-[10px]">Sábado</span>
+                                        <span class="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{{ m.horario_inicio_sab }} - {{ m.horario_fin_sab }}</span>
+                                    </div>
+                                    {% endif %}
+                                    {% if m.trabaja_domingo %}
+                                    <div class="flex items-center gap-2 text-xs">
+                                        <span class="w-20 font-semibold text-purple-400 uppercase tracking-wider text-[10px]">Domingo</span>
+                                        <span class="text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-100">{{ m.horario_inicio_dom }} - {{ m.horario_fin_dom }}</span>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td class="px-6 py-5 text-center">
+                                <div class="flex justify-center gap-2">
+                                    <a href="{% url 'editar_maquina' m.pk %}?page={{ maquinas.number }}" class="px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all flex items-center gap-2 text-xs font-bold shadow-sm">
+                                        <i class="fas fa-edit"></i> Editar
+                                    </a>
+                                    <button type="button" onclick="openDeleteModal('{% url 'eliminar_maquina' m.pk %}?page={{ maquinas.number }}')" class="px-3 py-1.5 bg-rose-500 text-white rounded-lg hover:bg-rose-600 transition-all flex items-center gap-2 text-xs font-bold shadow-sm">
+                                        <i class="fas fa-trash-alt"></i> Borrar
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="px-6 py-12 text-center">
+                                <div class="flex flex-col items-center justify-center text-slate-400">
+                                    <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                                        <i class="fas fa-inbox text-2xl"></i>
+                                    </div>
+                                    <h3 class="text-lg font-medium text-slate-600">No hay máquinas configuradas</h3>
+                                    <p class="text-sm mt-1">Empieza creando una nueva máquina para el tablero.</p>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination -->
+             {% if maquinas.has_other_pages %}
+            <div class="mt-6 flex flex-col md:flex-row justify-between items-center gap-4">
+                 <div class="text-sm text-slate-500">
+                    Mostrando <span class="font-bold text-slate-700">{{ maquinas.start_index }}-{{ maquinas.end_index }}</span> de <span class="font-bold text-slate-700">{{ maquinas.paginator.count }}</span> resultados
+                </div>
+
+                <nav class="flex items-center gap-1.5" aria-label="Pagination">
+                    {% if maquinas.has_previous %}
+                    <a href="?page={{ maquinas.previous_page_number }}" class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-500 border border-slate-200 hover:bg-slate-50 transition-all">
+                        <i class="fas fa-chevron-left text-xs"></i>
+                    </a>
+                    {% endif %}
+                    
+                    {% for i in maquinas.paginator.page_range %}
+                        {% if maquinas.number == i %}
+                            <span class="w-10 h-10 flex items-center justify-center rounded-lg bg-emerald-600 text-white font-bold text-sm shadow-md shadow-emerald-500/20">{{ i }}</span>
+                        {% else %}
+                             <a href="?page={{ i }}" class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-600 border border-slate-200 hover:bg-slate-50 transition-all font-bold text-sm">{{ i }}</a>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if maquinas.has_next %}
+                    <a href="?page={{ maquinas.next_page_number }}" class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-500 border border-slate-200 hover:bg-slate-50 transition-all">
+                        <i class="fas fa-chevron-right text-xs"></i>
+                    </a>
+                    {% endif %}
+                </nav>
+            </div>
+            {% endif %}
+
+        </div>
+
+    </div>
+</div>
+
+<!-- Custom Delete Modal -->
+<div id="deleteModal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm transition-opacity duration-300 opacity-0">
+    <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden transform transition-all scale-95 opacity-0 duration-300" id="deleteModalContent">
+        <div class="p-8 text-center">
+            <div class="w-20 h-20 rounded-full bg-rose-50 flex items-center justify-center text-rose-500 mx-auto mb-6 ring-8 ring-rose-50/50">
+                <i class="fas fa-trash-alt text-3xl"></i>
+            </div>
+            <h3 class="text-xl font-bold text-slate-900 mb-2">¿Eliminar máquina?</h3>
+            <p class="text-slate-500 text-sm leading-relaxed mb-8">
+                Esta acción eliminará permanentemente la configuración de la máquina. No se puede revertir.
+            </p>
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="closeDeleteModal()" class="px-4 py-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors text-sm font-bold">
+                    Cancelar
+                </button>
+                <a id="confirmDeleteBtn" href="#" class="px-4 py-3 bg-rose-500 text-white rounded-xl hover:bg-rose-600 transition-colors text-sm font-bold shadow-lg shadow-rose-500/30 flex items-center justify-center">
+                    Sí, eliminar
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function openDeleteModal(url) {
+    const modal = document.getElementById('deleteModal');
+    const content = document.getElementById('deleteModalContent');
+    const confirmBtn = document.getElementById('confirmDeleteBtn');
+    
+    confirmBtn.href = url;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    
+    // Animate in
+    setTimeout(() => {
+        modal.classList.add('opacity-100');
+        content.classList.remove('scale-95', 'opacity-0');
+        content.classList.add('scale-100', 'opacity-100');
+    }, 10);
+}
+
+function closeDeleteModal() {
+    const modal = document.getElementById('deleteModal');
+    const content = document.getElementById('deleteModalContent');
+    
+    content.classList.remove('scale-100', 'opacity-100');
+    content.classList.add('scale-95', 'opacity-0');
+    modal.classList.remove('opacity-100');
+    modal.classList.add('opacity-0');
+    
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }, 300);
+}
+
+// Close on outside click
+window.onclick = function(event) {
+    const modal = document.getElementById('deleteModal');
+    if (event.target == modal) {
+        closeDeleteModal();
+    }
+}
+</script>
+{% endblock %}

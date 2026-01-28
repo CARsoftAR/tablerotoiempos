@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Tablero de Control - ABBAMAT{% endblock %}</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <!-- ApexCharts -->
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- TailwindCSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --sidebar-bg: #1e293b;
+        }
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; }
+        .font-brand { font-family: 'Outfit', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-100 flex h-screen overflow-hidden">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-slate-900 text-white flex flex-col shadow-2xl transition-all duration-300 z-[70] hidden md:flex">
+        <div class="p-6 border-b border-slate-800 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-white flex items-center justify-center shadow-lg overflow-hidden">
+                <img src="/static/img/logoAbbamat.png" alt="Logo" class="w-full h-full object-contain p-1">
+            </div>
+            <span class="text-2xl font-bold font-brand tracking-tight">ABBAMAT</span>
+        </div>
+
+        <nav class="flex-1 overflow-y-auto py-6 px-3 space-y-2">
+            <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 mb-2">Principal</div>
+            
+            <a href="{% url 'dashboard_produccion' %}" class="flex items-center gap-3 px-3 py-3 rounded-lg {% if request.resolver_match.url_name == 'dashboard_produccion' or request.resolver_match.url_name == 'home' %}bg-indigo-600 shadow-lg shadow-indigo-900/50 text-white{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %} font-medium group transition-all">
+                <i class="fas fa-chart-line w-6 text-center"></i>
+                Producción
+            </a>
+            <a href="{% url 'plant_map' %}" class="flex items-center gap-3 px-3 py-3 rounded-lg {% if request.resolver_match.url_name == 'plant_map' %}bg-cyan-600 shadow-lg shadow-cyan-900/50 text-white{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %} font-medium group transition-all">
+                <i class="fas fa-map-marked-alt w-6 text-center group-hover:text-cyan-400 transition-colors"></i>
+                Mapa de Planta
+            </a>
+            <a href="{% url 'estadisticas' %}" class="flex items-center gap-3 px-3 py-3 rounded-lg {% if 'estadisticas' in request.resolver_match.url_name %}bg-purple-600 shadow-lg shadow-purple-900/50 text-white{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %} font-medium group transition-all">
+                <i class="fas fa-chart-pie w-6 text-center group-hover:text-purple-400 transition-colors"></i>
+                Estadísticas
+            </a>
+            <a href="{% url 'lista_mantenimiento' %}" class="flex items-center gap-3 px-3 py-3 rounded-lg {% if 'mantenimiento' in request.resolver_match.url_name %}bg-amber-600 shadow-lg shadow-amber-900/40 text-white{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %} transition-all group">
+                <i class="fas fa-tools w-6 text-center group-hover:text-amber-400 transition-colors"></i>
+                Mantenimiento
+            </a>
+            <!-- Se oculta Calidad por ahora ya que no tiene formulario asociado
+            <a href="#" class="flex items-center gap-3 px-3 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors group">
+                <i class="fas fa-check-circle w-6 text-center group-hover:text-emerald-400 transition-colors"></i>
+                Calidad
+            </a>
+            -->
+
+            <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 mt-8 mb-2">Administración</div>
+            
+            <a href="{% url 'gestion_personal' %}" class="flex items-center gap-3 px-3 py-3 rounded-lg {% if 'gestion_personal' in request.resolver_match.url_name or 'operario' in request.resolver_match.url_name %}bg-blue-600 shadow-lg shadow-blue-900/40 text-white{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %} transition-all group">
+                <i class="fas fa-users w-6 text-center group-hover:text-blue-400 transition-colors"></i>
+                Personal
+            </a>
+            <a href="{% url 'gestion_maquinas' %}" class="flex items-center gap-3 px-3 py-3 rounded-lg {% if 'maquina' in request.resolver_match.url_name %}bg-slate-700 text-white{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %} transition-all group">
+                <i class="fas fa-cog w-6 text-center group-hover:text-slate-200 transition-colors"></i>
+                Configuración
+            </a>
+        </nav>
+
+        <div class="p-4 border-t border-slate-800">
+            <div class="flex items-center gap-3 p-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 cursor-pointer transition-colors">
+                <img src="https://ui-avatars.com/api/?name=Admin&background=random" alt="Admin" class="w-10 h-10 rounded-full">
+                <div>
+                    <h4 class="text-sm font-semibold">Administrador</h4>
+                    <span class="text-xs text-green-400 flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span> Online
+                    </span>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col overflow-hidden relative">
+        <!-- Topbar -->
+        <header class="h-16 bg-white shadow-sm border-b border-gray-200 flex items-center justify-between px-6 z-[60]">
+            <div class="flex items-center gap-4">
+                <button class="md:hidden text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-bars text-xl"></i>
+                </button>
+                <div class="hidden md:block">
+                    <h2 class="text-xl font-bold text-gray-800 font-brand">Tablero de Producción</h2>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-6">
+                <!-- Search -->
+                <div class="relative hidden sm:block">
+                    <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                    <input type="text" placeholder="Buscar máquina..." class="pl-10 pr-4 py-2 rounded-full border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all w-64">
+                </div>
+
+                <!-- Botón de Ayuda -->
+                <button type="button" onclick="openHelpModal()" 
+                    class="relative w-10 h-10 flex items-center justify-center rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all group overflow-hidden shadow-sm"
+                    title="Centro de Ayuda">
+                    <i class="fas fa-question text-lg group-hover:scale-110 transition-transform"></i>
+                    <span class="absolute top-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white animate-pulse"></span>
+                </button>
+
+                <!-- Notifications -->
+                <div class="relative" id="notification-container">
+                    <button class="relative text-gray-500 hover:text-indigo-600 transition-colors" id="notification-btn" onclick="toggleNotifications()">
+                        <i class="fas fa-bell text-xl" id="bell-icon"></i>
+                        <span id="notification-count" class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full border-2 border-white hidden">0</span>
+                    </button>
+                    <!-- Dropdown -->
+                    <div id="notification-dropdown" class="hidden absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-2xl border border-gray-100 z-[100] overflow-hidden">
+                        <div class="px-4 py-3 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
+                            <h3 class="font-bold text-gray-700 text-sm">Notificaciones</h3>
+                            <button class="text-xs text-indigo-500 hover:text-indigo-700 font-medium" onclick="clearNotifications()">Limpiar</button>
+                        </div>
+                        <ul id="notification-list" class="max-h-64 overflow-y-auto">
+                            <!-- Items will be injected here -->
+                            <li class="px-4 py-8 text-center text-gray-400 text-xs italic">No tienes nuevas notificaciones</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Time -->
+                <div class="bg-indigo-50 px-4 py-1.5 rounded-full text-indigo-700 font-medium text-sm border border-indigo-100 hidden sm:block" id="current-time">
+                    --:--
+                </div>
+            </div>
+        </header>
+
+        <!-- Scrollable Content -->
+        <div class="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    </div>
+
+    <!-- ALERT DETAILS MODAL -->
+    <div id="alert-modal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[150] flex items-center justify-center hidden p-4 opacity-0 transition-opacity duration-300">
+        <div class="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm overflow-hidden scale-95 transition-transform duration-300 transform" id="alert-modal-content">
+            <div class="p-8 flex flex-col items-center text-center">
+                <!-- Icono Dinámico -->
+                <div id="alert-modal-icon-bg" class="w-20 h-20 rounded-full flex items-center justify-center mb-6 bg-red-50 text-red-500 shadow-xl shadow-red-100">
+                    <i id="alert-modal-icon" class="fas fa-exclamation-triangle text-3xl"></i>
+                </div>
+                
+                <h3 id="alert-modal-title" class="text-2xl font-black text-slate-800 mb-2 font-brand">Detención Crítica</h3>
+                
+                <div class="bg-slate-50 rounded-xl p-4 w-full mb-6 border border-slate-100">
+                    <p id="alert-modal-message" class="text-slate-600 text-sm leading-relaxed font-medium">
+                        La máquina ha detenido su producción sin justificación.
+                    </p>
+                </div>
+
+                <div class="flex gap-3 w-full">
+                    <button onclick="closeAlertModal()" 
+                        class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-3.5 rounded-2xl transition-all text-sm">
+                        Cerrar
+                    </button>
+                    <a href="{% url 'lista_mantenimiento' %}" id="alert-btn-action"
+                        class="flex-1 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-red-200 transition-all text-sm transform hover:-translate-y-0.5" >
+                        Ver Máquina
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- HELP CENTER MODAL -->
+    <div id="help-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] z-[200] hidden items-center justify-center p-4 opacity-0 transition-opacity duration-300">
+        <div class="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden scale-95 transition-transform duration-300 transform" id="help-modal-content">
+            <!-- Header Modal -->
+            <div class="bg-emerald-600 p-6 flex justify-between items-center text-white shrink-0">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center text-2xl shadow-inner">
+                        <i class="fas fa-book-open"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold font-brand tracking-tight">Centro de Ayuda</h2>
+                        <p class="text-xs text-emerald-100">Aprende a dominar el sistema ABBAMAT</p>
+                    </div>
+                </div>
+                <button onclick="closeHelpModal()" class="w-10 h-10 rounded-full bg-emerald-700/50 hover:bg-emerald-800 flex items-center justify-center transition-colors">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="flex flex-1 overflow-hidden">
+                <!-- Sidebar help -->
+                <nav class="w-56 bg-slate-50 border-r border-slate-100 p-4 space-y-2 shrink-0 overflow-y-auto">
+                    <button onclick="switchHelpTab('workflow')" class="help-tab-btn flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-bold transition-all text-emerald-700 bg-white shadow-sm border border-emerald-100" data-tab="workflow">
+                        <i class="fas fa-list-ol w-5"></i> Paso a Paso
+                    </button>
+                    <button onclick="switchHelpTab('intro')" class="help-tab-btn flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-slate-100" data-tab="intro">
+                        <i class="fas fa-play-circle w-5"></i> ¿Qué es esto?
+                    </button>
+                    <button onclick="switchHelpTab('dash')" class="help-tab-btn flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-slate-100" data-tab="dash">
+                        <i class="fas fa-tachometer-alt w-5"></i> Dashboard
+                    </button>
+                    <button onclick="switchHelpTab('mantenimiento')" class="help-tab-btn flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-slate-100" data-tab="mantenimiento">
+                        <i class="fas fa-tools w-5"></i> Mantenimiento
+                    </button>
+                    <button onclick="switchHelpTab('personal')" class="help-tab-btn flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-slate-100" data-tab="personal">
+                        <i class="fas fa-id-card w-5"></i> Personal
+                    </button>
+                </nav>
+
+                <!-- Content Area -->
+                <div class="flex-1 p-8 overflow-y-auto bg-white">
+                    <!-- Workflow Tab (PASO A PASO) -->
+                    <div id="tab-workflow" class="help-content-tab space-y-8">
+                        <div class="border-b border-slate-100 pb-4">
+                            <h3 class="text-2xl font-black text-slate-800">Guía de Operación Diaria</h3>
+                            <p class="text-slate-500 text-sm mt-1">Sigue este flujo para sacar el máximo provecho al sistema.</p>
+                        </div>
+                        
+                        <div class="relative space-y-8 before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-emerald-500 before:via-blue-500 before:to-slate-200">
+                            <!-- Paso 1 -->
+                            <div class="relative flex items-start group">
+                                <div class="absolute left-0 w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold shadow-lg z-10 group-hover:scale-110 transition-transform">1</div>
+                                <div class="ml-14 bg-slate-50 p-4 rounded-2xl border border-slate-100 w-full hover:shadow-md transition-shadow">
+                                    <h4 class="font-bold text-slate-800 flex items-center gap-2">
+                                        Configuración Inicial <span class="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full uppercase">Una sola vez</span>
+                                    </h4>
+                                    <p class="text-xs text-slate-600 mt-2 leading-relaxed">
+                                        Ve al menú de la izquierda y haz clic en <b>Configuración</b>. Registra tus máquinas con el mismo ID que el ERP y establece sus horarios de turno. Sin esto, la <i>Disponibilidad</i> no se calculará correctamente.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Paso 2 -->
+                            <div class="relative flex items-start group">
+                                <div class="absolute left-0 w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold shadow-lg z-10 group-hover:scale-110 transition-transform">2</div>
+                                <div class="ml-14 bg-slate-50 p-4 rounded-2xl border border-slate-100 w-full hover:shadow-md transition-shadow">
+                                    <h4 class="font-bold text-slate-800 flex items-center gap-2">Alta de Personal</h4>
+                                    <p class="text-xs text-slate-600 mt-2 leading-relaxed">
+                                        Registra a los operarios en el menú lateral, sección <b>Personal</b>. Asegúrate de que el Legajo coincida con lo que cargan en las máquinas para poder medir su eficiencia.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Paso 3 -->
+                            <div class="relative flex items-start group">
+                                <div class="absolute left-0 w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold shadow-lg z-10 group-hover:scale-110 transition-transform">3</div>
+                                <div class="ml-14 bg-slate-50 p-4 rounded-2xl border border-slate-100 w-full hover:shadow-md transition-shadow">
+                                    <h4 class="font-bold text-slate-800 flex items-center gap-2">Monitoreo y Alertas</h4>
+                                    <p class="text-xs text-slate-600 mt-2 leading-relaxed">
+                                        Abre el <b>Dashboard de Producción</b> en una pantalla grande. Si una máquina se detiene por más de 20 min, el sistema lanzará una <b>alerta sonora</b> y visual.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Paso 4 -->
+                            <div class="relative flex items-start group">
+                                <div class="absolute left-0 w-10 h-10 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold shadow-lg z-10 group-hover:scale-110 transition-transform">4</div>
+                                <div class="ml-14 bg-slate-50 p-4 rounded-2xl border border-slate-100 w-full hover:shadow-md transition-shadow">
+                                    <h4 class="font-bold text-slate-800 flex items-center gap-2">Control de Mantenimiento</h4>
+                                    <p class="text-xs text-slate-600 mt-2 leading-relaxed">
+                                        Cuando ocurra una falla, repórtala en <b>Mantenimiento</b>. Esto "limpia" el tablero para que todos sepan que la máquina está en reparación y no solo ociosa.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Intro Tab -->
+                    <div id="tab-intro" class="hidden help-content-tab space-y-6">
+                        <h3 class="text-2xl font-black text-slate-800">Bienvenido al Sistema</h3>
+                        <p class="text-slate-600 leading-relaxed">Este sistema permite monitorear en <b>tiempo real</b> el estado de la planta, medir la productividad y gestionar el mantenimiento preventivo de todas las máquinas.</p>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="p-4 rounded-2xl bg-blue-50 border border-blue-100">
+                                <i class="fas fa-bolt text-blue-500 mb-3 text-xl"></i>
+                                <h4 class="font-bold text-blue-900 text-sm">Tiempo Real</h4>
+                                <p class="text-xs text-blue-700 mt-1">Los datos se actualizan automáticamente desde el sistema ERP.</p>
+                            </div>
+                            <div class="p-4 rounded-2xl bg-amber-50 border border-amber-100">
+                                <i class="fas fa-bell text-amber-500 mb-3 text-xl"></i>
+                                <h4 class="font-bold text-amber-900 text-sm">Alertas Inteligentes</h4>
+                                <p class="text-xs text-amber-700 mt-1">Notificaciones sonoras y visuales cuando algo sale del plan.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dashboard Tab -->
+                    <div id="tab-dash" class="help-content-tab hidden space-y-6">
+                        <h3 class="text-2xl font-black text-slate-800">Métricas OEE</h3>
+                        <div class="space-y-4">
+                            <div class="flex gap-4 p-4 rounded-xl border border-slate-100">
+                                <div class="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 font-bold">D</div>
+                                <div>
+                                    <h4 class="font-bold text-slate-800">Disponibilidad</h4>
+                                    <p class="text-xs text-slate-500 mt-1">Es el porcentaje de tiempo que la máquina estuvo produciendo comparado con su turno de trabajo.</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-4 p-4 rounded-xl border border-slate-100">
+                                <div class="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 font-bold">R</div>
+                                <div>
+                                    <h4 class="font-bold text-slate-800">Rendimiento (Eficiencia)</h4>
+                                    <p class="text-xs text-slate-500 mt-1">Compara el tiempo real que tardó una pieza vs el tiempo estándar esperado.</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-4 p-4 rounded-xl border border-slate-100">
+                                <div class="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 font-bold">OEE</div>
+                                <div>
+                                    <h4 class="font-bold text-slate-800">OEE Global</h4>
+                                    <p class="text-xs text-slate-500 mt-1">El indicador maestro de productividad que combina todas las métricas.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mantenimiento Tab -->
+                    <div id="tab-mantenimiento" class="help-content-tab hidden space-y-6">
+                        <h3 class="text-2xl font-black text-slate-800">Mantenimiento y Agenda</h3>
+                        <p class="text-slate-600 text-sm">El sistema gestiona dos tipos de alertas mecánicas:</p>
+                        <ul class="space-y-4">
+                            <li class="flex items-start gap-4">
+                                <div class="bg-red-50 p-2 rounded-lg text-red-500 mt-1"><i class="fas fa-tools"></i></div>
+                                <div>
+                                    <h4 class="font-bold text-slate-800 text-sm">Correctivo (Reportar Falla)</h4>
+                                    <p class="text-xs text-slate-500">Usa el botón "Reportar Nueva Falla" para registrar una avería. La máquina aparecerá como "En Mantenimiento" y ocultará alertas de ocio.</p>
+                                </div>
+                            </li>
+                            <li class="flex items-start gap-4 border-t pt-4 border-slate-50">
+                                <div class="bg-emerald-50 p-2 rounded-lg text-emerald-500 mt-1"><i class="fas fa-calendar-alt"></i></div>
+                                <div>
+                                    <h4 class="font-bold text-slate-800 text-sm">Preventivo (Agenda/Uso)</h4>
+                                    <p class="text-xs text-slate-500 leading-relaxed">Configura alertas por <b>Horas de Uso</b> o por <b>Fecha Determinada</b>. El tablero mostrará cuerdas de colores: <span class="text-emerald-500 font-bold">Verde (OK)</span>, <span class="text-amber-500 font-bold">Amarillo (Próximo)</span> y <span class="text-red-500 font-bold">Rojo (Vencido)</span>.</p>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <!-- Personal Tab -->
+                    <div id="tab-personal" class="help-content-tab hidden space-y-6">
+                        <h3 class="text-2xl font-black text-slate-800">Gestión de Personal</h3>
+                        <p class="text-slate-600 text-sm leading-relaxed">En esta sección puedes dar de alta a los operarios de la planta. Es fundamental que el <b>Número de Legajo</b> sea el mismo que figura en el sistema de producción para que las métricas de eficiencia se asignen correctamente al operario.</p>
+                        <div class="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-4">
+                             <div class="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-sm text-blue-500">
+                                <i class="fas fa-id-card"></i>
+                             </div>
+                             <div>
+                                 <h5 class="font-bold text-sm">Tip de Legajo</h5>
+                                 <p class="text-xs text-slate-500">Si un operario no aparece en el sistema, sus horas producidas se sumarán al total de la planta pero su Pareto individual no estará disponible.</p>
+                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Config Tab -->
+                    <div id="tab-config" class="help-content-tab hidden space-y-6">
+                        <h3 class="text-2xl font-black text-slate-800">Configuración de Máquinas</h3>
+                        <p class="text-slate-600 text-sm">Para que las métricas sean precisas, configura:</p>
+                        <div class="space-y-4">
+                             <div class="p-4 rounded-xl border border-slate-100 flex gap-4">
+                                <i class="fas fa-history text-slate-400 mt-1"></i>
+                                <div>
+                                    <h5 class="font-bold text-sm">Turnos y Horarios</h5>
+                                    <p class="text-xs text-slate-500">Define cuándo comienza y termina el turno de cada máquina. Esto afecta directamente al cálculo de <b>Disponibilidad</b>.</p>
+                                </div>
+                             </div>
+                             <div class="p-4 rounded-xl border border-slate-100 flex gap-4">
+                                <i class="fas fa-toggle-on text-emerald-500 mt-1"></i>
+                                <div>
+                                    <h5 class="font-bold text-sm">Estado Activa</h5>
+                                    <p class="text-xs text-slate-500">Si una máquina está en desuso, bájala de aquí para que no arrastre hacia abajo el promedio global de la planta.</p>
+                                </div>
+                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function updateTime() {
+            const now = new Date();
+            const options = { hour: '2-digit', minute: '2-digit', second: '2-digit' };
+            document.getElementById('current-time').textContent = now.toLocaleTimeString('es-ES', options);
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+
+        // --- NOTIFICATION SYSTEM ---
+        const notifDropdown = document.getElementById('notification-dropdown');
+        const notifList = document.getElementById('notification-list');
+        const notifCount = document.getElementById('notification-count');
+        const bellIcon = document.getElementById('bell-icon');
+        let notificationStore = [];
+        let notifHistory = []; // Tracks alerts even when UI is cleared to prevent immediate re-alerts
+
+        function toggleNotifications() {
+            notifDropdown.classList.toggle('hidden');
+        }
+
+        function clearNotifications() {
+            notificationStore = [];
+            renderNotifications();
+        }
+
+        function addNotification(type, title, message) {
+            const id = Date.now();
+            const notif = { id, type, title, message, time: new Date() };
+            notificationStore.unshift(notif);
+            notifHistory.unshift(notif);
+            
+            // Keep history lean (last 50 items)
+            if (notifHistory.length > 50) notifHistory.pop();
+            
+            renderNotifications();
+            
+            // Visual Effect
+            bellIcon.classList.add('animate-swing'); 
+            setTimeout(() => bellIcon.classList.remove('animate-swing'), 1000);
+        }
+
+        // --- MODAL LOGIC ---
+        function openAlertModal(alert) {
+            const modal = document.getElementById('alert-modal');
+            const content = document.getElementById('alert-modal-content');
+            
+            // Set Content
+            document.getElementById('alert-modal-title').textContent = alert.title;
+            document.getElementById('alert-modal-message').textContent = alert.message;
+            
+            // Style based on type
+            const iconBg = document.getElementById('alert-modal-icon-bg');
+            const icon = document.getElementById('alert-modal-icon');
+            const btnAction = document.getElementById('alert-btn-action');
+
+            if (alert.type === 'error') {
+                iconBg.className = "w-20 h-20 rounded-full flex items-center justify-center mb-6 bg-red-50 text-red-500 shadow-xl shadow-red-100";
+                icon.className = "fas fa-exclamation-triangle text-3xl";
+                btnAction.className = "flex-1 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-red-200 transition-all text-sm transform hover:-translate-y-0.5";
+                btnAction.textContent = "Reportar Falla";
+                btnAction.href = "{% url 'lista_mantenimiento' %}"; 
+            } else {
+                iconBg.className = "w-20 h-20 rounded-full flex items-center justify-center mb-6 bg-amber-50 text-amber-500 shadow-xl shadow-amber-100";
+                icon.className = "fas fa-info-circle text-3xl";
+                btnAction.className = "flex-1 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-amber-200 transition-all text-sm transform hover:-translate-y-0.5";
+                btnAction.textContent = "Ver Detalles";
+                btnAction.href = "#"; // Could link to specific machine stats if we parsed the ID
+            }
+
+            // Show
+            modal.classList.remove('hidden');
+            // Small delay for transition
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                content.classList.remove('scale-95');
+                content.classList.add('scale-100');
+            }, 10);
+            
+            // Close dropdown
+            notifDropdown.classList.add('hidden');
+        }
+
+        function closeAlertModal() {
+            const modal = document.getElementById('alert-modal');
+            const content = document.getElementById('alert-modal-content');
+            
+            modal.classList.add('opacity-0');
+            content.classList.remove('scale-100');
+            content.classList.add('scale-95');
+            
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        // --- HELP CENTER LOGIC ---
+        function openHelpModal() {
+            const modal = document.getElementById('help-modal');
+            const content = document.getElementById('help-modal-content');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                content.classList.remove('scale-95');
+                content.classList.add('scale-100');
+            }, 10);
+        }
+
+        function closeHelpModal() {
+            const modal = document.getElementById('help-modal');
+            const content = document.getElementById('help-modal-content');
+            modal.classList.add('opacity-0');
+            content.classList.remove('scale-100');
+            content.classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }, 300);
+        }
+
+        function switchHelpTab(tabId) {
+            // Hide all tabs
+            document.querySelectorAll('.help-content-tab').forEach(t => t.classList.add('hidden'));
+            // Remove active style from all btns
+            document.querySelectorAll('.help-tab-btn').forEach(b => {
+                b.className = "help-tab-btn flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-slate-100";
+            });
+            
+            // Show new tab
+            document.getElementById('tab-' + tabId).classList.remove('hidden');
+            // Style active btn
+            const activeBtn = document.querySelector(`.help-tab-btn[data-tab="${tabId}"]`);
+            if (activeBtn) {
+                activeBtn.className = "help-tab-btn flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-bold transition-all text-emerald-700 bg-white shadow-sm border border-emerald-100";
+            }
+        }
+
+        function renderNotifications() {
+            if (notificationStore.length === 0) {
+                notifList.innerHTML = '<li class="px-4 py-8 text-center text-gray-400 text-xs italic">No tienes nuevas notificaciones</li>';
+                notifCount.classList.add('hidden');
+                return;
+            }
+
+            notifCount.textContent = notificationStore.length;
+            notifCount.classList.remove('hidden');
+
+            let html = '';
+            notificationStore.forEach((n, index) => {
+                let iconClass = 'fa-info-circle text-blue-500 bg-blue-50';
+                if (n.type === 'warning') iconClass = 'fa-exclamation-triangle text-amber-500 bg-amber-50';
+                if (n.type === 'error') iconClass = 'fa-exclamation-circle text-red-500 bg-red-50';
+
+                // We store the object in a way we can retrieve it. 
+                // Simple trick: attach it to window or use index.
+                // Better: Pass index to click handler.
+                html += `
+                <li onclick='openAlertModal(notificationStore[${index}])' class="cursor-pointer px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors flex gap-3 text-left group">
+                    <div class="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center ${iconClass.split(' ').slice(1).join(' ')} group-hover:scale-110 transition-transform">
+                        <i class="fas ${iconClass.split(' ')[0]}"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold text-gray-800">${n.title}</p>
+                        <p class="text-[11px] text-gray-500 leading-snug line-clamp-2">${n.message}</p>
+                        <span class="text-[9px] text-gray-400 mt-1 block">${n.time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    </div>
+                </li>`;
+            });
+            notifList.innerHTML = html;
+        }
+
+        // --- REAL TIME ALERTS POLLING ---
+        async function fetchRealAlerts() {
+            try {
+                const response = await fetch('{% url "check_alerts" %}');
+                const data = await response.json();
+                
+                if (data.alerts && data.alerts.length > 0) {
+                    data.alerts.forEach(alert => {
+                        // Avoid duplicates using history (suppress same message for 20 minutes)
+                        const exists = notifHistory.some(n => n.message === alert.message && (new Date() - n.time) < 1200000); 
+                        if (!exists) {
+                            addNotification(alert.type, alert.title, alert.message);
+                            
+                            // Audio Alert if function exists (from dashboard/produccion.html)
+                            if (typeof speak === 'function') {
+                                speak(alert.message);
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error("Error fetching alerts:", error);
+            }
+        }
+
+        // Start Polling
+        fetchRealAlerts();
+        setInterval(fetchRealAlerts, 60000); // Every 1 minute
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const container = document.getElementById('notification-container');
+            // If click is outside notification container AND outside the modal (if open)
+            const modal = document.getElementById('alert-modal');
+            const isModalOpen = !modal.classList.contains('hidden');
+            
+            if (!container.contains(event.target) && !isModalOpen) {
+                notifDropdown.classList.add('hidden');
+            }
+        });
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

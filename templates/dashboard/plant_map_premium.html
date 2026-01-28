@@ -1,0 +1,1384 @@
+{% extends 'base.html' %}
+{% load static l10n %}
+
+{% block title %}Mapa de Planta - ABBAMAT{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<style>
+    :root {
+        --brand-primary: #4f46e5;
+        --brand-secondary: #0891b2;
+        --status-running: #10b981;
+        --status-stopped: #ef4444;
+        --status-offline: #64748b;
+        --map-bg: #0f172a;
+    }
+
+    /* Override body if needed? No, base.html handles it. 
+       We want the map to fill the available space in the content area. */
+    .map-container-wrapper {
+        position: relative;
+        height: calc(100vh - 160px); /* Adjust based on topbar and padding */
+        background: var(--map-bg);
+        border-radius: 1rem;
+        overflow: hidden;
+        border: 1px solid #e2e8f0;
+        box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+    }
+
+    /* HEADER INTERNO DEL MAPA */
+    .map-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.5rem;
+        background: white;
+        border-bottom: 1px solid #e2e8f0;
+        margin: -2rem -2rem 1.5rem -2rem; /* Compensate for p-8 in base.html */
+        position: sticky;
+        top: -2rem;
+        z-index: 40;
+    }
+
+    .map-title {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .map-title h2 {
+        font-family: 'Outfit', sans-serif;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin: 0;
+    }
+
+    .btn-system {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        font-weight: 600;
+        transition: all 0.2s;
+        border: 1px solid transparent;
+        cursor: pointer;
+    }
+
+    .btn-ghost {
+        color: #64748b;
+        background: transparent;
+    }
+    .btn-ghost:hover {
+        background: #f1f5f9;
+        color: #1e293b;
+    }
+
+    .btn-primary-system {
+        background: var(--brand-primary);
+        color: white;
+    }
+    .btn-primary-system:hover {
+        background: #4338ca;
+        box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
+    }
+
+    .btn-outline {
+        border-color: #cbd5e1;
+        color: #475569;
+        background: white;
+    }
+    .btn-outline:hover {
+        border-color: #94a3b8;
+        background: #f8fafc;
+    }
+
+    /* MAPA CORE STYLES */
+    .map-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #000000;
+        background-image: url("/static/img/planta_blueprint.png");
+        background-size: contain;
+        background-position: center;
+        background-repeat: no-repeat;
+        perspective: 2000px;
+        transition: right 0.3s ease;
+    }
+
+    .map-container.sidebar-open {
+        right: 320px;
+    }
+
+    .plant-floor {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        transform-style: preserve-3d;
+        transition: transform 0.5s ease;
+    }
+
+    /* MACHINE MARKER - 3D NEON STYLE */
+    .machine-marker {
+        position: absolute;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        transform: translate(-50%, -50%) translateZ(20px);
+        transform-style: preserve-3d;
+        background: rgba(15, 23, 42, 0.4);
+        backdrop-filter: blur(8px);
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        z-index: 5;
+        /* Depth Shadow for 3D look */
+        box-shadow: 
+            0 10px 30px -10px rgba(0, 0, 0, 0.5),
+            0 0 0 1px rgba(255, 255, 255, 0.1);
+    }
+
+    .machine-marker:hover {
+        transform: translate(-50%, -50%) translateZ(50px) scale(1.1);
+        z-index: 50;
+        border-color: #fff;
+        background: rgba(15, 23, 42, 0.6);
+    }
+
+    /* INTENSE ELECTRIFYING NEON RUNNING */
+    @keyframes neon-halo-running {
+        0% { 
+            box-shadow: 0 0 15px #10b981, 0 0 30px rgba(16, 185, 129, 0.5), inset 0 0 15px rgba(16, 185, 129, 0.5); 
+            border-color: #10b981;
+            filter: brightness(1);
+        }
+        50% { 
+            box-shadow: 0 0 30px #10b981, 0 0 60px #10b981, 0 0 100px rgba(16, 185, 129, 0.4), inset 0 0 30px rgba(16, 185, 129, 0.8); 
+            border-color: #34d399;
+            filter: brightness(1.5);
+        }
+        100% { 
+            box-shadow: 0 0 15px #10b981, 0 0 30px rgba(16, 185, 129, 0.5), inset 0 0 15px rgba(16, 185, 129, 0.5); 
+            border-color: #10b981;
+            filter: brightness(1);
+        }
+    }
+
+    /* INTENSE ELECTRIFYING NEON STOPPED */
+    @keyframes neon-halo-stopped {
+        0% { 
+            box-shadow: 0 0 15px #ef4444, 0 0 30px rgba(239, 68, 68, 0.5), inset 0 0 15px rgba(239, 68, 68, 0.5); 
+            border-color: #ef4444;
+            filter: brightness(1);
+        }
+        50% { 
+            box-shadow: 0 0 30px #ef4444, 0 0 60px #ef4444, 0 0 100px rgba(239, 68, 68, 0.4), inset 0 0 30px rgba(239, 68, 68, 0.8); 
+            border-color: #f87171;
+            filter: brightness(1.5);
+        }
+        100% { 
+            box-shadow: 0 0 15px #ef4444, 0 0 30px rgba(239, 68, 68, 0.5), inset 0 0 15px rgba(239, 68, 68, 0.5); 
+            border-color: #ef4444;
+            filter: brightness(1);
+        }
+    }
+
+    .machine-marker i {
+        font-size: 1.5rem;
+        color: rgba(255, 255, 255, 0.9);
+        transform: translateZ(10px);
+        text-shadow: 0 0 10px rgba(255,255,255,0.5);
+    }
+    
+    .status-running i { color: #fff; text-shadow: 0 0 10px #10b981, 0 0 20px #10b981; }
+    .status-stopped i { color: #fff; text-shadow: 0 0 10px #ef4444, 0 0 20px #ef4444; }
+
+    /* Machine Label Neon */
+    .machine-label {
+        position: absolute;
+        top: 110%;
+        left: 50%;
+        transform: translateX(-50%) translateZ(15px);
+        white-space: nowrap;
+        background: rgba(15, 23, 42, 0.8);
+        color: #fff;
+        padding: 4px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 800;
+        pointer-events: none;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+        transition: all 0.3s;
+    }
+
+    .status-running .machine-label {
+        border-color: #10b981;
+        text-shadow: 0 0 8px #10b981;
+        box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+    }
+
+    .status-stopped .machine-label {
+        border-color: #ef4444;
+        text-shadow: 0 0 8px #ef4444;
+        box-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
+    }
+
+    /* SPECIAL NEON FOR TM1 (RED STYLE) */
+    @keyframes neon-tm1 {
+        0% { box-shadow: 0 0 15px #ff4444, 0 0 30px rgba(255, 68, 68, 0.4), inset 0 0 10px rgba(255, 68, 68, 0.5); border-color: #ff4444; }
+        50% { box-shadow: 0 0 30px #ff0000, 0 0 60px #ff0000, 0 0 80px rgba(255, 0, 0, 0.6), inset 0 0 20px rgba(255, 0, 0, 0.8); border-color: #ff0000; }
+        100% { box-shadow: 0 0 15px #ff4444, 0 0 30px rgba(255, 68, 68, 0.4), inset 0 0 10px rgba(255, 68, 68, 0.5); border-color: #ff4444; }
+    }
+
+    .machine-tm1 {
+        animation: neon-tm1 1.5s infinite ease-in-out !important;
+        border-color: #ff4444 !important;
+    }
+
+    .machine-tm1 i {
+        color: #ff4444 !important;
+        text-shadow: 0 0 15px #ff4444 !important;
+    }
+
+    /* SIDEBAR SYSTEM STYLE */
+    .map-sidebar {
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        width: 320px;
+        background: white;
+        border-left: 1px solid #e2e8f0;
+        padding: 1.5rem;
+        overflow-y: auto;
+        z-index: 30;
+        transition: transform 0.3s ease;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .map-sidebar.hidden {
+        transform: translateX(100%);
+    }
+
+    .sidebar-kpi-card {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.75rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .sidebar-kpi-label {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.25rem;
+    }
+
+    .sidebar-kpi-value {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: #1e293b;
+    }
+
+    /* BOTÓN FLOTANTE PARA REABRIR */
+    #floatingToggle {
+        position: fixed;
+        right: 0;
+        top: 80px;
+        z-index: 999;
+        background: #1e293b;
+        color: white;
+        border: 1px solid rgba(255,255,255,0.2);
+        border-right: none;
+        padding: 12px 10px;
+        border-radius: 12px 0 0 12px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: -4px 0 15px rgba(0,0,0,0.3);
+        transition: all 0.3s ease;
+    }
+
+    #floatingToggle:hover {
+        padding-right: 15px;
+        background: #3b82f6;
+    }
+
+    #floatingToggle.hidden-btn {
+        transform: translateX(100%);
+        pointer-events: none;
+        opacity: 0;
+    }
+
+    /* BARRA DE BOTONES SIDEBAR */
+
+    /* BARRA DE BOTONES SIDEBAR */
+    .sidebar-ctrl-header {
+        position: sticky;
+        top: -1.5rem; /* Ajuste por el padding del parent */
+        margin: -1.5rem -1.5rem 1.5rem -1.5rem;
+        background: #1e293b;
+        padding: 12px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        z-index: 100;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    .btn-mini-toggle {
+        background: #3b82f6;
+        color: white;
+        border: none;
+        padding: 8px;
+        border-radius: 8px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+    }
+
+    .btn-mini-toggle.inactive {
+        background: rgba(255,255,255,0.1);
+        opacity: 0.5;
+    }
+
+    /* TOOLTIP & MODAL RESET */
+    .tooltip {
+        position: absolute;
+        background: #1e293b;
+        color: white;
+        padding: 12px;
+        border-radius: 8px;
+        z-index: 2000;
+        display: none;
+        min-width: 220px;
+        pointer-events: none;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+        font-size: 13px;
+    }
+    
+    .tooltip-title { font-weight: 800; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px; }
+    .tooltip-status { font-size: 9px; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; }
+    .tooltip-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+    .tooltip-label { color: #94a3b8; font-weight: 600; }
+
+    /* MODAL OVERLAY */
+    .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.75);
+        backdrop-filter: blur(4px);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 100;
+    }
+
+    .modal-dialog {
+        background: white;
+        width: 100%;
+        max-width: 450px;
+        border-radius: 1.5rem;
+        overflow: hidden;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    }
+
+    .modal-header {
+        padding: 1.5rem;
+        background: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .modal-body {
+        padding: 1.5rem;
+    }
+
+    .modal-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+    }
+
+    .modal-label {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #64748b;
+        text-transform: uppercase;
+        margin-bottom: 0.25rem;
+    }
+
+    .modal-value {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #1e293b;
+    }
+
+    /* DESIGN PANEL */
+    .design-panel {
+        position: absolute;
+        top: 1rem;
+        left: 1rem;
+        width: 240px;
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.75rem;
+        padding: 1rem;
+        z-index: 45;
+        box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+    }
+
+    .design-panel h4 { font-weight: 700; margin-bottom: 0.75rem; color: #1e293b; border-bottom: 1px solid #f1f5f9; padding-bottom: 0.5rem; }
+    .form-group { margin-bottom: 0.75rem; }
+    .form-group label { display: block; font-size: 0.7rem; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 0.25rem; }
+    .form-group input, .form-group select { width: 100%; padding: 0.4rem; border: 1px solid #e2e8f0; border-radius: 0.4rem; font-size: 0.8rem; }
+
+    /* SHAPES */
+    .shape-GENERICO, .shape-ROBOT { border-radius: 9999px; }
+    .shape-CNC { border-radius: 0.5rem; }
+    .shape-TORNO, .shape-AGUJEREADORA, .shape-PRENSA { border-radius: 0.25rem; }
+
+    /* CUSTOM SCROLLBAR */
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    /* BOTONES DE CONTROL SIDEBAR (NUEVO) */
+    .btn-sidebar-toggle {
+        background: transparent;
+        color: white;
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 6px;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .btn-sidebar-toggle:hover {
+        background: rgba(255,255,255,0.1);
+        border-color: white;
+    }
+
+    .btn-section-toggle {
+        background: transparent;
+        color: #94a3b8;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-size: 10px;
+        font-weight: 700;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        transition: all 0.2s;
+    }
+    
+    .btn-section-toggle.active {
+        background: #3b82f6;
+        color: white;
+        border-color: #3b82f6;
+        box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+    }
+
+    .btn-section-toggle:hover {
+        border-color: #64748b;
+        color: white;
+    }
+    
+    .map-container-wrapper:fullscreen {
+        height: 100vh !important;
+        width: 100vw !important;
+        border-radius: 0;
+        border: none;
+    }
+    .map-container-wrapper:fullscreen .map-container {
+        right: 320px; /* Mantener espacio para sidebar si está abierta */
+    }
+    .map-container-wrapper:fullscreen .map-container:not(.sidebar-open) {
+        right: 0;
+    }
+
+</style>
+
+<!-- TOP CONTROL BAR -->
+<div class="map-header">
+    <div class="map-title">
+        <a href="{% url 'dashboard_produccion' %}" class="btn-system btn-ghost" title="Volver al Menú Principal">
+            <i class="fas fa-arrow-left"></i>
+            <span>Volver</span>
+        </a>
+        <div class="h-6 w-px bg-slate-200"></div>
+        <h2>MAPA DE PLANTA</h2>
+    </div>
+
+    <div class="flex items-center gap-2">
+        <button class="btn-system btn-outline" id="btnFullscreen" onclick="toggleFullscreen()" title="Pantalla Completa">
+            <i class="fas fa-expand"></i> Pantalla Completa
+        </button>
+        <button class="btn-system btn-outline" id="btnDesign" onclick="toggleDesignMode()">
+            <i class="fas fa-edit"></i> Modo Diseño
+        </button>
+        <div class="h-6 w-px bg-slate-200 mx-1"></div>
+        <button class="btn-system btn-primary-system" onclick="location.reload()">
+            <i class="fas fa-sync-alt"></i> Actualizar
+        </button>
+        <button class="btn-system btn-ghost" onclick="toggleSidebar()">
+            <i class="fas fa-columns"></i>
+        </button>
+    </div>
+</div>
+
+<div class="map-container-wrapper">
+    <!-- BOTÓN FLOTANTE (Solo visible cuando el panel está oculto) -->
+    <button id="floatingToggle" class="hidden-btn" onclick="toggleSidebar()" title="Abrir Panel" style="position: absolute;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+    </button>
+    <!-- BLUEPRINT DESIGN INDICATOR -->
+    <div id="designIndicator" class="hidden absolute top-4 left-1/2 -translate-x-1/2 bg-amber-500 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-lg z-[50] animate-pulse">
+        MODO DISEÑO ACTIVADO: ARRASTRA LAS MÁQUINAS
+    </div>
+
+    <div class="map-container sidebar-open" id="mapContainer" ondragover="onMapDragOver(event)" ondrop="onMapDrop(event)">
+        <div class="plant-floor" id="plantFloor">
+             {% for m in machines %}
+                {% with shape_class=m.type|default:'GENERICO' %}
+                <div class="machine-marker status-{{ m.status|lower }} shape-{{ shape_class }} {% if m.name == 'TM1' %}machine-tm1{% endif %}" 
+                     id="marker-{{ m.pk }}" 
+                     style="left: {% if m.x != 0 %}{{ m.x|unlocalize }}{% else %}50{% endif %}%; top: {% if m.y != 0 %}{{ m.y|unlocalize }}{% else %}50{% endif %}%; width: {{ m.w|unlocalize }}%; height: {{ m.h|unlocalize }}%; transform: translate(-50%, -50%) translateZ(20px) rotate({{ m.r|unlocalize }}deg); border-width: {{ m.border_weight|unlocalize }}px;"
+                     data-id="{{ m.id }}"
+                     data-pk="{{ m.pk }}"
+                     data-name="{{ m.name }}"
+                     data-status="{{ m.status }}"
+                     data-type="{{ m.type }}"
+                     data-w="{{ m.w|unlocalize }}"
+                     data-h="{{ m.h|unlocalize }}"
+                     data-r="{{ m.r|unlocalize }}"
+                     data-label-size="{{ m.label_size|unlocalize }}"
+                     data-border-weight="{{ m.border_weight|unlocalize }}"
+                     data-operario="{{ m.operario }}"
+                     data-proceso="{{ m.proceso }}"
+                     data-detalle="{{ m.detalle }}"
+                     data-orden="{{ m.orden }}"
+                     data-inicio="{{ m.inicio }}"
+                     data-fin="{{ m.fin }}"
+                     data-oee="{{ m.oee|floatformat:1 }}"
+                     data-performance="{{ m.performance|floatformat:1 }}"
+                     data-qty="{{ m.qty|floatformat:0 }}"
+                     data-maint="{{ m.mantenimiento.estado_display }}"
+                     onmousedown="onMarkerMouseDown(event, this)">
+                    
+                    {% if m.type == 'CNC' %}<i class="fas fa-microchip"></i>
+                    {% elif m.type == 'TORNO' %}<i class="fas fa-sync"></i>
+                    {% elif m.type == 'AGUJEREADORA' %}<i class="fas fa-tools"></i>
+                    {% elif m.type == 'ROBOT' %}<i class="fas fa-robot"></i>
+                    {% elif m.type == 'PRENSA' %}<i class="fas fa-compress-arrows-alt"></i>
+                    {% else %}<i class="fas fa-cog"></i>
+                    {% endif %}
+
+                    <div class="machine-label" style="font-size: {{ m.label_size|unlocalize }}px; {% if m.name == 'TM1' %}color: #ff4444; border-color: #ff4444; text-shadow: 0 0 10px #ff4444;{% endif %}">{{ m.name }}</div>
+                </div>
+                {% endwith %}
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- SIDEBAR -->
+    <div class="map-sidebar custom-scrollbar" id="mapSidebar">
+        <!-- HEADER DE BOTONES -->
+        <!-- HEADER DE BOTONES -->
+        <div class="sidebar-ctrl-header">
+            <button onclick="toggleSidebar()" class="btn-sidebar-toggle" title="Ocultar Panel">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="flex gap-2">
+                <button class="btn-section-toggle active" id="btn-sec-stats" onclick="toggleSection('sec-stats')" title="Estadísticas">
+                    <i class="fas fa-chart-line"></i> STATS
+                </button>
+                <button class="btn-section-toggle active" id="btn-sec-activity" onclick="toggleSection('sec-activity')" title="Actividad">
+                    <i class="fas fa-list-ul"></i> ACT
+                </button>
+                <button class="btn-section-toggle active" id="btn-sec-legend" onclick="toggleSection('sec-legend')" title="Referencias">
+                    <i class="fas fa-info-circle"></i> REF
+                </button>
+            </div>
+        </div>
+
+        <div id="statsAndRefs">
+            <div id="sec-stats">
+                <h3 class="text-sm font-bold text-slate-800 uppercase tracking-widest mb-6 border-b pb-2">Estadísticas Hoy</h3>
+            
+            <div class="sidebar-kpi-card">
+                <div class="sidebar-kpi-label">OEE Global</div>
+                <div id="globalOEEValue" class="sidebar-kpi-value {% if global_stats.promedio_oee >= 85 %}text-emerald-600{% elif global_stats.promedio_oee >= 70 %}text-amber-500{% else %}text-rose-600{% endif %}">
+                    {{ global_stats.promedio_oee }}%
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 mb-6">
+                <div class="sidebar-kpi-card mb-0">
+                    <div class="sidebar-kpi-label">Disp.</div>
+                    <div id="globalDispValue" class="text-lg font-bold text-slate-700">{{ global_stats.avg_availability }}%</div>
+                </div>
+                <div class="sidebar-kpi-card mb-0">
+                    <div class="sidebar-kpi-label">Rend.</div>
+                    <div id="globalRendValue" class="text-lg font-bold text-slate-700">{{ global_stats.avg_performance }}%</div>
+                </div>
+            </div>
+
+            <div class="sidebar-kpi-card">
+                <div class="sidebar-kpi-label">Máquinas Activas</div>
+                <div id="activeMachinesText" class="text-xl font-bold text-indigo-600">{{ active_count }} <span class="text-slate-400 font-medium">/ {{ total_count }}</span></div>
+            </div>
+
+            </div> <!-- Fin sec-stats -->
+
+            <!-- DETALLE DE ACTIVIDAD (TIEMPO REAL) -->
+            <div id="sec-activity" style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+                <h3 class="text-sm font-bold text-slate-800 uppercase tracking-widest mt-10 mb-4 border-b pb-2">Actividad Actual</h3>
+                <div id="activityListContainer" class="space-y-2 overflow-y-auto pr-2 custom-scrollbar mb-4" style="flex: 1;">
+                    {% for m in machines %}
+                    {% if m.status != 'OFFLINE' %}
+                    <div class="group p-3 bg-white border border-slate-200 rounded-xl cursor-pointer hover:border-indigo-500 hover:shadow-md transition-all"
+                         onclick="focusMachine('{{ m.pk }}')">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-[11px] font-black text-slate-800 uppercase tracking-tight">{{ m.name }}</span>
+                            <div class="w-1.5 h-1.5 rounded-full {% if m.status == 'RUNNING' %}bg-emerald-500{% else %}bg-rose-500 animate-pulse{% endif %}"></div>
+                        </div>
+                        <div class="flex items-center gap-2 text-[10px] text-indigo-600 font-bold mb-1">
+                            <i class="fas fa-user-circle"></i>
+                            <span>{{ m.operario }}</span>
+                        </div>
+                        <div class="text-[9px] text-slate-500 italic leading-tight line-clamp-1 group-hover:line-clamp-none transition-all" title="{{ m.detalle }}">
+                            {{ m.detalle }}
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div> <!-- Fin sec-activity -->
+
+            <div id="sec-legend">
+                <h3 class="text-sm font-bold text-slate-800 uppercase tracking-widest mt-10 mb-4 border-b pb-2">Referencias</h3>
+                <div class="space-y-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-3 h-3 bg-emerald-500 rounded-full shadow-sm"></div>
+                        <span class="text-xs font-bold text-slate-600 uppercase">Produciendo</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="w-3 h-3 bg-rose-500 rounded-full shadow-sm"></div>
+                        <span class="text-xs font-bold text-slate-600 uppercase">Parada / Falla</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="w-3 h-3 bg-slate-400 rounded-full shadow-sm"></div>
+                        <span class="text-xs font-bold text-slate-600 uppercase">Fuera de Línea</span>
+                    </div>
+                </div>
+            </div> <!-- Fin sec-legend -->
+        </div>
+
+        <!-- LISTADO DE MÁQUINAS (PARA MODO DISEÑO) -->
+        <div id="designModeList" class="hidden mt-10">
+            <h3 class="text-sm font-bold text-amber-600 uppercase tracking-widest mb-4 border-b border-amber-200 pb-2">Inventario de Mapa</h3>
+            <p class="text-[10px] text-slate-400 mb-4 italic">Haz clic en una máquina para ubicarla en el plano.</p>
+            <div class="space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                {% for m in machines %}
+                <div class="group p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 cursor-grab active:cursor-grabbing hover:border-indigo-500 hover:bg-white hover:shadow-sm transition-all flex items-center justify-between"
+                     draggable="true"
+                     ondragstart="onSidebarDragStart(event, '{{ m.pk }}')"
+                     onclick="focusMachine('{{ m.pk }}')">
+                    <div class="flex items-center gap-3">
+                        <div class="w-2 h-2 rounded-full bg-slate-300 group-hover:bg-indigo-500"></div>
+                        <span>{{ m.name }}</span>
+                    </div>
+                    <i class="fas fa-crosshairs text-slate-300 group-hover:text-indigo-500"></i>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- DESIGN MODE PANEL -->
+    <div id="editPanel" class="design-panel hidden">
+        <h4 id="editPanelHeader" onmousedown="startDraggingPanel(event)" class="cursor-move flex items-center justify-between">
+            <span>Configurar</span>
+            <i class="fas fa-arrows-alt text-[10px] text-slate-400"></i>
+        </h4>
+        <div class="form-group">
+            <label>Forma</label>
+            <select id="editType" onchange="updateSelectedMachine('type', this.value)">
+                <option value="GENERICO">Círculo</option>
+                <option value="CNC">Cuadrado</option>
+                <option value="TORNO">Rectángulo Horizontal</option>
+                <option value="AGUJEREADORA">Rectángulo Vertical</option>
+                <option value="ROBOT">Robot</option>
+                <option value="PRENSA">Prensa</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <div class="flex justify-between items-center mb-1">
+                <label class="m-0">Ancho (%)</label>
+                <span id="valW" class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 rounded">0</span>
+            </div>
+            <input type="range" id="editW" min="1" max="25" step="0.5" oninput="updateSelectedMachine('w', this.value)">
+        </div>
+        <div class="form-group">
+            <div class="flex justify-between items-center mb-1">
+                <label class="m-0">Alto (%)</label>
+                <span id="valH" class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 rounded">0</span>
+            </div>
+            <input type="range" id="editH" min="1" max="25" step="0.5" oninput="updateSelectedMachine('h', this.value)">
+        </div>
+        <div class="form-group">
+            <div class="flex justify-between items-center mb-1">
+                <label class="m-0">Rotación (°)</label>
+                <span id="valR" class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 rounded">0</span>
+            </div>
+            <input type="range" id="editR" min="0" max="360" step="5" oninput="updateSelectedMachine('r', this.value)">
+        </div>
+        <div class="form-group">
+            <div class="flex justify-between items-center mb-1">
+                <label class="m-0">Tam. Fuente (px)</label>
+                <span id="valFS" class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 rounded">0</span>
+            </div>
+            <input type="range" id="editFS" min="6" max="24" step="1" oninput="updateSelectedMachine('labelSize', this.value)">
+        </div>
+        <div class="form-group">
+            <div class="flex justify-between items-center mb-1">
+                <label class="m-0">Grosor Línea (px)</label>
+                <span id="valBW" class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 rounded">0</span>
+            </div>
+            <input type="range" id="editBW" min="0" max="10" step="0.5" oninput="updateSelectedMachine('borderWeight', this.value)">
+        </div>
+        <div class="space-y-2 mt-4">
+            <button class="btn-system btn-primary-system w-full" onclick="saveSelectedMachine()">Guardar</button>
+            <button class="btn-system btn-outline w-full" onclick="deselectMachine()">Cerrar</button>
+        </div>
+    </div>
+</div>
+
+<!-- TOOLTIP -->
+<div id="tooltip" class="tooltip"></div>
+
+<!-- DETAILS MODAL -->
+<div class="modal-overlay" id="detailModal">
+    <div class="modal-dialog">
+        <div class="modal-header">
+            <div class="modal-icon-container" id="mIconBg">
+                <i class="fas fa-microchip modal-icon" id="mIcon"></i>
+            </div>
+            <div>
+                <h3 class="text-xl font-bold text-slate-800 leading-none mb-1" id="mName">Nombre Máquina</h3>
+                <span class="text-[10px] font-black uppercase tracking-widest text-slate-400" id="mId">MAC00</span>
+            </div>
+        </div>
+        <div class="modal-body">
+            <div class="modal-grid">
+                <div>
+                    <div class="modal-label">Estado</div>
+                    <div class="modal-value" id="mStatusText">Procesando</div>
+                </div>
+                <div>
+                    <div class="modal-label">OEE / Rend.</div>
+                    <div class="modal-value" id="mStats">0% / 0%</div>
+                </div>
+                <div>
+                    <div class="modal-label">Operario</div>
+                    <div class="modal-value" id="mOperario">---</div>
+                </div>
+                <div>
+                    <div class="modal-label">Piezas Hoy</div>
+                    <div class="modal-value text-indigo-600" id="mQty">0</div>
+                </div>
+                <div class="col-span-2">
+                    <div class="modal-label">Orden / Proceso</div>
+                    <div class="modal-value" id="mOperacion">---</div>
+                </div>
+                <div class="col-span-2">
+                    <div class="modal-label">Detalle (Actividad)</div>
+                    <div class="modal-value text-indigo-600 font-bold" id="mDetalle">---</div>
+                </div>
+            </div>
+            
+            <div class="mt-8">
+                <button class="btn-system btn-primary-system w-full py-3" onclick="closeModal()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="toastContainer" class="fixed bottom-4 left-4 z-[9999] flex flex-col gap-2"></div>
+
+<script>
+    let isDesignMode = false;
+    let selectedMarker = null;
+    let isDragging = false;
+    let isDraggingPanel = false;
+    let dragStartX, dragStartY;
+    let currentDragX, currentDragY;
+    let mapRect;
+
+    // --- INITIALIZATION ---
+    document.addEventListener('DOMContentLoaded', () => {
+        mapRect = document.getElementById('mapContainer').getBoundingClientRect();
+        window.addEventListener('resize', () => {
+            mapRect = document.getElementById('mapContainer').getBoundingClientRect();
+        });
+        
+        initTooltips();
+    });
+
+    // --- UI CONTROLS ---
+    function toggleSidebar() {
+        const sidebar = document.getElementById('mapSidebar');
+        const container = document.getElementById('mapContainer');
+        const floatingBtn = document.getElementById('floatingToggle');
+        
+        const isHidden = sidebar.classList.toggle('hidden');
+        container.classList.toggle('sidebar-open');
+        
+        if (isHidden) {
+            floatingBtn.classList.remove('hidden-btn');
+        } else {
+            floatingBtn.classList.add('hidden-btn');
+        }
+    }
+
+    function toggleSection(id) {
+        const sec = document.getElementById(id);
+        const btn = document.getElementById('btn-' + id);
+        if (!sec) return;
+        
+        if (sec.style.display === 'none') {
+            sec.style.display = 'block';
+            btn.classList.remove('inactive');
+        } else {
+            sec.style.display = 'none';
+            btn.classList.add('inactive');
+        }
+    }
+
+    function toggleFullscreen() {
+        const wrapper = document.querySelector('.map-container-wrapper');
+        const btn = document.getElementById('btnFullscreen');
+        
+        if (!document.fullscreenElement) {
+            wrapper.requestFullscreen().then(() => {
+                btn.innerHTML = '<i class="fas fa-compress"></i> Salir Pantalla';
+            }).catch(err => {
+                showToast("Error al activar pantalla completa", "error");
+            });
+        } else {
+            document.exitFullscreen();
+        }
+    }
+
+    // Escuchar cambios de fullscreen para actualizar el botón
+    document.addEventListener('fullscreenchange', () => {
+        const btn = document.getElementById('btnFullscreen');
+        if (!document.fullscreenElement) {
+            btn.innerHTML = '<i class="fas fa-expand"></i> Pantalla Completa';
+        }
+    });
+
+
+
+    function toggleDesignMode() {
+        isDesignMode = !isDesignMode;
+        const indicator = document.getElementById('designIndicator');
+        const btn = document.getElementById('btnDesign');
+        const list = document.getElementById('designModeList');
+        const stats = document.getElementById('statsAndRefs');
+        
+        if (isDesignMode) {
+            indicator.classList.remove('hidden');
+            list.classList.remove('hidden');
+            stats.classList.add('hidden');
+            btn.classList.add('bg-amber-100', 'border-amber-500', 'text-amber-700');
+            showToast("Modo Diseño ACTIVADO", "warning");
+        } else {
+            indicator.classList.add('hidden');
+            list.classList.add('hidden');
+            stats.classList.remove('hidden');
+            btn.classList.remove('bg-amber-100', 'border-amber-500', 'text-amber-700');
+            deselectMachine();
+            showToast("Modo Diseño DESACTIVADO", "success");
+        }
+    }
+
+    function focusMachine(pk) {
+        const marker = document.getElementById(`marker-${pk}`);
+        if (!marker) return;
+
+        // Abrir sidebar si está cerrada
+        const sidebar = document.getElementById('mapSidebar');
+        if (sidebar.classList.contains('hidden')) toggleSidebar();
+
+        // Efecto visual de pulsación
+        marker.classList.add('scale-150', 'z-[100]');
+        marker.style.boxShadow = '0 0 40px #4f46e5, 0 0 80px rgba(79, 70, 229, 0.4)';
+        
+        setTimeout(() => {
+            marker.classList.remove('scale-150', 'z-[100]');
+            if (selectedMarker !== marker) {
+                marker.style.boxShadow = '';
+            }
+        }, 1500);
+
+        if (isDesignMode) {
+            selectMachine(marker);
+        } else {
+            openModal(marker);
+        }
+    }
+
+    // --- SIDEBAR DRAG AND DROP TO MAP ---
+    function onSidebarDragStart(e, pk) {
+        if (!isDesignMode) {
+            e.preventDefault();
+            return;
+        }
+        e.dataTransfer.setData("pk", pk);
+        // Imagen de arrastre personalizada (opcional)
+        e.dataTransfer.effectAllowed = "move";
+        
+        // Mostrar visualmente que se puede soltar
+        document.getElementById('mapContainer').classList.add('border-indigo-500', 'border-2');
+    }
+
+    function onMapDragOver(e) {
+        if (!isDesignMode) return;
+        e.preventDefault(); // Necesario para permitir el drop
+        e.dataTransfer.dropEffect = "move";
+    }
+
+    function onMapDrop(e) {
+        if (!isDesignMode) return;
+        e.preventDefault();
+        document.getElementById('mapContainer').classList.remove('border-indigo-500', 'border-2');
+        
+        const pk = e.dataTransfer.getData("pk");
+        const marker = document.getElementById(`marker-${pk}`);
+        if (!marker) return;
+
+        const rect = document.getElementById('mapContainer').getBoundingClientRect();
+        
+        // Calcular porcentajes
+        let xPerc = ((e.clientX - rect.left) / rect.width) * 100;
+        let yPerc = ((e.clientY - rect.top) / rect.height) * 100;
+        
+        // Bounds
+        xPerc = Math.max(2, Math.min(98, xPerc));
+        yPerc = Math.max(2, Math.min(98, yPerc));
+        
+        marker.style.left = xPerc.toFixed(2) + '%';
+        marker.style.top = yPerc.toFixed(2) + '%';
+        
+        // Seleccionarla para ver el panel de edición
+        selectMachine(marker);
+        
+        // Toast informativo
+        showToast(`Máquina ubicada: ${marker.dataset.name}`, "info");
+    }
+
+    // --- DRAG AND DROP (DESIGN MODE - INTERNAL) ---
+    function onMarkerMouseDown(e, marker) {
+        if (!isDesignMode) {
+            if (e.button === 0) openModal(marker);
+            return;
+        }
+        
+        e.preventDefault();
+        selectMachine(marker);
+        
+        isDragging = true;
+        selectedMarker = marker;
+        marker.classList.add('scale-110', 'z-[100]', 'border-white');
+        
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+        
+        document.addEventListener('mousemove', onMarkerMouseMove);
+        document.addEventListener('mouseup', onMarkerMouseUp);
+    }
+
+    function onMarkerMouseMove(e) {
+        if (!isDragging || !selectedMarker) return;
+        
+        const dx = e.clientX - dragStartX;
+        const dy = e.clientY - dragStartY;
+        
+        const rect = document.getElementById('mapContainer').getBoundingClientRect();
+        
+        // Calculate percentages
+        let xPerc = ((e.clientX - rect.left) / rect.width) * 100;
+        let yPerc = ((e.clientY - rect.top) / rect.height) * 100;
+        
+        // Bounds
+        xPerc = Math.max(2, Math.min(98, xPerc));
+        yPerc = Math.max(2, Math.min(98, yPerc));
+        
+        selectedMarker.style.left = xPerc.toFixed(2) + '%';
+        selectedMarker.style.top = yPerc.toFixed(2) + '%';
+    }
+
+    function onMarkerMouseUp() {
+        isDragging = false;
+        if (selectedMarker) {
+            selectedMarker.classList.remove('scale-110', 'border-white');
+        }
+        document.removeEventListener('mousemove', onMarkerMouseMove);
+        document.removeEventListener('mouseup', onMarkerMouseUp);
+    }
+
+    // --- MACHINE SELECTION & EDITING ---
+    function selectMachine(marker) {
+        if (selectedMarker) selectedMarker.style.boxShadow = '';
+        selectedMarker = marker;
+        selectedMarker.style.boxShadow = '0 0 20px white';
+        
+        const panel = document.getElementById('editPanel');
+        panel.classList.remove('hidden');
+        
+        // Fill form
+        document.getElementById('editType').value = marker.dataset.type || 'GENERICO';
+        document.getElementById('editW').value = marker.dataset.w;
+        document.getElementById('valW').innerText = marker.dataset.w;
+        document.getElementById('editH').value = marker.dataset.h;
+        document.getElementById('valH').innerText = marker.dataset.h;
+        document.getElementById('editR').value = marker.dataset.r;
+        document.getElementById('valR').innerText = marker.dataset.r;
+        document.getElementById('editFS').value = marker.dataset.labelSize;
+        document.getElementById('valFS').innerText = marker.dataset.labelSize;
+        document.getElementById('editBW').value = marker.dataset.borderWeight;
+        document.getElementById('valBW').innerText = marker.dataset.borderWeight;
+    }
+
+    function deselectMachine() {
+        if (selectedMarker) selectedMarker.style.boxShadow = '';
+        selectedMarker = null;
+        document.getElementById('editPanel').classList.add('hidden');
+    }
+
+    function updateSelectedMachine(prop, val) {
+        if (!selectedMarker) return;
+        
+        if (prop === 'type') {
+            selectedMarker.className = `machine-marker status-${selectedMarker.dataset.status.toLowerCase()} shape-${val}`;
+            selectedMarker.dataset.type = val;
+        } else if (prop === 'w') {
+            selectedMarker.style.width = val + '%';
+            selectedMarker.dataset.w = val;
+            document.getElementById('valW').innerText = val;
+        } else if (prop === 'h') {
+            selectedMarker.style.height = val + '%';
+            selectedMarker.dataset.h = val;
+            document.getElementById('valH').innerText = val;
+        } else if (prop === 'r') {
+            selectedMarker.style.transform = `translate(-50%, -50%) rotate(${val}deg)`;
+            selectedMarker.dataset.r = val;
+            document.getElementById('valR').innerText = val;
+        } else if (prop === 'labelSize') {
+            const label = selectedMarker.querySelector('.machine-label');
+            if (label) label.style.fontSize = val + 'px';
+            selectedMarker.dataset.labelSize = val;
+            document.getElementById('valFS').innerText = val;
+        } else if (prop === 'borderWeight') {
+            selectedMarker.style.borderWidth = val + 'px';
+            selectedMarker.dataset.borderWeight = val;
+            document.getElementById('valBW').innerText = val;
+        }
+    }
+
+    async function saveSelectedMachine() {
+        if (!selectedMarker) return;
+        
+        const data = {
+            id: selectedMarker.dataset.id,
+            x: parseFloat(selectedMarker.style.left),
+            y: parseFloat(selectedMarker.style.top),
+            w: selectedMarker.dataset.w,
+            h: selectedMarker.dataset.h,
+            r: selectedMarker.dataset.r,
+            type: selectedMarker.dataset.type,
+            labelSize: selectedMarker.dataset.labelSize,
+            borderWeight: selectedMarker.dataset.borderWeight
+        };
+
+        try {
+            const res = await fetch('{% url "update_machine_position" %}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (res.ok) {
+                showToast("Cambios guardados correctamente", "success");
+            } else {
+                showToast("Error al guardar en el servidor", "error");
+            }
+        } catch (e) {
+            showToast("Error de conexión", "error");
+        }
+    }
+
+    // --- TOOLTIPS ---
+    function initTooltips() {
+        const tooltip = document.getElementById('tooltip');
+        const markers = document.querySelectorAll('.machine-marker');
+        
+        markers.forEach(marker => {
+            marker.addEventListener('mouseenter', (e) => {
+                if (isDesignMode) return;
+                
+                const name = marker.dataset.name;
+                const maint = marker.dataset.maint;
+                let statusDisplay = status;
+                let statusClass = "bg-slate-700";
+                
+                if (maint && maint !== 'None' && maint !== '') {
+                    statusDisplay = "MANTENIMIENTO: " + maint;
+                    statusClass = "bg-rose-600 animate-pulse";
+                } else if (status === 'RUNNING') {
+                    statusDisplay = "EN PRODUCCIÓN";
+                    statusClass = "bg-emerald-600";
+                } else if (status === 'STOPPED') {
+                    statusDisplay = "DETENIDA";
+                    statusClass = "bg-rose-500";
+                } else if (status === 'OFFLINE') {
+                    statusDisplay = "FUERA DE LÍNEA";
+                    statusClass = "bg-slate-500";
+                }
+
+                tooltip.innerHTML = `
+                    <div class="tooltip-title">
+                        <span>${name}</span>
+                        <span class="tooltip-status ${statusClass}">${statusDisplay}</span>
+                    </div>
+                    <div class="tooltip-row">
+                        <span class="tooltip-label">OEE / REND.</span>
+                        <span class="font-bold text-indigo-400">${oee}% / ${perf}%</span>
+                    </div>
+                    <div class="tooltip-row">
+                        <span class="tooltip-label">OPERARIO</span>
+                        <span>${op}</span>
+                    </div>
+                `;
+                tooltip.style.display = 'block';
+            });
+
+            marker.addEventListener('mousemove', (e) => {
+                tooltip.style.left = (e.pageX + 15) + 'px';
+                tooltip.style.top = (e.pageY + 15) + 'px';
+            });
+
+            marker.addEventListener('mouseleave', () => {
+                tooltip.style.display = 'none';
+            });
+        });
+    }
+
+    // --- MODAL ---
+    function openModal(marker) {
+        const maint = marker.dataset.maint;
+        const status = marker.dataset.status;
+        const isRunning = status === 'RUNNING';
+
+        document.getElementById('mName').innerText = marker.dataset.name;
+        document.getElementById('mId').innerText = marker.dataset.id;
+        
+        let statusText = status;
+        if (maint && maint !== 'None' && maint !== '') {
+            statusText = "MANTENIMIENTO: " + maint;
+        } else if (isRunning) {
+            statusText = "EN PRODUCCIÓN";
+        } else if (status === 'STOPPED') {
+            statusText = "DETENIDA";
+        } else if (status === 'OFFLINE') {
+            statusText = "FUERA DE LÍNEA";
+        }
+        document.getElementById('mStatusText').innerText = statusText;
+        
+        document.getElementById('mStats').innerText = `${marker.dataset.oee}% / ${marker.dataset.performance}%`;
+        document.getElementById('mOperario').innerText = marker.dataset.operario;
+        document.getElementById('mQty').innerText = marker.dataset.qty;
+        document.getElementById('mOperacion').innerText = `${marker.dataset.orden} - ${marker.dataset.proceso}`;
+        document.getElementById('mDetalle').innerText = marker.dataset.detalle;
+        
+        const iconBg = document.getElementById('mIconBg');
+        const icon = document.getElementById('mIcon');
+        
+        if (maint && maint !== 'None' && maint !== '') {
+            iconBg.className = "w-16 h-16 rounded-full bg-rose-100 flex items-center justify-center animate-pulse";
+            icon.className = "fas fa-wrench text-rose-600 text-2xl";
+        } else if (status === 'RUNNING') {
+            iconBg.className = "w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center";
+            icon.className = "fas fa-play text-emerald-500 text-2xl";
+        } else if (status === 'STOPPED') {
+            iconBg.className = "w-16 h-16 rounded-full bg-rose-50 flex items-center justify-center";
+            icon.className = "fas fa-stop text-rose-500 text-2xl";
+        } else {
+            iconBg.className = "w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center";
+            icon.className = "fas fa-power-off text-slate-500 text-2xl";
+        }
+
+        document.getElementById('detailModal').style.display = 'flex';
+    }
+
+    function closeModal() {
+        document.getElementById('detailModal').style.display = 'none';
+    }
+
+    // --- UTILS ---
+    function showToast(msg, type = 'info') {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `px-4 py-3 rounded-lg shadow-xl text-white font-bold text-sm transform transition-all duration-300 translate-x-[-20px] opacity-0 flex items-center gap-3`;
+        
+        if (type === 'success') toast.classList.add('bg-emerald-600');
+        else if (type === 'warning') toast.classList.add('bg-amber-500');
+        else toast.classList.add('bg-indigo-600');
+        
+        toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'info-circle'}"></i> ${msg}`;
+        container.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.classList.remove('translate-x-[-20px]', 'opacity-0');
+        }, 10);
+        
+        setTimeout(() => {
+            toast.classList.add('translate-x-[20px]', 'opacity-0');
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+
+    // --- AUTO-REFRESH (Every 30s) ---
+    async function refreshDashboard() {
+        if (isDragging || isDesignMode) return; // No refrescar si el usuario está operando
+        
+        try {
+            const res = await fetch(window.location.pathname + '?format=json');
+            const data = await res.json();
+            
+            // 1. Update Global Stats
+            if (data.global_stats) {
+                const oeeEl = document.getElementById('globalOEEValue');
+                oeeEl.innerText = data.global_stats.promedio_oee + '%';
+                // Dynamic color classes
+                oeeEl.className = 'sidebar-kpi-value ';
+                if (data.global_stats.promedio_oee >= 85) oeeEl.classList.add('text-emerald-600');
+                else if (data.global_stats.promedio_oee >= 70) oeeEl.classList.add('text-amber-500');
+                else oeeEl.classList.add('text-rose-600');
+
+                document.getElementById('globalDispValue').innerText = data.global_stats.avg_availability + '%';
+                document.getElementById('globalRendValue').innerText = data.global_stats.avg_performance + '%';
+                document.getElementById('activeMachinesText').innerHTML = `${data.active_count} <span class="text-slate-400 font-medium">/ ${data.total_count}</span>`;
+            }
+
+            // 2. Update Machine Markers and Activity List
+            const activityList = document.getElementById('activityListContainer');
+            let activityHTML = '';
+
+            data.machines.forEach(m => {
+                const marker = document.getElementById(`marker-${m.pk}`);
+                if (marker) {
+                    // Update classes for status-based glow
+                    marker.className = `machine-marker status-${m.status.toLowerCase()} shape-${m.type || 'GENERICO'}`;
+                    
+                    // Update dataset
+                    marker.dataset.status = m.status;
+                    marker.dataset.operario = m.operario;
+                    marker.dataset.proceso = m.proceso;
+                    marker.dataset.detalle = m.detalle;
+                    marker.dataset.orden = m.orden;
+                    marker.dataset.oee = m.oee.toFixed(1);
+                    marker.dataset.performance = m.performance.toFixed(1);
+                    marker.dataset.qty = Math.floor(m.qty);
+                    marker.dataset.maint = m.mantenimiento ? m.mantenimiento.estado_display : '';
+                }
+
+                // Append to activity HTML if not offline
+                if (m.status !== 'OFFLINE') {
+                    const statusDotClass = m.status === 'RUNNING' ? 'bg-emerald-500' : 'bg-rose-500 animate-pulse';
+                    activityHTML += `
+                        <div class="group p-3 bg-white border border-slate-200 rounded-xl cursor-pointer hover:border-indigo-500 hover:shadow-md transition-all"
+                             onclick="focusMachine('${m.pk}')">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-[11px] font-black text-slate-800 uppercase tracking-tight">${m.name}</span>
+                                <div class="w-1.5 h-1.5 rounded-full ${statusDotClass}"></div>
+                            </div>
+                            <div class="flex items-center gap-2 text-[10px] text-indigo-600 font-bold mb-1">
+                                <i class="fas fa-user-circle"></i>
+                                <span>${m.operario}</span>
+                            </div>
+                            <div class="text-[9px] text-slate-500 italic leading-tight line-clamp-1 group-hover:line-clamp-none transition-all" title="${m.detalle}">
+                                ${m.detalle}
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+
+            activityList.innerHTML = activityHTML;
+            console.log("Dashboard Refreshed:", new Date().toLocaleTimeString());
+
+        } catch (e) {
+            console.error("Refresh Error:", e);
+        }
+    }
+
+    // Intervalo de 30 segundos
+    setInterval(refreshDashboard, 30000);
+
+    // --- UTILS ---
+    function startDraggingPanel(e) {
+        isDraggingPanel = true;
+        const panel = document.getElementById('editPanel');
+        const startX = e.clientX - panel.offsetLeft;
+        const startY = e.clientY - panel.offsetTop;
+        
+        function onMouseMove(e) {
+            if (!isDraggingPanel) return;
+            panel.style.left = (e.clientX - startX) + 'px';
+            panel.style.top = (e.clientY - startY) + 'px';
+            panel.style.right = 'auto';
+        }
+        
+        function onMouseUp() {
+            isDraggingPanel = false;
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        }
+        
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    }
+
+    // Initializer
+    document.addEventListener('DOMContentLoaded', () => {
+        initTooltips();
+    });
+</script>
+{% endblock %}

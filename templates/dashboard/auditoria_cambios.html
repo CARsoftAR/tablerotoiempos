@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold text-white">Auditoría de Cambios de Configuración</h1>
+        <a href="{% url 'gestion_maquinas' %}" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded transition">
+            <i class="fas fa-arrow-left mr-2"></i>Volver a Máquinas
+        </a>
+    </div>
+
+    <div class="bg-slate-800 rounded-lg shadow-xl overflow-hidden border border-slate-700">
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-left text-sm whitespace-nowrap">
+                <thead class="uppercase tracking-wider border-b-2 border-slate-700 bg-slate-900">
+                    <tr>
+                        <th scope="col" class="px-6 py-4 text-slate-400 font-semibold">Fecha</th>
+                        <th scope="col" class="px-6 py-4 text-slate-400 font-semibold">Usuario</th>
+                        <th scope="col" class="px-6 py-4 text-slate-400 font-semibold">Acción</th>
+                        <th scope="col" class="px-6 py-4 text-slate-400 font-semibold">Entidad</th>
+                        <th scope="col" class="px-6 py-4 text-slate-400 font-semibold">Detalle del Cambio</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-700">
+                    {% for log in logs %}
+                    <tr class="hover:bg-slate-700 transition duration-150">
+                        <td class="px-6 py-4 text-slate-300 font-mono">{{ log.fecha|date:"d/m/Y H:i" }}</td>
+                        <td class="px-6 py-4 text-white font-medium">{{ log.usuario }}</td>
+                        <td class="px-6 py-4">
+                            {% if log.accion == 'CREATE' %}
+                                <span class="px-2 py-1 rounded-full bg-emerald-900/50 text-emerald-400 text-xs font-bold border border-emerald-700">CREAR</span>
+                            {% elif log.accion == 'UPDATE' %}
+                                <span class="px-2 py-1 rounded-full bg-amber-900/50 text-amber-400 text-xs font-bold border border-amber-700">EDITAR</span>
+                            {% elif log.accion == 'DELETE' %}
+                                <span class="px-2 py-1 rounded-full bg-red-900/50 text-red-400 text-xs font-bold border border-red-700">ELIMINAR</span>
+                            {% else %}
+                                <span class="px-2 py-1 rounded-full bg-slate-700 text-slate-300 text-xs font-bold">{{ log.accion }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 text-slate-300">{{ log.modelo }} <span class="text-slate-500 text-xs">({{ log.referencia_id }})</span></td>
+                        <td class="px-6 py-4 text-slate-300">{{ log.detalle }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-12 text-center text-slate-500 italic">
+                            No hay registros de cambios recientes en el sistema.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
