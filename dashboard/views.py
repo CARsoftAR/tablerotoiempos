@@ -2099,14 +2099,29 @@ def plant_map(request):
         detalle = "---"
         
         if data:
-            # VÍNCULO DIRECTO CON EL TABLERO DE TARJETAS (QUE YA FUNCIONA CORRECTAMENTE)
-            if data.get('is_online'):
-                if data.get('is_currently_interrupted') or data.get('mantenimiento'):
-                    status = 'STOPPED' # Rojo
+            # VÍNCULO DIRECTO CON EL TABLERO DE TARJETAS
+            # Relaxed Logic: Consider 'Online' if active session OR recent activity (< 60 mins) to prevent grey-out during short breaks
+            idle_val = data.get('idle_mins', 999)
+            is_effectively_online = data.get('is_online') or (idle_val < 60.0)
+
+            if is_effectively_online:
+                # If we have maintenance, it takes precedence usually, but if we are producing, we are producing.
+                # If recent qty > 0, we can't be stopped.
+                is_producing = data.get('actual_qty', 0) > 0 and not data.get('latest_is_interrupcion')
+                
+                # STRICT LOGIC AS REQUESTED:
+                # Two states only: RUNNING (Green) and STOPPED (Red)
+                # Green (RUNNING) ONLY if 'last_reason' contains "ONLINE"
+                reason_text = str(data.get('last_reason', '')).upper()
+                
+                if 'ONLINE' in reason_text:
+                     status = 'RUNNING'
                 else:
-                    status = 'RUNNING' # Verde
+                     status = 'STOPPED'
             else:
-                status = 'OFFLINE' # Gris
+                # If not effectively online, it's Stopped (Red)
+                status = 'STOPPED'
+
                 
             op_name = data.get('operator_name', 'S/A')
             proceso = data.get('last_reason', '---')

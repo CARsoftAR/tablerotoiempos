@@ -1,342 +1,243 @@
 {% load static %}
+{% load l10n %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tablero Geográfico Premium</title>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@300;500;700&display=swap" rel="stylesheet">
+    <title>Tablero Geográfico</title>
+    <!-- Removed Futuristic Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
-            --neon-green: #10b981;
-            --neon-red: #ef4444;
-            --neon-blue: #3b82f6;
-            --neon-gray: #94a3b8;
-            --sidebar-bg: rgba(255, 255, 255, 0.98);
-            --sidebar-text: #1e293b;
+            --status-green: #10b981;
+            --status-red: #ef4444;
+            --status-gray: #94a3b8;
+            --primary-blue: #0f172a; /* Dark blue for text/branding */
+            --light-bg: #ffffff;
+            --border-color: #e2e8f0;
+            --text-main: #1e293b;
         }
 
         body {
             margin: 0;
             padding: 0;
             background-color: #f1f5f9;
-            color: var(--sidebar-text);
-            font-family: 'Rajdhani', sans-serif;
+            color: var(--text-main);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif; /* Standard modern font */
             overflow: hidden;
             height: 100vh;
             width: 100vw;
         }
 
-        /* BG */
+        /* BG - KEEP LAYOUT IMAGE */
         .blueprint-bg {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
-            background-color: #050a10;
-            background-image: url('{% static "img/Gemini_Generated maquinas.png" %}');
+            background-color: #0f172a;
+            background-image: url('{% static "img/planta_blueprint.png" %}?v={% now "U" %}');
             background-size: 100% 100%;
+            background-repeat: no-repeat;
+            background-position: center;
             z-index: -2;
         }
 
+        /* REMOVED GLOW EFFECT ON BG for cleaner look */
         .blueprint-glow {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: radial-gradient(circle at 50% 50%, rgba(0, 255, 255, 0.05) 0%, rgba(5, 10, 16, 0.4) 90%);
-            z-index: -1;
-            pointer-events: none;
+            display: none;
         }
 
-        /* HEADER */
+        /* HEADER - WHITE STYLE */
         .top-bar {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0 30px;
-            background: rgba(10, 20, 30, 0.8);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(0, 243, 255, 0.2);
+            padding: 0 25px;
+            background: #ffffff; /* White Header */
+            border-bottom: 1px solid var(--border-color);
             height: 60px;
             position: relative;
             z-index: 10;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
 
         .top-bar h1 {
-            font-family: 'Orbitron', sans-serif;
+            font-family: 'Inter', sans-serif;
             font-size: 20px;
+            font-weight: 700;
             margin: 0;
-            color: var(--neon-blue);
-            text-shadow: 0 0 10px var(--neon-blue);
-            letter-spacing: 2px;
+            color: var(--primary-blue);
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
         }
 
-        /* SIDEBAR LIGHT PREMIUM */
+        .btn-home {
+            background: #eff6ff;
+            color: #3b82f6;
+            border: 1px solid #dbeafe;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+        .btn-home:hover {
+            background: #3b82f6;
+            color: white;
+        }
+
+        /* SIDEBAR - CLEAN WHITE */
         .sidebar {
             position: absolute;
             right: 0;
             top: 60px;
             bottom: 0;
-            width: 340px;
-            background: var(--sidebar-bg);
-            border-left: 1px solid rgba(0,0,0,0.1);
+            width: 350px;
+            background: #ffffff;
+            border-left: 1px solid var(--border-color);
             overflow-y: auto;
             z-index: 1000;
-            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: -10px 0 30px rgba(0,0,0,0.05);
+            transition: transform 0.3s ease;
+            box-shadow: -2px 0 15px rgba(0,0,0,0.05);
         }
 
         .sidebar.hidden { transform: translateX(100%); }
 
-        .sidebar-ctrl-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 15px 20px;
-            background: #ffffff;
-            border-bottom: 2px solid #e2e8f0;
-            position: relative;
-            z-index: 1010;
-        }
-
-        .btn-hamburger-close {
-            background: #f1f5f9;
-            border: 1px solid #e2e8f0;
-            color: #1e293b;
-            width: 42px;
-            height: 42px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.2s;
-            font-size: 18px;
-        }
-        .btn-hamburger-close:hover { background: #e2e8f0; color: #ef4444; }
-
-        .btn-mini-toggle {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            color: #64748b;
-            width: 38px;
-            height: 38px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.2s;
-            font-size: 16px;
-        }
-        .btn-mini-toggle.active {
-            background: #eff6ff;
-            color: #3b82f6;
-            border-color: #3b82f6;
-            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
-        }
-
-        .sidebar-content-padding { padding: 20px; }
-
-        .section-title {
-            color: #1e293b;
-            font-size: 14px;
-            font-weight: 800;
-            margin: 25px 0 15px 0;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            border-bottom: 2px solid #f1f5f9;
-            padding-bottom: 8px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        /* KPI */
-        .kpi-card {
-            background: white;
-            border: 1px solid #e2e8f0;
-            border-radius: 16px;
-            padding: 18px;
-            margin-bottom: 12px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.02);
-        }
-        .kpi-title { color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; }
-        .kpi-value { font-size: 28px; font-weight: 800; color: #1e293b; font-family: 'Orbitron', sans-serif; }
-
-        /* MACHINE LIST */
-        .sidebar-machine-item {
-            background: white;
-            border: 1px solid #f1f5f9;
-            padding: 12px 15px;
-            margin-bottom: 10px;
-            border-radius: 14px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.01);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        /* MAP ELEMENTS */
-        .map-container {
-            position: absolute;
-            top: 60px; left: 0; right: 0; bottom: 0;
-            overflow: hidden;
-            perspective: 2000px;
-            transition: right 0.3s ease;
-        }
-        .map-container.sidebar-open { right: 340px; }
-
-        .plant-floor {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            transform-style: preserve-3d;
-            transition: transform 0.5s ease;
-        }
-
-        .machine-marker {
-            position: absolute;
-            width: 60px; height: 60px; border-radius: 50%;
-            display: flex; justify-content: center; align-items: center;
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            transform: translate(-50%, -50%);
-            background: rgba(10, 20, 30, 0.4);
-            backdrop-filter: blur(4px);
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            z-index: 5;
-        }
-
-        .machine-marker:hover {
-            transform: translate(-50%, -50%) scale(1.15);
-            z-index: 100;
-        }
-
-        /* INTENSE NEON GLOWS */
-        .status-running {
-            border-color: var(--neon-green);
-            box-shadow:
-                0 0 10px rgba(0, 255, 157, 0.3),
-                0 0 20px rgba(0, 255, 157, 0.2),
-                inset 0 0 15px rgba(0, 255, 157, 0.4);
-            animation: neon-breath-green 3s ease-in-out infinite alternate;
-        }
-
-        .status-stopped {
-            border-color: var(--neon-red);
-            box-shadow:
-                0 0 10px rgba(255, 50, 50, 0.3),
-                0 0 20px rgba(255, 50, 50, 0.2),
-                inset 0 0 15px rgba(255, 50, 50, 0.4);
-            animation: neon-breath-red 3s ease-in-out infinite alternate;
-        }
-
-        .status-offline {
-            border-color: #555;
-            box-shadow: none;
-            opacity: 0.5;
-            filter: grayscale(1);
-        }
-
-        /* NEON BREATH ANIMATIONS */
-        @keyframes neon-breath-green {
-            0% { box-shadow: 0 0 10px rgba(0, 255, 157, 0.3), 0 0 20px rgba(0, 255, 157, 0.2), inset 0 0 15px rgba(0, 255, 157, 0.4); border-color: rgba(0, 255, 157, 0.6); }
-            100% { box-shadow: 0 0 25px rgba(0, 255, 157, 0.8), 0 0 50px rgba(0, 255, 157, 0.4), inset 0 0 25px rgba(0, 255, 157, 0.6); border-color: var(--neon-green); }
-        }
-
-        @keyframes neon-breath-red {
-            0% { box-shadow: 0 0 10px rgba(255, 50, 50, 0.3), 0 0 20px rgba(255, 50, 50, 0.2), inset 0 0 15px rgba(255, 50, 50, 0.4); border-color: rgba(255, 50, 50, 0.6); }
-            100% { box-shadow: 0 0 25px rgba(255, 50, 50, 0.8), 0 0 50px rgba(255, 50, 50, 0.4), inset 0 0 25px rgba(255, 50, 50, 0.6); border-color: var(--neon-red); }
-        }
-
-        /* ENHANCED LABELS */
-        .machine-label {
-            position: absolute;
-            top: 130%; left: 50%; transform: translateX(-50%);
-            white-space: nowrap;
-            background: rgba(0, 10, 20, 0.82);
-            padding: 4px 12px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 700;
-            color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            pointer-events: none;
-            letter-spacing: 1px;
-            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
-            transition: all 0.3s ease;
-        }
-
-        .status-running .machine-label {
-            color: var(--neon-green);
-            text-shadow: 0 0 8px var(--neon-green);
-            border-color: rgba(0, 255, 157, 0.3);
-        }
-
-        .status-stopped .machine-label {
-            color: var(--neon-red);
-            text-shadow: 0 0 8px var(--neon-red);
-            border-color: rgba(255, 50, 50, 0.3);
-        }
-
-        /* DESIGN MODE OVERLAY */
-        .design-mode-indicator {
-            display: none;
-            position: fixed;
-            top: 70px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255, 165, 0, 0.2);
-            border: 1px solid orange;
-            color: orange;
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-weight: bold;
-            z-index: 20;
-        }
-
-        /* CONTROLS */
-        .controls {
-            display: flex;
-            gap: 15px;
-        }
-
+        /* CONTROLS - STANDARD BUTTONS */
         .btn {
-            background: rgba(0, 243, 255, 0.05);
-            border: 1px solid var(--neon-blue);
-            color: var(--neon-blue);
-            padding: 6px 12px;
+            background: white;
+            border: 1px solid #cbd5e1;
+            color: #475569;
+            padding: 6px 14px;
             border-radius: 6px;
             cursor: pointer;
-            font-family: 'Rajdhani', sans-serif;
-            font-size: 12px;
-            font-weight: bold;
-            transition: all 0.3s;
-            text-transform: uppercase;
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+            text-transform: none; /* No uppercase forced */
         }
 
         .btn:hover {
-            background: var(--neon-blue);
-            color: black;
-            box-shadow: 0 0 8px var(--neon-blue);
+            background: #f1f5f9;
+            color: #0f172a;
+            border-color: #94a3b8;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
         }
 
-        .btn-warning { border-color: #ffc107; color: #ffc107; }
-        .btn-warning:hover { background: #ffc107; color: black; box-shadow: 0 0 8px #ffc107; }
-        .btn-danger { border-color: #ff4136; color: #ff4136; }
-        .btn-danger:hover { background: #ff4136; color: black; box-shadow: 0 0 8px #ff4136; }
-
-        .top-bar > div { /* Specificity for controls in top-bar */
-            display: flex;
-            gap: 5px;
-            flex-wrap: wrap;
-            justify-content: flex-end;
-        }
-        
         .btn-active {
-            background: var(--neon-blue);
-            color: black;
-            box-shadow: 0 0 10px var(--neon-blue);
+            background: #eff6ff;
+            color: #2563eb;
+            border-color: #2563eb;
         }
+
+        /* SIDEBAR SECTIONS & KPI CARDS */
+        .sidebar-content-padding {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+
+        .sidebar-section {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .section-title {
+            font-size: 11px;
+            font-weight: 800;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin: 0;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #f1f5f9;
+        }
+
+        .kpi-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            padding: 15px;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            transition: all 0.2s;
+        }
+        .kpi-card:hover { border-color: #cbd5e1; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
+
+        .kpi-title {
+            font-size: 10px;
+            font-weight: 800;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .kpi-value {
+            font-weight: 800;
+            color: #0f172a;
+            line-height: 1;
+        }
+
+        /* MACHINE LIST ITEMS */
+        .sidebar-machine-item {
+            display: flex;
+            align-items: center;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            padding: 12px 15px;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            transition: all 0.2s;
+            cursor: pointer;
+            position: relative;
+        }
+        .sidebar-machine-item:hover {
+            border-color: #3b82f6;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.08);
+            transform: translateX(4px);
+        }
+
+        .machine-status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .btn-toggle-eye {
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            color: #64748b;
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-toggle-eye:hover {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+        .btn-toggle-eye.off {
+            opacity: 0.4;
+            background: #f8fafc;
+        }
+
 
         /* TOOLTIP */
         .tooltip {
@@ -398,26 +299,151 @@
             opacity: 1;
         }
         
-        /* DRAGGING PERFORMANCE */
-        .top-bar, .sidebar { transition: transform 0.3s ease; }
-        .map-container { transition: all 0.3s ease; }
+        /* MAP CONTAINER & FLOOR */
+        .map-container {
+            position: absolute;
+            top: 60px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            transition: all 0.3s ease;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
 
-        /* ANTI-GHOSTING FOR UNPLACED MACHINES */
-        .machine-marker[style*="left: 0%"], 
-        .machine-marker[style*="top: 0%"],
-        .machine-marker[style*="left: 0.0%"],
-        .machine-marker[style*="top: 0.0%"],
-        .machine-marker[style*="left: 0.1%"],
-        .machine-marker[style*="top: 0.1%"],
-        .machine-marker[style*="left: 1%"],
-        .machine-marker[style*="top: 1%"] {
-            display: none !important;
+        .map-container.sidebar-open {
+            right: 350px;
+        }
+
+        .plant-floor {
+            position: relative;
+            /* We use a fixed aspect ratio for the floor to match the blueprint's likely shape */
+            width: 100%;
+            height: 100%;
+            max-width: 100%;
+            max-height: 100%;
+            aspect-ratio: 16 / 9; /* Adjusted via JS or set to common value */
+        }
+
+        /* MACHINE MARKERS */
+        .machine-marker {
+            position: absolute;
+            width: 5%;
+            height: 8%;
+            min-width: 30px;
+            min-height: 30px;
+            background: rgba(30, 41, 59, 0.8);
+            border: 2px solid #64748b;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 20;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            color: #94a3b8;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            backdrop-filter: blur(4px);
+        }
+
+        .machine-marker:hover {
+            transform: translate(-50%, -50%) scale(1.1) rotate(var(--rot, 0deg));
+            z-index: 30;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
+        }
+
+        .machine-marker.status-running {
+            border-color: var(--status-green);
+            color: var(--status-green);
+            background: rgba(16, 185, 129, 0.1);
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
         }
         
-        /* Hide anything in top-left corner area */
-        .plant-floor > .machine-marker:first-child {
-            display: none !important;
+        .machine-marker.status-running::after {
+            content: '';
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 100%; height: 100%;
+            transform: translate(-50%, -50%);
+            border: 2px solid var(--status-green);
+            border-radius: inherit;
+            animation: wave-green 2s infinite;
+            pointer-events: none;
+            opacity: 0;
         }
+
+        .machine-marker.status-stopped {
+            border-color: var(--status-red);
+            color: var(--status-red);
+            background: rgba(239, 68, 68, 0.1);
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
+        }
+
+        .machine-marker.status-stopped::after {
+            content: '';
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 100%; height: 100%;
+            transform: translate(-50%, -50%);
+            border: 2px solid var(--status-red);
+            border-radius: inherit;
+            animation: wave-red 2s infinite;
+            pointer-events: none;
+            opacity: 0;
+        }
+
+        @keyframes wave-green {
+            0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; border-width: 2px; }
+            100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; border-width: 0px; }
+        }
+        
+        @keyframes wave-red {
+            0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; border-width: 2px; }
+            100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; border-width: 0px; }
+        }
+
+        .machine-icon-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+        }
+
+        .machine-marker svg {
+            width: 60%;
+            height: 60%;
+            stroke-width: 2;
+            flex-shrink: 0;
+        }
+
+        .machine-label {
+            position: absolute;
+            bottom: -22px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(15, 23, 42, 0.9);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            white-space: nowrap;
+            letter-spacing: 0.5px;
+            border: 1px solid rgba(255,255,255,0.1);
+            pointer-events: none;
+        }
+
+        .shape-circle { border-radius: 50%; }
+        .shape-rect { border-radius: 4px; width: 7%; height: 5%; }
+        .shape-square { border-radius: 4px; }
+
+        /* REMOVED ANTI-GHOSTING THAT WAS CAUSING VISIBILITY ISSUES */
 
         .btn-toggle-eye {
             background: transparent;
@@ -460,6 +486,107 @@
         
         /* btn-close-sidebar is replaced by btn-hamburger-close */
         /* btn-hamburger-close and btn-mini-toggle already defined above */
+
+        /* PROPERTIES PANEL - FLOATING LIGHT STYLE */
+        .properties-panel {
+            position: fixed;
+            right: 20px;
+            top: 80px;
+            width: 360px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            z-index: 6000;
+            display: none;
+            color: #1e293b;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+        }
+        .prop-header {
+            background: #f8fafc;
+            padding: 12px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #e2e8f0;
+            cursor: move; /* Indicate draggable */
+        }
+        .prop-header span { font-weight: 700; font-size: 14px; color: #0f172a; text-transform: uppercase; }
+        .prop-header button { background: none; border: none; color: #64748b; cursor: pointer; font-size: 18px; }
+        .prop-body { padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+        .prop-group { display: flex; flex-direction: column; gap: 5px; }
+        .prop-row { display: flex; gap: 12px; }
+        .prop-row .prop-group { flex: 1; }
+        .prop-group label { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 700; }
+        .prop-group input, .prop-group select {
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            color: #1e293b;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        .prop-group input:focus { border-color: #3b82f6; outline: none; }
+        .btn-save-prop {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: all 0.2s;
+            text-transform: uppercase;
+        }
+        .btn-save-prop:hover { background: #2563eb; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2); }
+        .prop-value-display { font-size: 11px; color: #3b82f6; font-weight: 700; float: right; }
+
+        /* PREMIUM TOAST NOTIFICATION */
+        .toast-container {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(10px);
+            color: white;
+            padding: 12px 25px;
+            border-radius: 50px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            z-index: 9999;
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border: 1px solid rgba(255,255,255,0.1);
+            opacity: 0;
+            pointer-events: none;
+        }
+        .toast-container.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .toast-icon {
+            width: 28px;
+            height: 28px;
+            background: var(--status-green);
+            color: #0f172a;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+        .toast-message {
+            font-weight: 600;
+            font-size: 14px;
+            letter-spacing: 0.5px;
+        }
     </style>
 </head>
 <body>
@@ -468,11 +595,15 @@
         <i class="fa-solid fa-eye"></i>
     </div>
 
-    <div class="blueprint-bg"></div>
     <div class="blueprint-glow"></div>
 
     <div class="top-bar">
-        <h1>FACTORY<span style="color:white">MAP</span> <span style="font-size:12px; opacity:0.7">PREMIUM</span></h1>
+        <h1>
+            <a href="/dashboard/" class="btn-home" title="Volver al Panel Principal">
+                <i class="fa-solid fa-arrow-left"></i>
+            </a>
+            <span>FACTORY<span style="color:#3b82f6">MAP</span> <span style="font-size:12px; opacity:0.6; font-weight:400; color:#64748b; margin-left:5px;">PREMIUM</span></span>
+        </h1>
         
         <div style="display:flex; gap:10px;">
             <button class="btn" id="btnToggle3D" onclick="toggle3D()">2D/3D</button>
@@ -485,20 +616,85 @@
     <div class="design-mode-indicator" id="designIndicator" style="display:none; position:fixed; top:70px; left:50%; transform:translateX(-50%); background:orange; color:black; padding:5px 15px; border-radius:20px; font-weight:bold; z-index:50;">MODO DISEÑO ACTIVADO</div>
 
     <div class="map-container sidebar-open" id="mapContainer">
-        <div class="plant-floor" id="plantFloor" style="position:relative; width:100%; height:100%; transition:all 0.5s;">
+        <div class="blueprint-bg"></div>
+        <div class="plant-floor" id="plantFloor" 
+             style="position:relative; width:100%; height:100%; transition:all 0.5;"
+             ondragover="event.preventDefault()" 
+             ondrop="onMapDrop(event)">
+            <!-- Marcadores de máquinas -->
             <!-- Marcadores de máquinas -->
             {% for m in machines %}
-                {% if m.x and m.x > 1 %}
-                <div class="machine-marker status-{{ m.status|lower }}" 
+                <div class="machine-marker status-{{ m.status|lower }} {% if m.type == 'TORNO' or m.type == 'PRENSA' or m.type == 'AGUJEREADORA' %}shape-rect{% elif m.type == 'GENERICO' or m.type == 'ROBOT' %}shape-circle{% else %}shape-square{% endif %}" 
                      id="machine-{{ m.id }}" 
-                     style="left: {{ m.x }}%; top: {{ m.y }}%;"
+                     style="left: {{ m.x|default:0.5|unlocalize }}%; top: {{ m.y|default:0.5|unlocalize }}%; {% if m.w %}width: {{ m.w|unlocalize }}%;{% endif %} {% if m.h %}height: {{ m.h|unlocalize }}%;{% endif %} border-width: {{ m.border_weight|default:2 }}px; --rot: {{ m.r|default:0|unlocalize }}deg; transform: translate(-50%, -50%) rotate({{ m.r|default:0|unlocalize }}deg);"
                      data-id="{{ m.id }}"
                      data-name="{{ m.name }}"
                      data-status="{{ m.status }}"
+                     data-reason="{{ m.proceso }}"
+                     data-type="{{ m.type }}"
                      onmousedown="onMarkerMouseDown(event, this)">
-                    <div class="machine-label">{{ m.name }}</div>
+                    
+                    <div class="machine-icon-container">
+                        {% if m.type == 'CNC' %}
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                <rect x="7" y="7" width="10" height="8" rx="1"></rect>
+                                <line x1="7" y1="18" x2="17" y2="18"></line>
+                            </svg>
+                        {% elif m.type == 'TORNO' %}
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M2 7h20v10H2z"></path>
+                                <path d="M4 7v10"></path>
+                                <path d="M8 7l2 10"></path>
+                                <rect x="14" y="9" width="6" height="6"></rect>
+                            </svg>
+                        {% elif m.type == 'AGUJEREADORA' %}
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 2v20"></path>
+                                <path d="M9 22h6"></path>
+                                <path d="M8 6h8"></path>
+                                <rect x="10" y="2" width="4" height="4"></rect>
+                                <path d="M12 10l-3 4h6l-3-4z"></path>
+                            </svg>
+                         {% elif m.type == 'PRENSA' %}
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                 <path d="M4 4h16v4H4z"></path>
+                                 <path d="M6 8v12"></path>
+                                 <path d="M18 8v12"></path>
+                                 <path d="M4 20h16"></path>
+                                 <rect x="8" y="12" width="8" height="6"></rect>
+                                 <path d="M12 8v4"></path>
+                            </svg>
+                        {% elif m.type == 'ROBOT' %}
+                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <circle cx="12" cy="12" r="4"></circle>
+                                <path d="M12 2v2"></path>
+                                <path d="M12 20v2"></path>
+                                <path d="M2 12h2"></path>
+                                <path d="M20 12h2"></path>
+                             </svg>
+                        {% else %}
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+                                <rect x="9" y="9" width="6" height="6"></rect>
+                                <line x1="9" y1="1" x2="9" y2="4"></line>
+                                <line x1="15" y1="1" x2="15" y2="4"></line>
+                                <line x1="9" y1="20" x2="9" y2="23"></line>
+                                <line x1="15" y1="20" x2="15" y2="23"></line>
+                                <line x1="20" y1="9" x2="23" y2="9"></line>
+                                <line x1="20" y1="14" x2="23" y2="14"></line>
+                                <line x1="1" y1="9" x2="4" y2="9"></line>
+                                <line x1="1" y1="14" x2="4" y2="14"></line>
+                            </svg>
+                        {% endif %}
+                    </div>
+
+                    <div class="machine-label" style="font-size: {{ m.label_size|default:10 }}px;">{{ m.name }}</div>
                 </div>
-                {% endif %}
+
+                    <div class="machine-label" style="font-size: {{ m.label_size|default:10 }}px;">{{ m.name }}</div>
+                </div>
             {% endfor %}
         </div>
     </div>
@@ -529,21 +725,21 @@
             <h3 class="section-title">ESTADÍSTICAS HOY</h3>
             <div class="kpi-card">
                 <div class="kpi-title">OEE GLOBAL</div>
-                <div class="kpi-value" style="color:#059669;">{{ global_stats.oee_global|default:"0" }}%</div>
+                <div class="kpi-value" style="color:#059669; font-size: 24px;">{{ global_stats.oee_global|default:"0" }}%</div>
             </div>
             <div style="display:flex; gap:12px;">
                 <div class="kpi-card" style="flex:1;">
                     <div class="kpi-title">DISP.</div>
-                    <div class="kpi-value" style="font-size: 22px;">{{ global_stats.disponibilidad_global|default:"0" }}%</div>
+                    <div class="kpi-value" style="font-size: 18px;">{{ global_stats.disponibilidad_global|default:"0" }}%</div>
                 </div>
                 <div class="kpi-card" style="flex:1;">
                     <div class="kpi-title">REND.</div>
-                    <div class="kpi-value" style="font-size: 22px;">{{ global_stats.rendimiento_global|default:"0" }}%</div>
+                    <div class="kpi-value" style="font-size: 18px;">{{ global_stats.rendimiento_global|default:"0" }}%</div>
                 </div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-title">MÁQUINAS ACTIVAS</div>
-                <div class="kpi-value"><span style="color:#3b82f6">{{ active_count }}</span> <span style="font-size:16px; color:#94a3b8;">/ {{ total_count }}</span></div>
+                <div class="kpi-value" style="font-size:20px;"><span style="color:#3b82f6">{{ active_count }}</span> <span style="font-size:14px; color:#94a3b8;">/ {{ total_count }}</span></div>
             </div>
         </div>
 
@@ -553,25 +749,30 @@
             <div id="sidebarMachineList">
                 {% for m in machines %}
                     <div class="sidebar-machine-item" 
+                         id="sidebar-item-{{ m.id }}"
                          data-id="{{ m.id }}"
                          data-name="{{ m.name }}"
-                         data-status="{{ m.status }}">
+                         data-status="{{ m.status }}"
+                         draggable="true"
+                         ondragstart="onSidebarDragStart(event, '{{ m.id }}')">
                         <div style="flex:1;">
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                                <span style="color:#1e293b; font-weight:800; font-size:14px;">{{ m.name }}</span>
-                                <div style="width:10px; height:10px; border-radius:50%; background: {% if m.status == 'RUNNING' %}#10b981{% elif m.status == 'STOPPED' %}#ef4444{% else %}#94a3b8{% endif %};"></div>
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                <span style="color:#0f172a; font-weight:800; font-size:14px;">{{ m.name }}</span>
+                                <div class="machine-status-dot" style="background: {% if m.status == 'RUNNING' %}#10b981{% else %}#ef4444{% endif %}; box-shadow: 0 0 8px {% if m.status == 'RUNNING' %}rgba(16,185,129,0.4){% else %}rgba(239,68,68,0.4){% endif %};"></div>
                             </div>
-                            <div style="font-size:12px; color:#3b82f6; display:flex; align-items:center; gap:6px; margin-bottom:2px; font-weight: 600;">
+                            <div style="font-size:12px; color:#3b82f6; display:flex; align-items:center; gap:6px; margin-bottom:4px; font-weight: 700;">
+                                <i class="fa-solid fa-user-gear" style="font-size:10px; opacity:0.7;"></i>
                                 {{ m.operario|default:"Sin Operario"|truncatechars:25 }}
                             </div>
-                            <div style="font-size:11px; color:#64748b; font-style:italic;">
-                                {{ m.detalle|default:"Sin Actividad"|truncatechars:35 }}
+                            <div style="font-size:11px; color:#64748b; line-height:1.4; opacity:0.8;">
+                                <i class="fa-solid fa-microchip" style="font-size:9px; margin-right:4px; opacity:0.5;"></i>
+                                {{ m.detalle|default:"Sin Actividad"|truncatechars:45 }}
                             </div>
                         </div>
                         
-                        <div style="display:flex; flex-direction:column; gap:5px; margin-left:15px;">
-                            <button class="btn-toggle-eye {% if m.x == 0 and m.y == 0 %}off{% endif %}" onclick="toggleMarker('{{ m.id }}', this)" title="Mostrar en mapa" style="color: #94a3b8; background:none; border:none; cursor:pointer;">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        <div style="display:flex; align-items:center; margin-left:15px;">
+                            <button class="btn-toggle-eye {% if m.x|default:0 <= 1 and m.y|default:0 <= 1 %}off{% endif %}" onclick="event.stopPropagation(); toggleMarker('{{ m.id }}', this)" title="Mostrar en mapa">
+                                <i class="fa-solid fa-eye"></i>
                             </button>
                         </div>
                     </div>
@@ -585,15 +786,11 @@
             <div style="display:flex; flex-direction:column; gap:10px; font-size:12px; color:#475569; padding-left: 5px;">
                 <div style="display:flex; align-items:center; gap:12px;">
                     <div style="width:12px; height:12px; border-radius:50%; background:#10b981; box-shadow:0 0 10px rgba(16,185,129,0.2);"></div>
-                    <span style="font-weight: 600;">PRODUCIENDO</span>
+                    <span style="font-weight: 600;">ENCENDIDA</span>
                 </div>
                 <div style="display:flex; align-items:center; gap:12px;">
                     <div style="width:12px; height:12px; border-radius:50%; background:#ef4444; box-shadow:0 0 10px rgba(239,68,68,0.2);"></div>
-                    <span style="font-weight: 600;">PARADA / FALLA</span>
-                </div>
-                <div style="display:flex; align-items:center; gap:12px;">
-                    <div style="width:12px; height:12px; border-radius:30%; background:#94a3b8;"></div>
-                    <span style="font-weight: 600;">FUERA DE LÍNEA</span>
+                    <span style="font-weight: 600;">APAGADA</span>
                 </div>
             </div> <!-- Fin Referencias -->
         </div> <!-- Fin sidebar-content-padding -->
@@ -602,6 +799,64 @@
 
     <!-- TOOLTIP -->
     <div class="tooltip" id="tooltip"></div>
+
+    <!-- Properties Panel (Floating Editor) -->
+    <div id="propertiesPanel" class="properties-panel">
+        <div class="prop-header" id="propHeader">
+            <span>Propiedades</span>
+            <button onclick="closeProperties()"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="prop-body">
+            <input type="hidden" id="propId">
+            <div class="prop-group">
+                <label>Nombre</label>
+                <input type="text" id="propName" readonly>
+            </div>
+            <div class="prop-row">
+                <div class="prop-group">
+                    <label>Ancho <span id="valW" class="prop-value-display">0</span></label>
+                    <input type="range" id="propW" min="0.5" max="30" step="0.1" oninput="updateLive()">
+                </div>
+                <div class="prop-group">
+                    <label>Alto <span id="valH" class="prop-value-display">0</span></label>
+                    <input type="range" id="propH" min="0.5" max="30" step="0.1" oninput="updateLive()">
+                </div>
+            </div>
+            <div class="prop-row">
+                <div class="prop-group">
+                    <label>Rotación <span id="valR" class="prop-value-display">0</span></label>
+                    <input type="range" id="propR" min="0" max="360" step="1" oninput="updateLive()">
+                </div>
+                <div class="prop-group">
+                    <label>Grosor de Linea <span id="valBorder" class="prop-value-display">0</span></label>
+                    <input type="range" id="propBorder" min="1" max="15" step="1" oninput="updateLive()">
+                </div>
+            </div>
+            <div class="prop-row">
+                <div class="prop-group">
+                    <label>Tamaño de Fuente <span id="valLabel" class="prop-value-display">0</span></label>
+                    <input type="range" id="propLabel" min="6" max="30" step="1" oninput="updateLive()">
+                </div>
+                <div class="prop-group">
+                    <label>Tipo</label>
+                    <select id="propType" onchange="updateLive()">
+                        <option value="CNC">CNC</option>
+                        <option value="TORNO">TORNO</option>
+                        <option value="AGUJEREADORA">AGUJEREADORA</option>
+                        <option value="PRENSA">PRENSA</option>
+                        <option value="ROBOT">ROBOT</option>
+                        <option value="GENERICO">GENERICO</option>
+                    </select>
+                </div>
+            </div>
+            <button class="btn-save-prop" onclick="saveAllProperties()">GUARDAR CAMBIOS</button>
+        </div>
+    </div>
+
+    <div id="toast" class="toast-container">
+        <div class="toast-icon"><i class="fa-solid fa-check"></i></div>
+        <div class="toast-message" id="toastMessage">Propiedades guardadas</div>
+    </div>
 
     <script>
         let isDesignMode = false;
@@ -618,6 +873,170 @@
             
             // Disable tooltip in design mode
             if(isDesignMode) tooltip.style.display = 'none';
+            else closeProperties();
+        }
+
+        // PROPERTIES PANEL LOGIC
+        let selectedElement = null;
+
+        function openProperties(element) {
+            selectedElement = element;
+            const panel = document.getElementById('propertiesPanel');
+            panel.style.display = 'block';
+            
+            document.getElementById('propId').value = element.getAttribute('data-id');
+            document.getElementById('propName').value = element.getAttribute('data-name');
+            const w = element.style.width.replace('%', '');
+            const h = element.style.height.replace('%', '');
+            document.getElementById('propW').value = w;
+            document.getElementById('propH').value = h;
+            document.getElementById('valW').innerText = w + '%';
+            document.getElementById('valH').innerText = h + '%';
+            
+            // Get rotation from style
+            let rotate = 0;
+            const transform = element.style.transform;
+            const match = transform.match(/rotate\((.*)deg\)/);
+            if(match) rotate = match[1];
+            document.getElementById('propR').value = rotate;
+            document.getElementById('valR').innerText = rotate + '°';
+            
+            document.getElementById('propType').value = element.getAttribute('data-type');
+            
+            const border = element.style.borderWidth.replace('px', '') || 2;
+            document.getElementById('propBorder').value = border;
+            document.getElementById('valBorder').innerText = border + 'px';
+            
+            const label = element.querySelector('.machine-label');
+            const fontSize = label.style.fontSize.replace('px', '') || 10;
+            document.getElementById('propLabel').value = fontSize;
+            document.getElementById('valLabel').innerText = fontSize + 'px';
+        }
+
+        function closeProperties() {
+            document.getElementById('propertiesPanel').style.display = 'none';
+            selectedElement = null;
+        }
+
+        function updateLive() {
+            if (!selectedElement) return;
+            
+            const w = document.getElementById('propW').value;
+            const h = document.getElementById('propH').value;
+            const r = document.getElementById('propR').value;
+            const type = document.getElementById('propType').value;
+            const border = document.getElementById('propBorder').value;
+            const labelSize = document.getElementById('propLabel').value;
+            
+            document.getElementById('valW').innerText = w + '%';
+            document.getElementById('valH').innerText = h + '%';
+            document.getElementById('valR').innerText = r + '°';
+            document.getElementById('valBorder').innerText = border + 'px';
+            document.getElementById('valLabel').innerText = labelSize + 'px';
+            
+            selectedElement.style.width = w + '%';
+            selectedElement.style.height = h + '%';
+            selectedElement.style.transform = `translate(-50%, -50%) rotate(${r}deg)`;
+            selectedElement.style.borderWidth = border + 'px';
+            
+            const label = selectedElement.querySelector('.machine-label');
+            label.style.fontSize = labelSize + 'px';
+            
+            // Update data attributes and classes
+            selectedElement.setAttribute('data-type', type);
+            
+            // Update Visual Shape Class
+            selectedElement.classList.remove('shape-rect', 'shape-circle', 'shape-square');
+            if (['TORNO', 'PRENSA', 'AGUJEREADORA'].includes(type)) {
+                selectedElement.classList.add('shape-rect');
+            } else if (['GENERICO', 'ROBOT'].includes(type)) {
+                selectedElement.classList.add('shape-circle');
+            } else {
+                selectedElement.classList.add('shape-square');
+            }
+            
+            // Update SVG Icon
+            const iconContainer = selectedElement.querySelector('.machine-icon-container');
+            if (iconContainer) {
+                iconContainer.innerHTML = getMachineSVG(type);
+            }
+        }
+
+        function getMachineSVG(type) {
+            const svgHeader = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">';
+            const svgFooter = '</svg>';
+            let content = '';
+            
+            if (type === 'CNC') {
+                content = '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><rect x="7" y="7" width="10" height="8" rx="1"></rect><line x1="7" y1="18" x2="17" y2="18"></line>';
+            } else if (type === 'TORNO') {
+                content = '<path d="M2 7h20v10H2z"></path><path d="M4 7v10"></path><path d="M8 7l2 10"></path><rect x="14" y="9" width="6" height="6"></rect>';
+            } else if (type === 'AGUJEREADORA') {
+                content = '<path d="M12 2v20"></path><path d="M9 22h6"></path><path d="M8 6h8"></path><rect x="10" y="2" width="4" height="4"></rect><path d="M12 10l-3 4h6l-3-4z"></path>';
+            } else if (type === 'PRENSA') {
+                content = '<path d="M4 4h16v4H4z"></path><path d="M6 8v12"></path><path d="M18 8v12"></path><path d="M4 20h16"></path><rect x="8" y="12" width="8" height="6"></rect><path d="M12 8v4"></path>';
+            } else if (type === 'ROBOT') {
+                content = '<circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="M2 12h2"></path><path d="M20 12h2"></path>';
+            } else {
+                // GENERICO
+                content = '<rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line>';
+            }
+            return svgHeader + content + svgFooter;
+        }
+
+        function saveAllProperties() {
+            if (!selectedElement) return;
+            
+            const id = document.getElementById('propId').value;
+            const x = selectedElement.style.left.replace('%', '');
+            const y = selectedElement.style.top.replace('%', '');
+            const w = document.getElementById('propW').value;
+            const h = document.getElementById('propH').value;
+            const r = document.getElementById('propR').value;
+            const type = document.getElementById('propType').value;
+            const border = document.getElementById('propBorder').value;
+            const labelSize = document.getElementById('propLabel').value;
+            
+            fetch('/dashboard/api/update-position/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ 
+                    id: id, x: x, y: y, w: w, h: h, r: r, 
+                    type: type, borderWeight: border, labelSize: labelSize 
+                })
+            }).then(res => res.json())
+              .then(data => {
+                  console.log('Properties saved', data);
+                  showToast('Configuración guardada correctamente');
+              })
+              .catch(err => {
+                  console.error(err);
+                  showToast('Error al guardar', 'error');
+              });
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const msg = document.getElementById('toastMessage');
+            const icon = toast.querySelector('.toast-icon');
+            
+            msg.innerText = message;
+            
+            if (type === 'error') {
+                icon.style.background = 'var(--status-red)';
+                icon.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+            } else {
+                icon.style.background = 'var(--status-green)';
+                icon.innerHTML = '<i class="fa-solid fa-check"></i>';
+            }
+            
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
         }
 
         function toggle3D() {
@@ -639,6 +1058,7 @@
                 
                 const name = marker.getAttribute('data-name');
                 const status = marker.getAttribute('data-status');
+                const reason = marker.getAttribute('data-reason');
                 
                 tooltip.style.display = 'block';
                 tooltip.style.left = (e.clientX + 15) + 'px';
@@ -646,6 +1066,7 @@
                 tooltip.innerHTML = `
                     <div class="tooltip-title">${name}</div>
                     <div class="tooltip-row"><span>Estado:</span> <span style="color:${getColor(status)}">${status}</span></div>
+                    <div class="tooltip-row"><span>Actividad:</span> <span style="color:#cbd5e1">${reason}</span></div>
                 `;
             });
 
@@ -655,16 +1076,30 @@
         });
 
         function getColor(status) {
-            if (status === 'RUNNING') return 'var(--neon-green)';
-            if (status === 'STOPPED') return 'var(--neon-red)';
-            return 'var(--neon-gray)';
+            if (status === 'RUNNING') return 'var(--status-green)';
+            if (status === 'STOPPED') return 'var(--status-red)';
+            return 'var(--status-gray)';
         }
 
         // DRAG AND DROP LOGIC
+        let startX, startY, isDragging = false;
+        let grabOffsetX = 0, grabOffsetY = 0;
+
         function onMarkerMouseDown(e, element) {
             if (!isDesignMode) return;
             e.preventDefault();
             draggedElement = element;
+            isDragging = false;
+            startX = e.clientX;
+            startY = e.clientY;
+
+            // Capturar la diferencia entre el mouse y el centro de la máquina
+            const rect = element.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            grabOffsetX = e.clientX - centerX;
+            grabOffsetY = e.clientY - centerY;
             
             document.addEventListener('mousemove', onDrag);
             document.addEventListener('mouseup', endDrag);
@@ -673,19 +1108,26 @@
         function onDrag(e) {
             if (!draggedElement) return;
             
-            // Calculate percentage based on container size
-            const rect = container.getBoundingClientRect();
-            let x = e.clientX - rect.left;
-            let y = e.clientY - rect.top;
-            
-            // Constrain
-            if (x < 0) x = 0;
-            if (y < 0) y = 0;
-            if (x > rect.width) x = rect.width;
-            if (y > rect.height) y = rect.height;
+            if (Math.abs(e.clientX - startX) > 5 || Math.abs(e.clientY - startY) > 5) {
+                isDragging = true;
+            }
 
-            const xPercent = (x / rect.width) * 100;
-            const yPercent = (y / rect.height) * 100;
+            // USAR EL FLOOR PARA CALCULAR LA POSICIÓN RELATIVA
+            const floor = document.getElementById('plantFloor');
+            const rect = floor.getBoundingClientRect();
+            
+            // Calculamos la posición deseada del CENTRO de la máquina
+            let targetX = e.clientX - rect.left - grabOffsetX;
+            let targetY = e.clientY - rect.top - grabOffsetY;
+            
+            // Limitar dentro del floor
+            if (targetX < 0) targetX = 0;
+            if (targetY < 0) targetY = 0;
+            if (targetX > rect.width) targetX = rect.width;
+            if (targetY > rect.height) targetY = rect.height;
+
+            const xPercent = (targetX / rect.width) * 100;
+            const yPercent = (targetY / rect.height) * 100;
 
             draggedElement.style.left = xPercent + '%';
             draggedElement.style.top = yPercent + '%';
@@ -694,12 +1136,16 @@
         function endDrag(e) {
             if (!draggedElement) return;
 
-            // Save position
-            const id = draggedElement.getAttribute('data-id');
-            const left = draggedElement.style.left.replace('%', '');
-            const top = draggedElement.style.top.replace('%', '');
-
-            savePosition(id, left, top);
+            if (!isDragging) {
+                // Si no hubo desplazamiento, fue un click
+                openProperties(draggedElement);
+            } else {
+                // Save final position
+                const id = draggedElement.getAttribute('data-id');
+                const left = draggedElement.style.left.replace('%', '');
+                const top = draggedElement.style.top.replace('%', '');
+                savePosition(id, left, top);
+            }
 
             draggedElement = null;
             document.removeEventListener('mousemove', onDrag);
@@ -793,13 +1239,102 @@
             alert('Posiciones reseteadas. Usa el ojo (👁️) para volver a colocarlas.');
             location.reload();
         }
+
+        // DRAG FROM SIDEBAR TO MAP
+        function onSidebarDragStart(e, id) {
+            if (!isDesignMode) {
+                e.preventDefault();
+                return;
+            }
+            e.dataTransfer.setData("machineId", id);
+            // Efecto visual de "fantasma"
+            const item = document.getElementById(`sidebar-item-${id}`);
+            e.dataTransfer.setDragImage(item, 20, 20);
+        }
+
+        function onMapDrop(e) {
+            if (!isDesignMode) return;
+            e.preventDefault();
+            
+            const id = e.dataTransfer.getData("machineId");
+            const marker = document.getElementById(`machine-${id}`);
+            if (!marker) return;
+
+            const floor = document.getElementById('plantFloor');
+            const rect = floor.getBoundingClientRect();
+            
+            let x = e.clientX - rect.left;
+            let y = e.clientY - rect.top;
+            
+            // Limit within floor
+            if (x < 0) x = 0;
+            if (y < 0) y = 0;
+            if (x > rect.width) x = rect.width;
+            if (y > rect.height) y = rect.height;
+
+            const xPercent = (x / rect.width) * 100;
+            const yPercent = (y / rect.height) * 100;
+
+            // Activate and position
+            marker.style.setProperty('display', 'flex', 'important');
+            marker.style.left = xPercent + '%';
+            marker.style.top = yPercent + '%';
+            
+            // Sync eye button in sidebar
+            const sidebarItem = document.getElementById(`sidebar-item-${id}`);
+            const eyeBtn = sidebarItem.querySelector('.btn-toggle-eye');
+            if (eyeBtn) eyeBtn.classList.remove('off');
+
+            savePosition(id, xPercent, yPercent);
+            showToast(`Máquina ${marker.getAttribute('data-name')} colocada`);
+        }
+
         // Forzar visibilidad al cargar
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('Premium Map Loaded. Checking sidebar controls...');
-            const btns = document.querySelectorAll('.btn-mini-toggle');
-            if(btns.length === 0) console.error('No toggle buttons found!');
-            else console.log('Toggle buttons found:', btns.length);
+            console.log('Premium Map Loaded.');
+            adjustFloorSize();
+            makeDraggable(document.getElementById("propertiesPanel"), document.getElementById("propHeader"));
         });
+
+        function makeDraggable(element, handle) {
+            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+            handle.onmousedown = dragMouseDown;
+
+            function dragMouseDown(e) {
+                e = e || window.event;
+                e.preventDefault();
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                document.onmouseup = closeDragElement;
+                document.onmousemove = elementDrag;
+            }
+
+            function elementDrag(e) {
+                e = e || window.event;
+                e.preventDefault();
+                pos1 = pos3 - e.clientX;
+                pos2 = pos4 - e.clientY;
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                element.style.top = (element.offsetTop - pos2) + "px";
+                element.style.left = (element.offsetLeft - pos1) + "px";
+                element.style.right = "auto";
+            }
+
+            function closeDragElement() {
+                document.onmouseup = null;
+                document.onmousemove = null;
+            }
+        }
+
+        function adjustFloorSize() {
+            const floor = document.getElementById('plantFloor');
+            // Como ahora el fondo es 100% 100%, el floor simplemente ocupa todo el contenedor 
+            // para que las coordenadas coincidan perfectamente con el estiramiento.
+            floor.style.width = '100%';
+            floor.style.height = '100%';
+        }
+        window.addEventListener('resize', adjustFloorSize);
 
         function toggleSection(id) {
             const sec = document.getElementById(id);
@@ -827,18 +1362,15 @@
         function toggleSidebar() {
             const sidebar = document.getElementById('mainSidebar');
             const mapContainer = document.getElementById('mapContainer');
-            const floatingToggle = document.querySelector('.floating-toggle');
             
             if (sidebar.classList.contains('hidden')) {
                 sidebar.classList.remove('hidden');
                 mapContainer.classList.add('sidebar-open');
-                mapContainer.style.right = '300px'; 
-                //floatingToggle.style.display = 'none'; // Opcional: ocultar el flotante si sidebar está abierto
+                setTimeout(adjustFloorSize, 300); // Readjust after transition
             } else {
                 sidebar.classList.add('hidden');
                 mapContainer.classList.remove('sidebar-open');
-                mapContainer.style.right = '0';
-                //floatingToggle.style.display = 'flex';
+                setTimeout(adjustFloorSize, 300); // Readjust after transition
             }
         }
 
@@ -849,6 +1381,7 @@
              if(!document.body.classList.contains('ui-hidden')) {
                  document.getElementById('mainSidebar').classList.remove('hidden');
              }
+             setTimeout(adjustFloorSize, 300);
         }
     </script>
 </body>
