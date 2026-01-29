@@ -1193,14 +1193,29 @@
                 const name = marker.getAttribute('data-name');
                 const status = marker.getAttribute('data-status');
                 const reason = marker.getAttribute('data-reason');
+                const detail = marker.getAttribute('data-detail') || '';
                 
+                // Logic for Status Display
+                let displayStatus = 'ONLINE';
+                if (['STOPPED', 'OFFLINE'].includes(status)) {
+                    displayStatus = 'OFFLINE';
+                }
+
+                // Logic for Activity/Detail Display
+                let displayDetail = reason;
+                // If reason is just the status code, try to show the specific part/detail
+                if (!reason || ['ONLINE', 'STOPPED', 'RUNNING', 'WAIT', 'BREAK'].includes(reason)) {
+                     displayDetail = detail;
+                }
+                if (!displayDetail || displayDetail === 'None') displayDetail = 'Sin Actividad';
+
                 tooltip.style.display = 'block';
                 tooltip.style.left = (e.clientX + 15) + 'px';
                 tooltip.style.top = (e.clientY + 15) + 'px';
                 tooltip.innerHTML = `
                     <div class="tooltip-title">${name}</div>
-                    <div class="tooltip-row"><span>Estado:</span> <span style="color:${getColor(status)}">${status}</span></div>
-                    <div class="tooltip-row"><span>Actividad:</span> <span style="color:#cbd5e1">${reason}</span></div>
+                    <div class="tooltip-row"><span>Estado:</span> <span style="color:${getColor(status)}">${displayStatus}</span></div>
+                    <div class="tooltip-row"><span>Detalle:</span> <span style="color:#cbd5e1">${displayDetail}</span></div>
                 `;
             });
 
@@ -1551,6 +1566,7 @@
                                 // Update data attributes
                                 marker.setAttribute('data-status', m.status);
                                 marker.setAttribute('data-reason', m.proceso);
+                                marker.setAttribute('data-detail', m.detalle);
                                 
                                 // Update Label if needed (optional)
                                 
