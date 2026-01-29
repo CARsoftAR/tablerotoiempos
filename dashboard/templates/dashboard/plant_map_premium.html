@@ -14,10 +14,19 @@
             --status-green: #10b981;
             --status-red: #ef4444;
             --status-gray: #94a3b8;
-            --primary-blue: #0f172a; /* Dark blue for text/branding */
+            --primary-blue: #0f172a;
             --light-bg: #ffffff;
             --border-color: #e2e8f0;
             --text-main: #1e293b;
+            --premium-gold: #fbbf24;
+            --premium-gold-glow: rgba(251, 191, 36, 0.4);
+            --hologram-blue: #00f3ff;
+            --deep-bg: #020617;
+        }
+
+        @font-face {
+            font-family: 'MonoData';
+            src: url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
         }
 
         body {
@@ -31,11 +40,11 @@
             width: 100vw;
         }
 
-        /* BG - KEEP LAYOUT IMAGE - Now inside plant-floor for proper scaling */
+        /* BG - PREMIUM SCANLINES & GRID */
         .blueprint-bg {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
-            background-color: #0f172a;
+            background-color: var(--deep-bg);
             background-image: url('{% static "img/planta_blueprint.png" %}?v={% now "U" %}');
             background-size: 100% 100%;
             background-repeat: no-repeat;
@@ -43,24 +52,59 @@
             z-index: 0;
             pointer-events: none;
         }
+        
+        .blueprint-bg::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%), 
+                        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px), 
+                        linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 100% 2px, 50px 50px, 50px 50px;
+            z-index: 1;
+            pointer-events: none;
+            opacity: 0.4;
+        }
+
+        .blueprint-bg::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at 50% 50%, transparent 20%, rgba(2, 6, 23, 0.7) 100%);
+            z-index: 2;
+        }
 
         /* REMOVED GLOW EFFECT ON BG for cleaner look */
         .blueprint-glow {
             display: none;
         }
 
-        /* HEADER - WHITE STYLE */
+        /* HEADER - SLEEK PREMIUM */
         .top-bar {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0 25px;
-            background: #ffffff; /* White Header */
-            border-bottom: 1px solid var(--border-color);
-            height: 60px;
+            padding: 0 30px;
+            background: #ffffff;
+            border-bottom: 2px solid var(--premium-gold);
+            height: 70px;
             position: relative;
-            z-index: 10;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        .top-bar::after {
+            content: "GOLD EDITION";
+            position: absolute;
+            bottom: -8px;
+            left: 30px;
+            background: var(--premium-gold);
+            color: black;
+            font-size: 8px;
+            font-weight: 900;
+            padding: 1px 6px;
+            border-radius: 0 0 4px 4px;
+            letter-spacing: 1px;
         }
 
         .top-bar h1 {
@@ -240,21 +284,71 @@
         }
 
 
-        /* TOOLTIP */
+        /* TOOLTIP PREMIUM STYLE */
         .tooltip {
             position: absolute;
-            background: rgba(10, 20, 30, 0.95);
-            border: 1px solid var(--neon-blue);
-            padding: 10px;
-            border-radius: 8px;
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 12px;
             z-index: 2000;
             display: none;
-            min-width: 150px;
+            min-width: 250px;
             pointer-events: none;
-            color: white; /* Added for visibility */
+            color: white;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+            transition: opacity 0.2s ease;
         }
-        .tooltip-title { color: var(--neon-blue); font-weight: bold; border-bottom: 1px solid #333; margin-bottom: 5px; padding-bottom: 3px; }
-        .tooltip-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 2px; }
+        .tooltip-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+        }
+        .tooltip-title { 
+            color: #3b82f6; 
+            font-weight: 800; 
+            font-size: 15px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .tooltip-status {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+        .tooltip-row { 
+            display: flex; 
+            justify-content: space-between; 
+            font-size: 12px; 
+            margin-bottom: 6px;
+            align-items: center;
+        }
+        .tooltip-label { color: #94a3b8; font-weight: 600; }
+        .tooltip-value { color: #f8fafc; font-weight: 700; }
+        
+        .tooltip-kpi-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .tooltip-kpi-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            align-items: center;
+        }
+        .tooltip-kpi-label { font-size: 10px; color: #64748b; font-weight: 800; text-transform: uppercase; }
+        .tooltip-kpi-value { font-size: 16px; font-weight: 800; color: #fff; }
 
         /* FULLSCREEN / UI TOGGLE */
         .ui-hidden .top-bar {
@@ -355,9 +449,18 @@
         .machine-marker.status-running {
             border-color: var(--status-green);
             color: var(--status-green);
-            background: rgba(16, 185, 129, 0.15); /* Slightly more visible bg */
-            box-shadow: 0 0 20px rgba(16, 185, 129, 0.6); /* Much stronger glow */
-            animation: pulse-green 3s infinite ease-in-out; /* Breathing border/shadow */
+            background: rgba(16, 185, 129, 0.1);
+            box-shadow: 
+                0 0 15px rgba(16, 185, 129, 0.4),
+                inset 0 0 10px rgba(16, 185, 129, 0.2);
+            animation: pulse-green 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+        }
+        
+        /* PREMIUM GOLD BORDER FOR SELECTED */
+        .machine-marker.selected {
+            border-color: var(--premium-gold) !important;
+            box-shadow: 0 0 20px var(--premium-gold-glow) !important;
+            z-index: 100 !important;
         }
         
         @keyframes pulse-green {
@@ -641,33 +744,72 @@
 
         .legend-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; }
 
-        /* OPERATOR BADGE */
-        .operator-badge {
+        /* PREMIUM OPERATOR INDICATOR */
+        .operator-indicator {
             position: absolute;
-            top: -8px;
-            right: -8px;
+            top: -10px;
+            right: -10px;
             width: 22px;
             height: 22px;
-            background: #1e293b;
-            border: 1px solid var(--border-color);
-            color: white;
+            background: var(--premium-gold);
+            color: #000;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 9px;
-            font-weight: 800;
-            z-index: 25;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-            transition: all 0.3s;
+            font-size: 11px;
+            z-index: 100;
+            box-shadow: 0 0 15px var(--premium-gold-glow);
+            border: 2px solid #fff;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
-        .machine-marker:hover .operator-badge {
-            transform: scale(1.2);
-            border-color: var(--neon-blue);
+        .machine-marker:hover .operator-indicator {
+            transform: scale(1.2) rotate(15deg);
+        }
+
+        /* PREMIUM SCROLLBAR */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--premium-gold); }
+
+        .system-time-widget {
+            position: fixed;
+            top: 85px;
+            left: 20px;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 10px 15px;
+            border-radius: 8px;
+            border-left: 3px solid var(--premium-gold);
+            color: white;
+            font-family: 'JetBrains Mono', monospace;
+            z-index: 500;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .system-time-label { font-size: 9px; color: var(--premium-gold); text-transform: uppercase; font-weight: 800; letter-spacing: 1px; }
+        .system-time-value { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+        .heartbeat-dot { width: 6px; height: 6px; background: #10b981; border-radius: 50%; box-shadow: 0 0 5px #10b981; animation: heartbeat 1s infinite; }
+        
+        @keyframes heartbeat {
+            0% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.5); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.5; }
         }
     </style>
 </head>
 <body>
+
+    <div class="system-time-widget" id="systemClock">
+        <span class="system-time-label">SISTEMA EN VIVO</span>
+        <div class="system-time-value">
+            <span id="realTimeClock">00:00:00</span>
+            <div class="heartbeat-dot"></div>
+        </div>
+    </div>
 
     <div class="floating-toggle" onclick="toggleUI()" title="Mostrar/Ocultar Paneles">
         <i class="fa-solid fa-eye"></i>
@@ -710,13 +852,19 @@
                      data-status="{{ m.status }}"
                      data-reason="{{ m.proceso }}"
                      data-type="{{ m.type }}"
+                     data-operario="{{ m.operario|default:'S/A' }}"
+                     data-detalle="{{ m.detalle|default:'---' }}"
+                     data-oee="{{ m.oee|default:0 }}"
+                     data-performance="{{ m.performance|default:0 }}"
+                     data-availability="{{ m.availability|default:0 }}"
+                     data-qty="{{ m.qty|floatformat:0 }}"
                      onmousedown="onMarkerMouseDown(event, this)">
                     
                     <div class="machine-icon-container">
-                        <!-- Operator Badge -->
+                        <!-- Operator Indicator -->
                         {% if m.operario and m.operario != 'S/A' and m.status != 'STOPPED' and m.status != 'OFFLINE' %}
-                        <div class="operator-badge" title="{{ m.operario }}">
-                            {{ m.operario|slice:":2" }}
+                        <div class="operator-indicator" title="Operario: {{ m.operario }}">
+                            <i class="fa-solid fa-user-check"></i>
                         </div>
                         {% endif %}
 
@@ -1193,29 +1341,61 @@
                 const name = marker.getAttribute('data-name');
                 const status = marker.getAttribute('data-status');
                 const reason = marker.getAttribute('data-reason');
-                const detail = marker.getAttribute('data-detail') || '';
+                const detail = marker.getAttribute('data-detalle') || '';
+                const operator = marker.getAttribute('data-operario');
+                const oee = marker.getAttribute('data-oee');
+                const perf = marker.getAttribute('data-performance');
+                const avail = marker.getAttribute('data-availability');
+                const qty = marker.getAttribute('data-qty');
                 
                 // Logic for Status Display
-                let displayStatus = 'ONLINE';
-                if (['STOPPED', 'OFFLINE'].includes(status)) {
-                    displayStatus = 'OFFLINE';
-                }
-
-                // Logic for Activity/Detail Display
-                let displayDetail = reason;
-                // If reason is just the status code, try to show the specific part/detail
-                if (!reason || ['ONLINE', 'STOPPED', 'RUNNING', 'WAIT', 'BREAK'].includes(reason)) {
-                     displayDetail = detail;
-                }
-                if (!displayDetail || displayDetail === 'None') displayDetail = 'Sin Actividad';
+                let displayStatus = status;
+                if (status === 'RUNNING') displayStatus = 'ONLINE / PRODUCCIÓN';
+                if (status === 'STOPPED') displayStatus = 'DETENIDA / PARADA';
+                if (status === 'REPAIR') displayStatus = 'MANTENIMIENTO';
+                if (status === 'WAIT') displayStatus = 'ESPERA / SETUP';
+                if (status === 'BREAK') displayStatus = 'DESCANSO';
 
                 tooltip.style.display = 'block';
-                tooltip.style.left = (e.clientX + 15) + 'px';
-                tooltip.style.top = (e.clientY + 15) + 'px';
+                tooltip.style.left = (e.clientX + 20) + 'px';
+                tooltip.style.top = (e.clientY + 20) + 'px';
+                
+                // Adjust tooltip position if it goes off screen
+                const rect = tooltip.getBoundingClientRect();
+                if (e.clientX + rect.width + 20 > window.innerWidth) {
+                    tooltip.style.left = (e.clientX - rect.width - 20) + 'px';
+                }
+                if (e.clientY + rect.height + 20 > window.innerHeight) {
+                    tooltip.style.top = (e.clientY - rect.height - 20) + 'px';
+                }
+
                 tooltip.innerHTML = `
-                    <div class="tooltip-title">${name}</div>
-                    <div class="tooltip-row"><span>Estado:</span> <span style="color:${getColor(status)}">${displayStatus}</span></div>
-                    <div class="tooltip-row"><span>Detalle:</span> <span style="color:#cbd5e1">${displayDetail}</span></div>
+                    <div class="tooltip-header">
+                        <div class="tooltip-title">${name}</div>
+                        <div class="tooltip-status" style="background:${getBgColor(status)}; color: ${status === 'WAIT' ? '#000' : '#fff'}">${displayStatus}</div>
+                    </div>
+                    <div class="tooltip-row">
+                        <span class="tooltip-label">Operario:</span>
+                        <span class="tooltip-value">${operator}</span>
+                    </div>
+                    <div class="tooltip-row">
+                        <span class="tooltip-label">Proceso:</span>
+                        <span class="tooltip-value">${reason}</span>
+                    </div>
+                    <div class="tooltip-row">
+                        <span class="tooltip-label">Artículo:</span>
+                        <span class="tooltip-value" style="font-size: 11px;">${detail}</span>
+                    </div>
+                    <div class="tooltip-kpi-grid">
+                        <div class="tooltip-kpi-item">
+                            <span class="tooltip-kpi-label">Rendimiento</span>
+                            <span class="tooltip-kpi-value" style="color:${getKPIColor(perf)}">${perf}%</span>
+                        </div>
+                        <div class="tooltip-kpi-item">
+                            <span class="tooltip-kpi-label">Disponibilidad</span>
+                            <span class="tooltip-kpi-value" style="color:${getKPIColor(avail)}">${avail}%</span>
+                        </div>
+                    </div>
                 `;
             });
 
@@ -1224,13 +1404,20 @@
             });
         });
 
-        function getColor(status) {
+        function getBgColor(status) {
             if (status === 'RUNNING') return 'var(--status-green)';
             if (status === 'STOPPED') return 'var(--status-red)';
             if (status === 'REPAIR') return '#f59e0b';
             if (status === 'WAIT') return '#facc15';
             if (status === 'BREAK') return '#3b82f6';
             return 'var(--status-gray)';
+        }
+
+        function getKPIColor(val) {
+            val = parseFloat(val);
+            if (val >= 85) return '#10b981';
+            if (val >= 60) return '#facc15';
+            return '#ef4444';
         }
 
         // DRAG AND DROP LOGIC
@@ -1451,10 +1638,20 @@
 
         // Forzar visibilidad al cargar
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('Premium Map Loaded.');
+            console.log('Premium Gold Map Loaded.');
             adjustFloorSize();
             makeDraggable(document.getElementById("propertiesPanel"), document.getElementById("propHeader"));
+            
+            // Iniciar Reloj Premium
+            setInterval(updateClock, 1000);
         });
+
+        function updateClock() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('es-AR', { hour12: false });
+            const clockEl = document.getElementById('realTimeClock');
+            if (clockEl) clockEl.innerText = timeStr;
+        }
 
         function makeDraggable(element, handle) {
             let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
@@ -1566,25 +1763,29 @@
                                 // Update data attributes
                                 marker.setAttribute('data-status', m.status);
                                 marker.setAttribute('data-reason', m.proceso);
-                                marker.setAttribute('data-detail', m.detalle);
+                                marker.setAttribute('data-detalle', m.detalle);
+                                marker.setAttribute('data-operario', m.operario || 'S/A');
+                                marker.setAttribute('data-oee', m.oee || 0);
+                                marker.setAttribute('data-performance', m.performance || 0);
+                                marker.setAttribute('data-availability', m.availability || 0);
+                                marker.setAttribute('data-qty', Math.round(m.qty || 0));
                                 
                                 // Update Label if needed (optional)
-                                
-                                // Update Operator Badge
-                                let badge = marker.querySelector('.operator-badge');
-                                const isInactive = ['STOPPED', 'OFFLINE'].includes(m.status);
+                                                                // Update Operator Indicator
+                                 let indicator = marker.querySelector('.operator-indicator');
+                                 const isInactive = ['STOPPED', 'OFFLINE'].includes(m.status);
 
-                                if (m.operario && m.operario !== 'S/A' && !isInactive) {
-                                    if (!badge) {
-                                        badge = document.createElement('div');
-                                        badge.className = 'operator-badge';
-                                        marker.appendChild(badge);
-                                    }
-                                    badge.innerText = m.operario.substring(0, 2).toUpperCase();
-                                    badge.title = m.operario;
-                                } else if (badge) {
-                                    badge.remove();
-                                }
+                                 if (m.operario && m.operario !== 'S/A' && !isInactive) {
+                                     if (!indicator) {
+                                         indicator = document.createElement('div');
+                                         indicator.className = 'operator-indicator';
+                                         indicator.innerHTML = '<i class="fa-solid fa-user-check"></i>';
+                                         marker.appendChild(indicator);
+                                     }
+                                     indicator.title = "Operario: " + m.operario;
+                                 } else if (indicator) {
+                                     indicator.remove();
+                                 }
                             }
                             
                             // Update Sidebar Item

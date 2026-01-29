@@ -390,8 +390,11 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 # El descanso NO suma cantidad ni tiempo cotizado
                 pass
             else:
-                data['cantidad_producida'] += qty
-                global_actual_qty += qty
+                # REGLA FUNDAMENTAL: Ignorar cantidad de registros 'ONLINE' (heartbeats) 
+                # porque a veces el ERP manda qty=1 solo para marcar que la máquina está viva.
+                if not is_online_record:
+                    data['cantidad_producida'] += qty
+                    global_actual_qty += qty
                 
                 # REGLA OEE MATRICERÍA: En trabajos de larga duración, tratamos la matricería como 100% eficiente (Estándar = Real).
                 added_row_std = False
@@ -404,7 +407,8 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 else:
                     # Para trabajos de SERIE (incluido ARMADO): Sumamos el estándar del ERP.
                     # El usuario dice que para Armado la cantidad siempre es 1 (para cálculo de std).
-                    if qty > 0 or (is_armado and std_mins > 0):
+                    # Solo sumamos el estándar si NO es un registro ONLINE (heartbeat).
+                    if (qty > 0 or (is_armado and std_mins > 0)) and not is_online_record:
                         val_std = std_mins
                         data['tiempo_cotizado'] += val_std
                         if add_std_global:
@@ -513,7 +517,8 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             # No suma cantidad
             pass
         else:
-            upers['cantidad_producida'] += qty
+            if not is_online_record:
+                upers['cantidad_producida'] += qty
             
             # REGLA OEE MATRICERÍA para Personal
             added_row_std_p = False
@@ -524,7 +529,8 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 added_row_std_p = True
             else:
                 # Trabajos normales: Sumar estándar si hay piezas (o si es Armado con estándar)
-                if qty > 0 or (is_armado and std_mins > 0):
+                # Solo si NO es un registro ONLINE (heartbeat) para evitar duplicar estándar.
+                if (qty > 0 or (is_armado and std_mins > 0)) and not is_online_record:
                     upers['tiempo_cotizado'] += std_mins
                     added_row_std_p = True
         
@@ -2153,10 +2159,15 @@ def plant_map(request):
 
         if data:
             # VÍNCULO DIRECTO CON EL TABLERO DE TARJETAS
-            # Relaxed Logic: Consider 'Online' if active session OR recent activity (< 20 mins) to prevent grey-out during short breaks
-            # Updated to 20 mins matching alert system
+            # Relaxed Logic: Consider 'Online' if active session OR recent activity (< 20 mins)
             idle_val = data.get('idle_mins', 999)
-            is_effectively_online = data.get('is_online') or (idle_val < 20.0)
+            has_erp_session = data.get('is_online')
+            
+            # ZOMBIE CHECK proactivo: Si el ERP dice Online pero pasaron 60 mins sin actividad real, lo matamos.
+            if has_erp_session and idle_val > 60:
+                has_erp_session = False
+                
+            is_effectively_online = has_erp_session or (idle_val < 20.0)
 
             # Prioridad de estados basados en el motivo
             reason_text = str(data.get('last_reason', '')).upper()
