@@ -355,8 +355,15 @@
         .machine-marker.status-running {
             border-color: var(--status-green);
             color: var(--status-green);
-            background: rgba(16, 185, 129, 0.1);
-            box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+            background: rgba(16, 185, 129, 0.15); /* Slightly more visible bg */
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.6); /* Much stronger glow */
+            animation: pulse-green 3s infinite ease-in-out; /* Breathing border/shadow */
+        }
+        
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 15px rgba(16, 185, 129, 0.5); border-color: rgba(16, 185, 129, 0.8); }
+            50% { box-shadow: 0 0 30px rgba(16, 185, 129, 0.9); border-color: rgba(16, 185, 129, 1); }
+            100% { box-shadow: 0 0 15px rgba(16, 185, 129, 0.5); border-color: rgba(16, 185, 129, 0.8); }
         }
         
         .machine-marker.status-running::after {
@@ -367,9 +374,10 @@
             transform: translate(-50%, -50%);
             border: 2px solid var(--status-green);
             border-radius: inherit;
-            animation: wave-green 2s infinite;
+            animation: wave-green 2.5s infinite linear; /* Faster, linear wave */
             pointer-events: none;
             opacity: 0;
+            z-index: -1;
         }
 
         .machine-marker.status-stopped {
@@ -417,7 +425,8 @@
         }
 
         @keyframes wave-green {
-            0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; border-width: 2px; }
+            0% { transform: translate(-50%, -50%) scale(1); opacity: 0.9; border-width: 3px; }
+            50% { opacity: 0.6; }
             100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; border-width: 0px; }
         }
         
@@ -630,18 +639,8 @@
         .legend-item { display: flex; align-items: center; gap: 12px; font-size: 12px; font-weight: 600; }
         .legend-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; }
 
-        /* OEE RING STYLES */
-        .oee-ring-bg { fill: none; stroke: rgba(255,255,255,0.1); stroke-width: 2.5; }
-        .oee-ring-progress { 
-            fill: none; 
-            stroke-width: 2.5; 
-            stroke-linecap: round; 
-            transform: rotate(-90deg); 
-            transform-origin: 50% 50%;
-            transition: stroke-dashoffset 1s ease-in-out;
-            filter: drop-shadow(0 0 2px currentColor);
-        }
-        
+        .legend-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; }
+
         /* OPERATOR BADGE */
         .operator-badge {
             position: absolute;
@@ -714,19 +713,6 @@
                      onmousedown="onMarkerMouseDown(event, this)">
                     
                     <div class="machine-icon-container">
-                        <!-- OEE Progress Ring -->
-                        <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: flex; align-items: center; justify-content: center;">
-                             <svg width="140%" height="140%" viewBox="0 0 36 36" style="position: absolute;">
-                                <path class="oee-ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                                <path class="oee-ring-progress" 
-                                      stroke="{% if m.oee >= 85 %}#10b981{% elif m.oee >= 60 %}#facc15{% else %}#ef4444{% endif %}"
-                                      stroke-dasharray="{{ m.oee|default:0 }}, 100"
-                                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                                      id="ring-{{ m.id }}" 
-                                />
-                             </svg>
-                        </div>
-                        
                         <!-- Operator Badge -->
                         {% if m.operario and m.operario != 'S/A' %}
                         <div class="operator-badge" title="{{ m.operario }}">
@@ -1567,20 +1553,6 @@
                                 marker.setAttribute('data-reason', m.proceso);
                                 
                                 // Update Label if needed (optional)
-                                
-                                // Update OEE Ring
-                                const ring = document.getElementById(`ring-${m.id}`);
-                                if (ring) {
-                                    const oeeVal = m.oee || 0;
-                                    ring.setAttribute('stroke-dasharray', `${oeeVal}, 100`);
-                                    
-                                    // Update Color based on OEE
-                                    let ringColor = '#ef4444';
-                                    if(oeeVal >= 85) ringColor = '#10b981';
-                                    else if(oeeVal >= 60) ringColor = '#facc15';
-                                    
-                                    ring.setAttribute('stroke', ringColor);
-                                }
                                 
                                 // Update Operator Badge
                                 let badge = marker.querySelector('.operator-badge');
