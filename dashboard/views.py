@@ -197,6 +197,7 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 'latest_article': '---',
                 'current_order': '---',
                 'is_found_online': False,
+                'is_producing_now': False,
                 'audit_log': []
             }
 
@@ -231,8 +232,13 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         raw_op_d = str(reg.get('operacion') or "").strip().upper()
         raw_obs = str(reg.get('observaciones') or "").strip().upper()
 
-        non_prod_keywords = ['REPROCESO', 'RETRABAJO']
-        descanso_keywords = ['DESCANSO', 'ALMUERZO', 'PAUSA']
+        non_prod_keywords = ['REPROCESO', 'RETRABAJO', 'DESCARTE', 'SCRAP']
+        descanso_keywords = [
+            'DESCANSO', 'ALMUERZO', 'PAUSA', 'CAPACI', 'CAPACIT', 'TENSI', 'TENSION', 
+            'HERRAMIENTA', 'MANTEN', 'REPAR', 'CORRECTIVO', 'PREVENTIVO', 
+            'AJUST', 'SET-UP', 'SETUP', 'LIMPIEZA', 'REUNION', 'REUNIÓN', 
+            'MATERIAL', 'ESPERA', 'ENSAYO', 'INSPEC', 'ASIST', 'AUXILIO'
+        ]
         
         is_repro = (
             raw_id_op in non_prod_keywords or 
@@ -319,18 +325,55 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             
             # Tracking de última actividad real
             act_time = reg.get('hora_fin') or reg.get('hora_inicio') or reg.get('fecha')
-            if not data['latest_activity_time'] or (act_time and data['latest_activity_time'] and act_time > data['latest_activity_time']):
+            if not data['latest_activity_time'] or (act_time and data['latest_activity_time'] and act_time >= data['latest_activity_time']):
+                prev_act_time = data['latest_activity_time']
                 data['latest_activity_time'] = act_time
-                if reg['observaciones']:
-                    data['latest_obs'] = str(reg['observaciones']).strip().upper()
+                
+                # DETERMINACIÓN DEL MOTIVO DE ESTADO
+                raw_obs = str(reg.get('observaciones') or "").strip().upper()
+                raw_art = str(reg.get('articulod') or "").strip().upper()
+                raw_op = str(reg.get('operacion') or "").strip().upper()
+                
+                # Buscamos palabras clave
+                found_kw = None
+                for kw in descanso_keywords:
+                    if kw in raw_obs or kw in raw_art or kw in raw_op:
+                        found_kw = kw
+                        break
+                
+                current_reason = found_kw if found_kw else (raw_obs if raw_obs else "ONLINE")
+                
+                # Lógica de Actualización:
+                # 1. Si el nuevo es importante, actualizamos siempre.
+                # 2. Si el nuevo es genérico (ONLINE), solo actualizamos si el motivo anterior ya está "terminado"
+                #    o si este nuevo registro es posterior.
+                
+                is_current_important = data.get('latest_obs') and data['latest_obs'] not in ['ONLINE', '', '---', 'S/A', 'S/D']
+                is_new_important = current_reason not in ['ONLINE', '', '---', 'S/A', 'S/D']
+                
+                force_update = not is_current_important or is_new_important
+                
+                # Si el actual es importante y el nuevo es genérico, revisamos tiempos
+                if is_current_important and not is_new_important:
+                    # Buscamos el fin de la actividad anterior (sticky)
+                    # Si el registro actual es ONLINE y el anterior terminó hace más de 1 min, limpiamos.
+                    if prev_act_time and reg.get('hora_inicio') and (reg['hora_inicio'] - prev_act_time).total_seconds() > 1200:
+                        force_update = True
+                
+                if not data['latest_obs'] or force_update:
+                    data['latest_obs'] = current_reason
+
                 data['latest_date'] = reg['fecha']
                 data['current_order'] = reg['id_orden']
-                # Guardamos info de la sesión más reciente para el Mapa en Tiempo Real
                 data['latest_is_active'] = is_session_active
                 data['latest_is_interrupcion'] = (reg.get('es_interrupcion') == True or is_descanso)
                 data['latest_is_proceso'] = (reg.get('es_proceso') == True)
             
-            # Siempre guardamos el último operario y artículo visto (ya que viene ordenado por hora_inicio)
+            # Si hay una sesión activa de procesos (producción), lo marcamos para el Mapa
+            if is_session_active and reg.get('es_proceso'):
+                data['is_producing_now'] = True
+            
+            # Siempre guardamos el último operario y artículo visto
             uid = str(reg.get('id_concepto') or '').strip()
             if uid:
                 data['latest_operator'] = nombres_operarios.get(uid, f"Operario {uid}")
@@ -655,6 +698,7 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             'is_active_production': t_op_hrs > 0.001,
             'is_session_open': data.get('latest_is_active', False),
             'is_currently_interrupted': data.get('latest_is_interrupcion', False),
+            'is_producing_now': data.get('is_producing_now', False),
             'idle_mins': round(idle_mins, 1),
             'audit_log': json.dumps(clean_log)
         })
@@ -2067,10 +2111,12 @@ def plant_map(request):
     # 1. Obtener KPIs del día de hoy mediante la lógica del dashboard principal
     prod_ctx = dashboard_produccion(request, return_context=True, force_date='today')
     
-    # Mapeo id_maquina -> KPI para acceso rápido
-    kpi_map = {k['id']: k for k in prod_ctx.get('kpis', [])}
+    # Obtener incidencias de mantenimiento activas
+    from .models import Mantenimiento
+    mants_activos = Mantenimiento.objects.filter(estado__in=['ABIERTO', 'PROCESO'])
+    maquinas_en_reparacion = [m.maquina_id for m in mants_activos]
     global_stats = prod_ctx.get('resumen', {})
-    
+
     # 2. Obtener máquinas configuradas
     machines_config = MaquinaConfig.objects.all()
     
@@ -2079,10 +2125,12 @@ def plant_map(request):
     # Creamos un buscador universal que admita cualquier forma de identificar la máquina.
     kpi_lookup = {}
     for k in prod_ctx.get('kpis', []):
-        kid = str(k.get('id' or '')).strip().upper()
-        kname = str(k.get('name' or '')).strip().upper()
+        kid = str(k.get('id') or '').strip().upper()
+        kname = str(k.get('name') or '').strip().upper()
         if kid: kpi_lookup[kid] = k
         if kname: kpi_lookup[kname] = k
+    
+    # print(f"DEBUG KPI KEYS: {list(kpi_lookup.keys())}")
     
     machine_data = []
     
@@ -2097,29 +2145,43 @@ def plant_map(request):
         op_name = "N/A"
         proceso = "---"
         detalle = "---"
-        
+
+        if m.id in maquinas_en_reparacion:
+            status = 'REPAIR'
+            proceso = "MANTENIMIENTO"
+            detalle = "Incidencia Abierta"
+
         if data:
             # VÍNCULO DIRECTO CON EL TABLERO DE TARJETAS
-            # Relaxed Logic: Consider 'Online' if active session OR recent activity (< 60 mins) to prevent grey-out during short breaks
+            # Relaxed Logic: Consider 'Online' if active session OR recent activity (< 20 mins) to prevent grey-out during short breaks
+            # Updated to 20 mins matching alert system
             idle_val = data.get('idle_mins', 999)
-            is_effectively_online = data.get('is_online') or (idle_val < 60.0)
+            is_effectively_online = data.get('is_online') or (idle_val < 20.0)
 
-            if is_effectively_online:
-                # If we have maintenance, it takes precedence usually, but if we are producing, we are producing.
-                # If recent qty > 0, we can't be stopped.
-                is_producing = data.get('actual_qty', 0) > 0 and not data.get('latest_is_interrupcion')
-                
-                # STRICT LOGIC AS REQUESTED:
-                # Two states only: RUNNING (Green) and STOPPED (Red)
-                # Green (RUNNING) ONLY if 'last_reason' contains "ONLINE"
-                reason_text = str(data.get('last_reason', '')).upper()
-                
-                if 'ONLINE' in reason_text:
-                     status = 'RUNNING'
+            # Prioridad de estados basados en el motivo
+            reason_text = str(data.get('last_reason', '')).upper()
+            
+            # Palabras clave simplificadas
+            repair_keywords = ['MANTEN', 'REPAR', 'CORRECTIVO', 'PREVENTIVO', 'FALLA', 'ROTURA']
+            wait_keywords = ['HERRAMIENTA', 'AJUST', 'TENSI', 'CAPACI', 'CAPACIT', 'ESPERA', 'SET-UP', 'SETUP', 'LIMPIEZA', 'MATERIAL', 'ENSAYO', 'INSPEC', 'ASIST', 'AUXILIO']
+            break_keywords = ['DESCANSO', 'ALMUERZO', 'PAUSA', 'REUNION', 'REUNIÓN', 'PERSONAL']
+            
+            # REPARACIÓN permanece aunque esté offline si hay ticket abierto
+            if m.id in maquinas_en_reparacion or any(k in reason_text for k in repair_keywords):
+                status = 'REPAIR'
+            elif data.get('is_producing_now'):
+                # Prioridad absoluta: Si hay producción activa, la máquina está VERDE.
+                status = 'RUNNING'
+            elif is_effectively_online:
+                if any(k in reason_text for k in wait_keywords):
+                    status = 'WAIT'
+                elif any(k in reason_text for k in break_keywords):
+                    status = 'BREAK'
+                elif 'ONLINE' in reason_text:
+                    status = 'RUNNING'
                 else:
-                     status = 'STOPPED'
+                    status = 'STOPPED'
             else:
-                # If not effectively online, it's Stopped (Red)
                 status = 'STOPPED'
 
                 
@@ -2152,6 +2214,18 @@ def plant_map(request):
             'fin': data.get('hora_fin', '--:--') if data else '--:--',
         })
         
+    # Ordenar máquinas por estado (Primero las activas/Online)
+    def status_priority(m):
+        s = m['status']
+        if s == 'RUNNING': return 0
+        if s == 'WAIT': return 1
+        if s == 'BREAK': return 2
+        if s == 'REPAIR': return 3
+        if s == 'STOPPED': return 4
+        return 5 # OFFLINE
+
+    machine_data.sort(key=lambda x: (status_priority(x), x['name']))
+
     context = {
         'machines': machine_data,
         'global_stats': global_stats,

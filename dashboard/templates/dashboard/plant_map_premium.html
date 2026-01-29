@@ -379,15 +379,39 @@
             box-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
         }
 
-        .machine-marker.status-stopped::after {
+        .machine-marker.status-repair {
+            border-color: #f59e0b;
+            color: #f59e0b;
+            background: rgba(245, 158, 11, 0.1);
+            box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+        }
+
+        .machine-marker.status-wait {
+            border-color: #facc15;
+            color: #facc15;
+            background: rgba(250, 204, 21, 0.1);
+            box-shadow: 0 0 10px rgba(250, 204, 21, 0.3);
+        }
+
+        .machine-marker.status-break {
+            border-color: #3b82f6;
+            color: #3b82f6;
+            background: rgba(59, 130, 246, 0.1);
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+        }
+
+        .machine-marker.status-stopped::after,
+        .machine-marker.status-repair::after,
+        .machine-marker.status-wait::after,
+        .machine-marker.status-break::after {
             content: '';
             position: absolute;
             top: 50%; left: 50%;
             width: 100%; height: 100%;
             transform: translate(-50%, -50%);
-            border: 2px solid var(--status-red);
+            border: 2px solid currentColor;
             border-radius: inherit;
-            animation: wave-red 2s infinite;
+            animation: wave-generic 3s infinite;
             pointer-events: none;
             opacity: 0;
         }
@@ -397,9 +421,9 @@
             100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; border-width: 0px; }
         }
         
-        @keyframes wave-red {
-            0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; border-width: 2px; }
-            100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; border-width: 0px; }
+        @keyframes wave-generic {
+            0% { transform: translate(-50%, -50%) scale(1); opacity: 0.4; border-width: 1px; }
+            100% { transform: translate(-50%, -50%) scale(1.8); opacity: 0; border-width: 0px; }
         }
 
         .machine-icon-container {
@@ -583,6 +607,28 @@
             font-size: 14px;
             letter-spacing: 0.5px;
         }
+
+        /* FLOATING LEGEND */
+        .floating-legend {
+            position: fixed;
+            left: 20px;
+            bottom: 25px;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 12px;
+            z-index: 4000;
+            color: white;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+            min-width: 200px;
+        }
+        .floating-legend.show { display: flex; }
+        .legend-item { display: flex; align-items: center; gap: 12px; font-size: 12px; font-weight: 600; }
+        .legend-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; }
     </style>
 </head>
 <body>
@@ -602,6 +648,7 @@
         </h1>
         
         <div style="display:flex; gap:10px;">
+            <button class="btn" onclick="toggleLegend()"><i class="fa-solid fa-circle-info"></i> LEYENDA</button>
             <button class="btn" id="btnFullscreen" onclick="toggleFullscreen()"><i class="fa-solid fa-expand"></i> FULLSCREEN</button>
             <button class="btn" id="btnDesign" onclick="toggleDesignMode()">DISEÑO</button>
             <button class="btn" id="btnToggleSidebar" onclick="toggleSidebar()">PANEL</button>
@@ -750,7 +797,7 @@
                         <div style="flex:1;">
                             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                                 <span style="color:#0f172a; font-weight:800; font-size:14px;">{{ m.name }}</span>
-                                <div class="machine-status-dot" style="background: {% if m.status == 'RUNNING' %}#10b981{% else %}#ef4444{% endif %}; box-shadow: 0 0 8px {% if m.status == 'RUNNING' %}rgba(16,185,129,0.4){% else %}rgba(239,68,68,0.4){% endif %};"></div>
+                                <div class="machine-status-dot" style="background: {% if m.status == 'RUNNING' %}#10b981{% elif m.status == 'REPAIR' %}#f59e0b{% elif m.status == 'WAIT' %}#facc15{% elif m.status == 'BREAK' %}#3b82f6{% else %}#ef4444{% endif %}; box-shadow: 0 0 8px {% if m.status == 'RUNNING' %}rgba(16,185,129,0.4){% elif m.status == 'REPAIR' %}rgba(245,158,11,0.4){% elif m.status == 'WAIT' %}rgba(250,204,21,0.4){% elif m.status == 'BREAK' %}rgba(59,130,246,0.4){% else %}rgba(239,68,68,0.4){% endif %};"></div>
                             </div>
                             <div style="font-size:12px; color:#3b82f6; display:flex; align-items:center; gap:6px; margin-bottom:4px; font-weight: 700;">
                                 <i class="fa-solid fa-user-gear" style="font-size:10px; opacity:0.7;"></i>
@@ -782,7 +829,19 @@
                 </div>
                 <div style="display:flex; align-items:center; gap:12px;">
                     <div style="width:12px; height:12px; border-radius:50%; background:#ef4444; box-shadow:0 0 10px rgba(239,68,68,0.2);"></div>
-                    <span style="font-weight: 600;">APAGADA</span>
+                    <span style="font-weight: 600;">APAGADA / PARADA</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <div style="width:12px; height:12px; border-radius:50%; background:#f59e0b; box-shadow:0 0 10px rgba(245,158,11,0.2);"></div>
+                    <span style="font-weight: 600;">REPARACIÓN / MANT.</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <div style="width:12px; height:12px; border-radius:50%; background:#facc15; box-shadow:0 0 10px rgba(250,204,21,0.2);"></div>
+                    <span style="font-weight: 600;">ESPERA / SET-UP</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <div style="width:12px; height:12px; border-radius:50%; background:#3b82f6; box-shadow:0 0 10px rgba(59,130,246,0.2);"></div>
+                    <span style="font-weight: 600;">DESCANSO</span>
                 </div>
             </div> <!-- Fin Referencias -->
         </div> <!-- Fin sidebar-content-padding -->
@@ -848,6 +907,34 @@
     <div id="toast" class="toast-container">
         <div class="toast-icon"><i class="fa-solid fa-check"></i></div>
         <div class="toast-message" id="toastMessage">Propiedades guardadas</div>
+    </div>
+
+    <!-- FLOATING LEGEND OVERLAY -->
+    <div id="floatingLegend" class="floating-legend">
+        <div style="font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; font-weight: 800; display: flex; justify-content: space-between; align-items: center;">
+            Monitor de Estados
+            <i class="fa-solid fa-xmark" style="cursor:pointer" onclick="toggleLegend()"></i>
+        </div>
+        <div class="legend-item">
+            <div class="legend-dot" style="background:#10b981; box-shadow: 0 0 10px #10b981;"></div>
+            <span>ENCENDIDA / ONLINE</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-dot" style="background:#facc15; box-shadow: 0 0 10px #facc15;"></div>
+            <span>ESPERA / CAPACITACIÓN</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-dot" style="background:#f59e0b; box-shadow: 0 0 10px #f59e0b;"></div>
+            <span>MANTENIMIENTO / REPARACIÓN</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-dot" style="background:#3b82f6; box-shadow: 0 0 10px #3b82f6;"></div>
+            <span>DESCANSO / PAUSA</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-dot" style="background:#ef4444; box-shadow: 0 0 10px #ef4444;"></div>
+            <span>APAGADA / SIN ACTIVIDAD</span>
+        </div>
     </div>
 
     <script>
@@ -1082,6 +1169,9 @@
         function getColor(status) {
             if (status === 'RUNNING') return 'var(--status-green)';
             if (status === 'STOPPED') return 'var(--status-red)';
+            if (status === 'REPAIR') return '#f59e0b';
+            if (status === 'WAIT') return '#facc15';
+            if (status === 'BREAK') return '#3b82f6';
             return 'var(--status-gray)';
         }
 
@@ -1157,16 +1247,20 @@
         }
 
         function savePosition(id, x, y) {
+            updateMachineBackend({ id: id, x: x, y: y });
+        }
+
+        function updateMachineBackend(payload) {
             fetch('/dashboard/api/update-position/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': '{{ csrf_token }}'
                 },
-                body: JSON.stringify({ id: id, x: x, y: y })
+                body: JSON.stringify(payload)
             }).then(res => res.json())
               .then(data => {
-                  console.log('Position saved', data);
+                  console.log('Update saved', data);
               })
               .catch(err => console.error(err));
         }
@@ -1190,13 +1284,16 @@
                     marker.style.left = xPercent + '%';
                     marker.style.top = yPercent + '%';
                     machinePositionCounter++;
-                    savePosition(id, xPercent, yPercent);
+                    updateMachineBackend({ id: id, x: xPercent, y: yPercent, visible: true });
+                } else {
+                    updateMachineBackend({ id: id, visible: true });
                 }
                 marker.style.display = 'flex';
                 btn.classList.remove('off');
             } else {
                 marker.style.display = 'none';
                 btn.classList.add('off');
+                updateMachineBackend({ id: id, visible: false });
             }
         }
 
@@ -1290,6 +1387,7 @@
             if (eyeBtn) eyeBtn.classList.remove('off');
 
             savePosition(id, xPercent, yPercent);
+            updateMachineBackend({ id: id, visible: true });
             showToast(`Máquina ${marker.getAttribute('data-name')} colocada`);
         }
 
@@ -1384,8 +1482,77 @@
              if(!document.body.classList.contains('ui-hidden')) {
                  document.getElementById('mainSidebar').classList.remove('hidden');
              }
-             setTimeout(adjustFloorSize, 300);
         }
+        
+    function toggleLegend() {
+            const legend = document.getElementById('floatingLegend');
+            legend.classList.toggle('show');
+        }
+
+        // AUTO-REFRESH LOGIC (30 Seconds)
+        setInterval(() => {
+            if (isDesignMode) return; // Don't refresh while editing
+            
+            fetch(window.location.pathname + '?format=json')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.machines) {
+                        data.machines.forEach(m => {
+                            // Update Marker
+                            const marker = document.getElementById(`machine-${m.id}`);
+                            if (marker) {
+                                // Update classes
+                                marker.classList.remove('status-running', 'status-stopped', 'status-repair', 'status-wait', 'status-break', 'status-offline');
+                                marker.classList.add(`status-${m.status.toLowerCase()}`);
+                                
+                                // Update data attributes
+                                marker.setAttribute('data-status', m.status);
+                                marker.setAttribute('data-reason', m.proceso);
+                                
+                                // Update Label if needed (optional)
+                            }
+                            
+                            // Update Sidebar Item
+                            const sidebarItem = document.getElementById(`sidebar-item-${m.id}`);
+                            if (sidebarItem) {
+                                const dot = sidebarItem.querySelector('.machine-status-dot');
+                                
+                                let color = '#ef4444'; // default red
+                                let shadow = 'rgba(239,68,68,0.4)';
+                                
+                                if (m.status === 'RUNNING') { color = '#10b981'; shadow = 'rgba(16,185,129,0.4)'; }
+                                else if (m.status === 'REPAIR') { color = '#f59e0b'; shadow = 'rgba(245,158,11,0.4)'; }
+                                else if (m.status === 'WAIT') { color = '#facc15'; shadow = 'rgba(250,204,21,0.4)'; }
+                                else if (m.status === 'BREAK') { color = '#3b82f6'; shadow = 'rgba(59,130,246,0.4)'; }
+                                
+                                if (dot) {
+                                    dot.style.background = color;
+                                    dot.style.boxShadow = `0 0 8px ${shadow}`;
+                                }
+                                
+                                // Update Operator Text
+                                const opDiv = sidebarItem.querySelector('.fa-user-gear').parentNode;
+                                if (opDiv) {
+                                     // Replace text node only
+                                     opDiv.childNodes.forEach(n => {
+                                         if (n.nodeType === 3) n.textContent = ' ' + (m.operario || 'Sin Operario').substring(0, 25);
+                                     });
+                                }
+                                
+                                // Update Detail Text
+                                const detDiv = sidebarItem.querySelector('.fa-microchip').parentNode;
+                                if (detDiv) {
+                                     detDiv.childNodes.forEach(n => {
+                                         if (n.nodeType === 3) n.textContent = ' ' + (m.detalle || 'Sin Actividad').substring(0, 45);
+                                     });
+                                }
+                            }
+                        });
+                        console.log('Map data refreshed.');
+                    }
+                })
+                .catch(e => console.error('Refresh error:', e));
+        }, 30000);
     </script>
 </body>
 </html>
