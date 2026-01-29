@@ -629,6 +629,43 @@
         .floating-legend.show { display: flex; }
         .legend-item { display: flex; align-items: center; gap: 12px; font-size: 12px; font-weight: 600; }
         .legend-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; }
+
+        /* OEE RING STYLES */
+        .oee-ring-bg { fill: none; stroke: rgba(255,255,255,0.1); stroke-width: 2.5; }
+        .oee-ring-progress { 
+            fill: none; 
+            stroke-width: 2.5; 
+            stroke-linecap: round; 
+            transform: rotate(-90deg); 
+            transform-origin: 50% 50%;
+            transition: stroke-dashoffset 1s ease-in-out;
+            filter: drop-shadow(0 0 2px currentColor);
+        }
+        
+        /* OPERATOR BADGE */
+        .operator-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 22px;
+            height: 22px;
+            background: #1e293b;
+            border: 1px solid var(--border-color);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            font-weight: 800;
+            z-index: 25;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            transition: all 0.3s;
+        }
+        .machine-marker:hover .operator-badge {
+            transform: scale(1.2);
+            border-color: var(--neon-blue);
+        }
     </style>
 </head>
 <body>
@@ -677,6 +714,26 @@
                      onmousedown="onMarkerMouseDown(event, this)">
                     
                     <div class="machine-icon-container">
+                        <!-- OEE Progress Ring -->
+                        <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: flex; align-items: center; justify-content: center;">
+                             <svg width="140%" height="140%" viewBox="0 0 36 36" style="position: absolute;">
+                                <path class="oee-ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                <path class="oee-ring-progress" 
+                                      stroke="{% if m.oee >= 85 %}#10b981{% elif m.oee >= 60 %}#facc15{% else %}#ef4444{% endif %}"
+                                      stroke-dasharray="{{ m.oee|default:0 }}, 100"
+                                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                      id="ring-{{ m.id }}" 
+                                />
+                             </svg>
+                        </div>
+                        
+                        <!-- Operator Badge -->
+                        {% if m.operario and m.operario != 'S/A' %}
+                        <div class="operator-badge" title="{{ m.operario }}">
+                            {{ m.operario|slice:":2" }}
+                        </div>
+                        {% endif %}
+
                         {% if m.type == 'CNC' %}
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
@@ -1510,6 +1567,34 @@
                                 marker.setAttribute('data-reason', m.proceso);
                                 
                                 // Update Label if needed (optional)
+                                
+                                // Update OEE Ring
+                                const ring = document.getElementById(`ring-${m.id}`);
+                                if (ring) {
+                                    const oeeVal = m.oee || 0;
+                                    ring.setAttribute('stroke-dasharray', `${oeeVal}, 100`);
+                                    
+                                    // Update Color based on OEE
+                                    let ringColor = '#ef4444';
+                                    if(oeeVal >= 85) ringColor = '#10b981';
+                                    else if(oeeVal >= 60) ringColor = '#facc15';
+                                    
+                                    ring.setAttribute('stroke', ringColor);
+                                }
+                                
+                                // Update Operator Badge
+                                let badge = marker.querySelector('.operator-badge');
+                                if (m.operario && m.operario !== 'S/A') {
+                                    if (!badge) {
+                                        badge = document.createElement('div');
+                                        badge.className = 'operator-badge';
+                                        marker.appendChild(badge);
+                                    }
+                                    badge.innerText = m.operario.substring(0, 2).toUpperCase();
+                                    badge.title = m.operario;
+                                } else if (badge) {
+                                    badge.remove();
+                                }
                             }
                             
                             // Update Sidebar Item
