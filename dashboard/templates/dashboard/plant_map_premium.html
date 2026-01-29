@@ -31,7 +31,7 @@
             width: 100vw;
         }
 
-        /* BG - KEEP LAYOUT IMAGE */
+        /* BG - KEEP LAYOUT IMAGE - Now inside plant-floor for proper scaling */
         .blueprint-bg {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -40,7 +40,8 @@
             background-size: 100% 100%;
             background-repeat: no-repeat;
             background-position: center;
-            z-index: -2;
+            z-index: 0;
+            pointer-events: none;
         }
 
         /* REMOVED GLOW EFFECT ON BG for cleaner look */
@@ -298,7 +299,6 @@
         .ui-hidden .floating-toggle:hover {
             opacity: 1;
         }
-        
         /* MAP CONTAINER & FLOOR */
         .map-container {
             position: absolute;
@@ -306,12 +306,10 @@
             left: 0;
             right: 0;
             bottom: 0;
-            transition: all 0.3s ease;
+            transition: right 0.3s ease;
             z-index: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
             overflow: hidden;
+            background-color: #0f172a; /* Dark fallback background */
         }
 
         .map-container.sidebar-open {
@@ -319,13 +317,11 @@
         }
 
         .plant-floor {
-            position: relative;
-            /* We use a fixed aspect ratio for the floor to match the blueprint's likely shape */
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
-            max-width: 100%;
-            max-height: 100%;
-            aspect-ratio: 16 / 9; /* Adjusted via JS or set to common value */
         }
 
         /* MACHINE MARKERS */
@@ -599,14 +595,14 @@
 
     <div class="top-bar">
         <h1>
-            <a href="/dashboard/" class="btn-home" title="Volver al Panel Principal">
+            <a href="/" class="btn-home" title="Volver al Panel Principal">
                 <i class="fa-solid fa-arrow-left"></i>
             </a>
-            <span>FACTORY<span style="color:#3b82f6">MAP</span> <span style="font-size:12px; opacity:0.6; font-weight:400; color:#64748b; margin-left:5px;">PREMIUM</span></span>
+            <span><span style="color:#ff8c00">ABBA</span><span style="color:#ffea00">MAT</span></span>
         </h1>
         
         <div style="display:flex; gap:10px;">
-            <button class="btn" id="btnToggle3D" onclick="toggle3D()">2D/3D</button>
+            <button class="btn" id="btnFullscreen" onclick="toggleFullscreen()"><i class="fa-solid fa-expand"></i> FULLSCREEN</button>
             <button class="btn" id="btnDesign" onclick="toggleDesignMode()">DISEÑO</button>
             <button class="btn" id="btnToggleSidebar" onclick="toggleSidebar()">PANEL</button>
             <button class="btn" onclick="location.reload()"><i class="fa-solid fa-rotate"></i></button>
@@ -616,17 +612,16 @@
     <div class="design-mode-indicator" id="designIndicator" style="display:none; position:fixed; top:70px; left:50%; transform:translateX(-50%); background:orange; color:black; padding:5px 15px; border-radius:20px; font-weight:bold; z-index:50;">MODO DISEÑO ACTIVADO</div>
 
     <div class="map-container sidebar-open" id="mapContainer">
-        <div class="blueprint-bg"></div>
         <div class="plant-floor" id="plantFloor" 
-             style="position:relative; width:100%; height:100%; transition:all 0.5;"
              ondragover="event.preventDefault()" 
              ondrop="onMapDrop(event)">
-            <!-- Marcadores de máquinas -->
+            <!-- Blueprint background inside plant-floor for proper relative positioning -->
+            <div class="blueprint-bg"></div>
             <!-- Marcadores de máquinas -->
             {% for m in machines %}
                 <div class="machine-marker status-{{ m.status|lower }} {% if m.type == 'TORNO' or m.type == 'PRENSA' or m.type == 'AGUJEREADORA' %}shape-rect{% elif m.type == 'GENERICO' or m.type == 'ROBOT' %}shape-circle{% else %}shape-square{% endif %}" 
                      id="machine-{{ m.id }}" 
-                     style="left: {{ m.x|default:0.5|unlocalize }}%; top: {{ m.y|default:0.5|unlocalize }}%; {% if m.w %}width: {{ m.w|unlocalize }}%;{% endif %} {% if m.h %}height: {{ m.h|unlocalize }}%;{% endif %} border-width: {{ m.border_weight|default:2 }}px; --rot: {{ m.r|default:0|unlocalize }}deg; transform: translate(-50%, -50%) rotate({{ m.r|default:0|unlocalize }}deg);"
+                     style="{% if not m.visible %}display: none;{% endif %} left: {{ m.x|default:0.5|unlocalize }}%; top: {{ m.y|default:0.5|unlocalize }}%; {% if m.w %}width: {{ m.w|unlocalize }}%;{% endif %} {% if m.h %}height: {{ m.h|unlocalize }}%;{% endif %} border-width: {{ m.border_weight|default:2 }}px; --rot: {{ m.r|default:0|unlocalize }}deg; transform: translate(-50%, -50%) rotate({{ m.r|default:0|unlocalize }}deg);"
                      data-id="{{ m.id }}"
                      data-name="{{ m.name }}"
                      data-status="{{ m.status }}"
@@ -689,9 +684,6 @@
                             </svg>
                         {% endif %}
                     </div>
-
-                    <div class="machine-label" style="font-size: {{ m.label_size|default:10 }}px;">{{ m.name }}</div>
-                </div>
 
                     <div class="machine-label" style="font-size: {{ m.label_size|default:10 }}px;">{{ m.name }}</div>
                 </div>
@@ -1039,17 +1031,29 @@
             }, 3000);
         }
 
-        function toggle3D() {
-            is3D = !is3D;
-            const floor = document.getElementById('plantFloor');
-            if (is3D) {
-                floor.style.transform = "rotateX(30deg) scale(0.9) translateY(-50px)";
-                document.getElementById('btnToggle3D').classList.add('btn-active');
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.error(`Error: ${err.message}`);
+                });
             } else {
-                floor.style.transform = "none";
-                document.getElementById('btnToggle3D').classList.remove('btn-active');
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
             }
         }
+
+        // Sync button state with actual fullscreen status
+        document.addEventListener('fullscreenchange', () => {
+            const btn = document.getElementById('btnFullscreen');
+            if (document.fullscreenElement) {
+                btn.classList.add('btn-active');
+                btn.innerHTML = '<i class="fa-solid fa-compress"></i> SALIR';
+            } else {
+                btn.classList.remove('btn-active');
+                btn.innerHTML = '<i class="fa-solid fa-expand"></i> FULLSCREEN';
+            }
+        });
 
         // TOOLTIP LOGIC
         document.querySelectorAll('.machine-marker').forEach(marker => {
@@ -1328,11 +1332,10 @@
         }
 
         function adjustFloorSize() {
-            const floor = document.getElementById('plantFloor');
-            // Como ahora el fondo es 100% 100%, el floor simplemente ocupa todo el contenedor 
-            // para que las coordenadas coincidan perfectamente con el estiramiento.
-            floor.style.width = '100%';
-            floor.style.height = '100%';
+            // Con el nuevo sistema de aspect-ratio fijo en CSS,
+            // ya no necesitamos ajustar manualmente el tamaño.
+            // El CSS se encarga de mantener las proporciones correctas.
+            console.log('Floor size adjusted via CSS aspect-ratio');
         }
         window.addEventListener('resize', adjustFloorSize);
 

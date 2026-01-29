@@ -2140,6 +2140,7 @@ def plant_map(request):
             'status': status,
             'label_size': m.label_size,
             'border_weight': m.border_weight,
+            'visible': m.visible_en_mapa,  # Estado de visibilidad persistido
             'operario': op_name,
             'proceso': proceso,
             'detalle': detalle,
@@ -2190,6 +2191,9 @@ def update_machine_position(request):
         if 'type' in data: machine.tipo_maquina = data['type']
         if 'labelSize' in data: machine.label_size = to_float(data['labelSize'])
         if 'borderWeight' in data: machine.border_weight = to_float(data['borderWeight'])
+        if 'visible' in data: 
+            machine.visible_en_mapa = bool(data['visible'])
+            changes.append(f"Visible: {data['visible']}")
         
         machine.save()
 

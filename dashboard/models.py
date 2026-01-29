@@ -83,6 +83,7 @@ class MaquinaConfig(models.Model):
     
     label_size = models.FloatField(default=13.0, verbose_name="Tamaño Letra (px)")
     border_weight = models.FloatField(default=2.0, verbose_name="Grosor Línea (px)")
+    visible_en_mapa = models.BooleanField(default=True, verbose_name="Visible en Mapa")
     
     # Horarios Lun-Vie
     horario_inicio_sem = models.TimeField(verbose_name="Inicio Lun-Vie", default="07:00")
