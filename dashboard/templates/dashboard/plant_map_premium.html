@@ -714,7 +714,7 @@
                     
                     <div class="machine-icon-container">
                         <!-- Operator Badge -->
-                        {% if m.operario and m.operario != 'S/A' %}
+                        {% if m.operario and m.operario != 'S/A' and m.status != 'STOPPED' and m.status != 'OFFLINE' %}
                         <div class="operator-badge" title="{{ m.operario }}">
                             {{ m.operario|slice:":2" }}
                         </div>
@@ -1556,7 +1556,9 @@
                                 
                                 // Update Operator Badge
                                 let badge = marker.querySelector('.operator-badge');
-                                if (m.operario && m.operario !== 'S/A') {
+                                const isInactive = ['STOPPED', 'OFFLINE'].includes(m.status);
+
+                                if (m.operario && m.operario !== 'S/A' && !isInactive) {
                                     if (!badge) {
                                         badge = document.createElement('div');
                                         badge.className = 'operator-badge';
