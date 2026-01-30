@@ -25,3 +25,8 @@ populate_*.py
 .vscode/
 .idea/
 *.log
+
+# Backups (no subir a GitHub)
+backups/
+*.sql
+*.zip
