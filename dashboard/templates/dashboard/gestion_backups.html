@@ -3,7 +3,7 @@
 
 {% block title %}Gestión de Backups - ABBAMAT{% endblock %}
 
-{% block extra_css %}
+{% block content %}
 <style>
     :root {
         --premium-gold: #d4af37;
@@ -14,13 +14,6 @@
         --text-primary: #f1f5f9;
         --text-secondary: #94a3b8;
         --border-color: rgba(212, 175, 55, 0.2);
-    }
-
-    body {
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-        color: var(--text-primary);
-        font-family: 'Inter', sans-serif;
-        min-height: 100vh;
     }
 
     .page-header {
@@ -139,16 +132,16 @@
         margin: 0;
     }
 
-    table {
+    .backups-table table {
         width: 100%;
         border-collapse: collapse;
     }
 
-    thead {
+    .backups-table thead {
         background: rgba(212, 175, 55, 0.1);
     }
 
-    th {
+    .backups-table th {
         padding: 16px;
         text-align: left;
         color: var(--premium-gold);
@@ -159,17 +152,17 @@
         border-bottom: 1px solid var(--border-color);
     }
 
-    td {
+    .backups-table td {
         padding: 16px;
         color: var(--text-primary);
         border-bottom: 1px solid rgba(212, 175, 55, 0.1);
     }
 
-    tbody tr {
+    .backups-table tbody tr {
         transition: all 0.2s ease;
     }
 
-    tbody tr:hover {
+    .backups-table tbody tr:hover {
         background: rgba(212, 175, 55, 0.05);
     }
 
@@ -378,9 +371,7 @@
         100% { transform: rotate(360deg); }
     }
 </style>
-{% endblock %}
 
-{% block content %}
 <div class="container" style="max-width: 1400px; margin: 0 auto; padding: 32px;">
     
     <!-- Page Header -->
