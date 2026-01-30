@@ -6,24 +6,51 @@
 {% block content %}
 <style>
     :root {
-        --premium-gold: #fbbf24;
-        --purple: #8b5cf6;
-        --pink: #ec4899;
-        --cyan: #06b6d4;
-        --dark-bg: #1e293b;
-        --card-bg: #ffffff;
-        --text-dark: #1e293b;
-        --text-light: #64748b;
-        --border: #e2e8f0;
+        --premium-gold: #d4af37;
+        --gold-light: #f4e4b7;
+        --gold-dark: #b8941e;
+        --gold-bright: #ffd700;
+        --dark-bg: #0a0a0a;
+        --card-bg: #1a1a1a;
+        --card-bg-light: #252525;
+        --text-light: #ffffff;
+        --text-gold: #d4af37;
+        --text-muted: #888888;
+        --border-gold: #d4af37;
+        --border-dark: #333333;
+    }
+
+    body {
+        background: #0a0a0a;
     }
 
     .backup-header {
-        background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+        background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+        border: 2px solid var(--border-gold);
         border-radius: 20px;
         padding: 40px;
         margin-bottom: 32px;
-        color: white;
-        box-shadow: 0 10px 40px rgba(139, 92, 246, 0.3);
+        color: var(--text-light);
+        box-shadow: 0 10px 40px rgba(212, 175, 55, 0.3),
+                    0 0 60px rgba(212, 175, 55, 0.1) inset;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .backup-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, var(--gold-bright), transparent);
+        animation: shimmer 3s infinite;
+    }
+
+    @keyframes shimmer {
+        0%, 100% { opacity: 0.3; }
+        50% { opacity: 1; }
     }
 
     .backup-header h1 {
@@ -33,43 +60,48 @@
         display: flex;
         align-items: center;
         gap: 12px;
+        color: var(--premium-gold);
+        text-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
     }
 
     .backup-header p {
         font-size: 16px;
         opacity: 0.9;
         margin: 0;
+        color: var(--text-muted);
     }
 
     .github-info {
-        background: white;
+        background: var(--card-bg);
         border-radius: 16px;
         padding: 24px;
         margin-bottom: 32px;
-        border: 2px solid var(--border);
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+        border: 2px solid var(--border-dark);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
     }
 
     .github-info-header {
         font-size: 12px;
         font-weight: 700;
-        color: var(--text-light);
+        color: var(--premium-gold);
         text-transform: uppercase;
         letter-spacing: 0.5px;
         margin-bottom: 12px;
     }
 
     .github-link {
-        color: #2563eb;
+        color: var(--gold-light);
         text-decoration: none;
         font-weight: 600;
         display: flex;
         align-items: center;
         gap: 8px;
+        transition: all 0.3s ease;
     }
 
     .github-link:hover {
-        text-decoration: underline;
+        color: var(--gold-bright);
+        text-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
     }
 
     .github-meta {
@@ -77,11 +109,12 @@
         gap: 32px;
         margin-top: 12px;
         font-size: 14px;
-        color: var(--text-light);
+        color: var(--text-muted);
     }
 
     .github-meta span {
         font-weight: 600;
+        color: var(--premium-gold);
     }
 
     .action-cards {
@@ -92,18 +125,38 @@
     }
 
     .action-card {
-        background: white;
+        background: var(--card-bg);
         border-radius: 16px;
         padding: 28px;
-        border: 2px solid var(--border);
+        border: 2px solid var(--border-dark);
         transition: all 0.3s ease;
         cursor: pointer;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .action-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(135deg, transparent, rgba(212, 175, 55, 0.1));
+        opacity: 0;
+        transition: opacity 0.3s ease;
     }
 
     .action-card:hover {
         transform: translateY(-4px);
-        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+        border-color: var(--premium-gold);
+        box-shadow: 0 12px 32px rgba(212, 175, 55, 0.3),
+                    0 0 40px rgba(212, 175, 55, 0.1);
+    }
+
+    .action-card:hover::before {
+        opacity: 1;
     }
 
     .action-card-icon {
@@ -115,24 +168,39 @@
         justify-content: center;
         font-size: 24px;
         margin-bottom: 20px;
-        color: white;
+        color: #0a0a0a;
+        position: relative;
+        z-index: 1;
     }
 
-    .action-card-icon.purple { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }
-    .action-card-icon.pink { background: linear-gradient(135deg, #ec4899 0%, #db2777 100%); }
-    .action-card-icon.dark { background: linear-gradient(135deg, #334155 0%, #1e293b 100%); }
-    .action-card-icon.cyan { background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); }
+    .action-card-icon.purple { 
+        background: linear-gradient(135deg, var(--premium-gold) 0%, var(--gold-bright) 100%);
+        box-shadow: 0 4px 20px rgba(212, 175, 55, 0.4);
+    }
+    .action-card-icon.pink { 
+        background: linear-gradient(135deg, var(--gold-dark) 0%, var(--premium-gold) 100%);
+        box-shadow: 0 4px 20px rgba(184, 148, 30, 0.4);
+    }
+    .action-card-icon.dark { 
+        background: linear-gradient(135deg, #3a3a3a 0%, #2a2a2a 100%);
+        border: 2px solid var(--premium-gold);
+        color: var(--premium-gold);
+    }
+    .action-card-icon.cyan { 
+        background: linear-gradient(135deg, var(--gold-light) 0%, var(--premium-gold) 100%);
+        box-shadow: 0 4px 20px rgba(244, 228, 183, 0.4);
+    }
 
     .action-card h3 {
         font-size: 18px;
         font-weight: 700;
-        color: var(--text-dark);
+        color: var(--text-light);
         margin: 0 0 8px 0;
     }
 
     .action-card p {
         font-size: 14px;
-        color: var(--text-light);
+        color: var(--text-muted);
         margin: 0 0 20px 0;
         line-height: 1.5;
     }
@@ -146,41 +214,80 @@
         font-size: 14px;
         cursor: pointer;
         transition: all 0.2s ease;
-        color: white;
+        color: #0a0a0a;
+        position: relative;
+        overflow: hidden;
     }
 
-    .action-card-btn.purple { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }
-    .action-card-btn.pink { background: linear-gradient(135deg, #ec4899 0%, #db2777 100%); }
-    .action-card-btn.dark { background: linear-gradient(135deg, #334155 0%, #1e293b 100%); }
-    .action-card-btn.cyan { background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); }
+    .action-card-btn::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 0;
+        height: 0;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.3);
+        transform: translate(-50%, -50%);
+        transition: width 0.6s, height 0.6s;
+    }
+
+    .action-card-btn:hover::before {
+        width: 300px;
+        height: 300px;
+    }
+
+    .action-card-btn.purple { 
+        background: linear-gradient(135deg, var(--premium-gold) 0%, var(--gold-bright) 100%);
+        box-shadow: 0 4px 15px rgba(212, 175, 55, 0.4);
+    }
+    .action-card-btn.pink { 
+        background: linear-gradient(135deg, var(--gold-dark) 0%, var(--premium-gold) 100%);
+        box-shadow: 0 4px 15px rgba(184, 148, 30, 0.4);
+    }
+    .action-card-btn.dark { 
+        background: linear-gradient(135deg, #3a3a3a 0%, #2a2a2a 100%);
+        border: 2px solid var(--premium-gold);
+        color: var(--premium-gold);
+    }
+    .action-card-btn.cyan { 
+        background: linear-gradient(135deg, var(--gold-light) 0%, var(--premium-gold) 100%);
+        box-shadow: 0 4px 15px rgba(244, 228, 183, 0.4);
+    }
 
     .action-card-btn:hover {
         transform: scale(1.02);
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        box-shadow: 0 6px 25px rgba(212, 175, 55, 0.6);
     }
 
     .history-section {
-        background: white;
+        background: var(--card-bg);
         border-radius: 16px;
         padding: 0;
-        border: 2px solid var(--border);
+        border: 2px solid var(--border-dark);
         overflow: hidden;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
     }
 
     .history-header {
         padding: 24px 28px;
-        border-bottom: 2px solid var(--border);
+        border-bottom: 2px solid var(--border-gold);
         display: flex;
         align-items: center;
         gap: 12px;
+        background: linear-gradient(135deg, #1a1a1a 0%, #252525 100%);
     }
 
     .history-header h2 {
         font-size: 20px;
         font-weight: 800;
-        color: var(--text-dark);
+        color: var(--premium-gold);
         margin: 0;
+        text-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
+    }
+
+    .history-header i {
+        color: var(--premium-gold);
     }
 
     .history-table {
@@ -189,7 +296,7 @@
     }
 
     .history-table thead {
-        background: #f8fafc;
+        background: #1a1a1a;
     }
 
     .history-table th {
@@ -197,21 +304,26 @@
         text-align: left;
         font-size: 12px;
         font-weight: 700;
-        color: var(--text-light);
+        color: var(--premium-gold);
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        border-bottom: 2px solid var(--border);
+        border-bottom: 2px solid var(--border-dark);
     }
 
     .history-table td {
         padding: 20px 28px;
-        color: var(--text-dark);
-        border-bottom: 1px solid var(--border);
+        color: var(--text-light);
+        border-bottom: 1px solid var(--border-dark);
         font-size: 14px;
     }
 
+    .history-table tbody tr {
+        transition: all 0.3s ease;
+    }
+
     .history-table tbody tr:hover {
-        background: #f8fafc;
+        background: #252525;
+        box-shadow: 0 0 20px rgba(212, 175, 55, 0.1) inset;
     }
 
     .badge {
@@ -224,23 +336,27 @@
     }
 
     .badge-success {
-        background: #d1fae5;
-        color: #065f46;
+        background: rgba(16, 185, 129, 0.2);
+        color: #10b981;
+        border: 1px solid #10b981;
     }
 
     .badge-error {
-        background: #fee2e2;
-        color: #991b1b;
+        background: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+        border: 1px solid #ef4444;
     }
 
     .badge-mysql {
-        background: #dbeafe;
-        color: #1e40af;
+        background: rgba(212, 175, 55, 0.2);
+        color: var(--premium-gold);
+        border: 1px solid var(--premium-gold);
     }
 
     .badge-completo {
-        background: #e9d5ff;
-        color: #6b21a8;
+        background: rgba(244, 228, 183, 0.2);
+        color: var(--gold-light);
+        border: 1px solid var(--gold-light);
     }
 
     .action-btns {
@@ -252,9 +368,9 @@
         width: 36px;
         height: 36px;
         border-radius: 8px;
-        border: 2px solid var(--border);
-        background: white;
-        color: var(--text-dark);
+        border: 2px solid var(--border-dark);
+        background: #1a1a1a;
+        color: var(--premium-gold);
         cursor: pointer;
         transition: all 0.2s ease;
         display: flex;
@@ -264,31 +380,33 @@
     }
 
     .icon-btn:hover {
-        background: var(--text-dark);
-        color: white;
-        border-color: var(--text-dark);
+        background: var(--premium-gold);
+        color: #0a0a0a;
+        border-color: var(--premium-gold);
+        box-shadow: 0 0 15px rgba(212, 175, 55, 0.5);
     }
 
     .icon-btn.danger:hover {
         background: #dc2626;
         border-color: #dc2626;
         color: white;
+        box-shadow: 0 0 15px rgba(220, 38, 38, 0.5);
     }
 
     .empty-state {
         text-align: center;
         padding: 60px 20px;
-        color: var(--text-light);
+        color: var(--text-muted);
     }
 
     .empty-state i {
         font-size: 64px;
-        color: #cbd5e1;
+        color: var(--border-dark);
         margin-bottom: 20px;
     }
 
     .empty-state h3 {
-        color: var(--text-dark);
+        color: var(--text-light);
         font-size: 20px;
         margin-bottom: 8px;
     }
@@ -302,18 +420,20 @@
         top: 0;
         width: 100%;
         height: 100%;
-        background: rgba(0, 0, 0, 0.6);
-        backdrop-filter: blur(4px);
+        background: rgba(0, 0, 0, 0.85);
+        backdrop-filter: blur(8px);
     }
 
     .modal-content {
-        background: white;
+        background: var(--card-bg);
+        border: 2px solid var(--border-gold);
         border-radius: 20px;
         margin: 8% auto;
         padding: 40px;
         width: 90%;
         max-width: 500px;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8),
+                    0 0 40px rgba(212, 175, 55, 0.2);
     }
 
     .modal-header {
@@ -324,21 +444,22 @@
     }
 
     .modal-header h2 {
-        color: var(--text-dark);
+        color: var(--premium-gold);
         font-size: 24px;
         font-weight: 800;
         margin: 0;
         display: flex;
         align-items: center;
         gap: 12px;
+        text-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
     }
 
     .close {
-        color: var(--text-light);
+        color: var(--text-muted);
         font-size: 28px;
         font-weight: bold;
         cursor: pointer;
-        transition: color 0.2s ease;
+        transition: all 0.2s ease;
         width: 36px;
         height: 36px;
         display: flex;
@@ -348,8 +469,8 @@
     }
 
     .close:hover {
-        background: #f1f5f9;
-        color: var(--text-dark);
+        background: #252525;
+        color: var(--premium-gold);
     }
 
     .form-group {
@@ -358,7 +479,7 @@
 
     .form-group label {
         display: block;
-        color: var(--text-dark);
+        color: var(--premium-gold);
         font-weight: 700;
         margin-bottom: 8px;
         font-size: 14px;
@@ -367,11 +488,11 @@
     .form-group select,
     .form-group textarea {
         width: 100%;
-        background: #f8fafc;
-        border: 2px solid var(--border);
+        background: #0a0a0a;
+        border: 2px solid var(--border-dark);
         border-radius: 12px;
         padding: 14px;
-        color: var(--text-dark);
+        color: var(--text-light);
         font-size: 14px;
         font-family: inherit;
         transition: all 0.2s ease;
@@ -380,8 +501,9 @@
     .form-group select:focus,
     .form-group textarea:focus {
         outline: none;
-        border-color: #8b5cf6;
-        background: white;
+        border-color: var(--premium-gold);
+        background: #1a1a1a;
+        box-shadow: 0 0 15px rgba(212, 175, 55, 0.2);
     }
 
     .form-group textarea {
@@ -397,9 +519,9 @@
     }
 
     .btn-secondary {
-        background: #f1f5f9;
-        border: none;
-        color: var(--text-dark);
+        background: #252525;
+        border: 2px solid var(--border-dark);
+        color: var(--text-light);
         padding: 14px 24px;
         border-radius: 10px;
         cursor: pointer;
@@ -408,13 +530,14 @@
     }
 
     .btn-secondary:hover {
-        background: #e2e8f0;
+        background: #3a3a3a;
+        border-color: var(--premium-gold);
     }
 
     .btn-primary {
-        background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+        background: linear-gradient(135deg, var(--premium-gold) 0%, var(--gold-bright) 100%);
         border: none;
-        color: white;
+        color: #0a0a0a;
         padding: 14px 24px;
         border-radius: 10px;
         cursor: pointer;
@@ -423,11 +546,12 @@
         display: flex;
         align-items: center;
         gap: 8px;
+        box-shadow: 0 4px 15px rgba(212, 175, 55, 0.4);
     }
 
     .btn-primary:hover {
         transform: scale(1.02);
-        box-shadow: 0 4px 16px rgba(139, 92, 246, 0.4);
+        box-shadow: 0 6px 25px rgba(212, 175, 55, 0.6);
     }
 
     .loading {
@@ -441,8 +565,8 @@
     }
 
     .spinner {
-        border: 4px solid #e2e8f0;
-        border-top: 4px solid #8b5cf6;
+        border: 4px solid #252525;
+        border-top: 4px solid var(--premium-gold);
         border-radius: 50%;
         width: 40px;
         height: 40px;
@@ -454,6 +578,7 @@
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
     }
+
 </style>
 
 <div style="max-width: 1400px; margin: 0 auto; padding: 32px;">
@@ -482,51 +607,27 @@
 
     <!-- Action Cards -->
     <div class="action-cards">
-        <!-- Backup DB -->
+        <!-- Backup Completo -->
         <div class="action-card">
             <div class="action-card-icon purple">
-                <i class="fas fa-database"></i>
+                <i class="fas fa-save"></i>
             </div>
-            <h3>Backup de Base de Datos</h3>
-            <p>Crea una copia de seguridad completa de la base de datos MySQL</p>
-            <button class="action-card-btn purple" onclick="openCreateModal('MYSQL')">
-                Crear Backup DB
+            <h3>Crear Backup Completo</h3>
+            <p>Genera automáticamente dos archivos: backup de base de datos MySQL y archivo ZIP del código fuente</p>
+            <button class="action-card-btn purple" onclick="openCreateModal()">
+                <i class="fas fa-plus-circle"></i> Crear Backup
             </button>
         </div>
 
-        <!-- Backup ZIP -->
-        <div class="action-card">
-            <div class="action-card-icon pink">
-                <i class="fas fa-file-archive"></i>
-            </div>
-            <h3>Backup ZIP de Código</h3>
-            <p>Genera un archivo ZIP descargable con todo el código fuente</p>
-            <button class="action-card-btn pink" onclick="openCreateModal('COMPLETO')">
-                Generar ZIP
-            </button>
-        </div>
-
-        <!-- Sincronizar GitHub (placeholder) -->
+        <!-- Sincronizar GitHub -->
         <div class="action-card">
             <div class="action-card-icon dark">
                 <i class="fab fa-github"></i>
             </div>
             <h3>Sincronizar GitHub</h3>
             <p>Realiza commit y push automático de los cambios a GitHub</p>
-            <button class="action-card-btn dark" onclick="alert('Función disponible próximamente')">
-                Push a GitHub
-            </button>
-        </div>
-
-        <!-- Backup Completo -->
-        <div class="action-card">
-            <div class="action-card-icon cyan">
-                <i class="fas fa-cloud-upload-alt"></i>
-            </div>
-            <h3>Backup Completo</h3>
-            <p>Realiza un backup completo de base de datos y código fuente</p>
-            <button class="action-card-btn cyan" onclick="openCreateModal('COMPLETO')">
-                Crear Backup Completo
+            <button class="action-card-btn dark" onclick="openGithubModal()">
+                <i class="fab fa-github"></i> Sincronizar ahora
             </button>
         </div>
     </div>
@@ -626,13 +727,8 @@
         <form id="createBackupForm" method="POST" action="{% url 'crear_backup' %}">
             {% csrf_token %}
             
-            <div class="form-group">
-                <label for="tipo">Tipo de Backup</label>
-                <select id="tipo" name="tipo" required>
-                    <option value="COMPLETO">Completo (DB + Código)</option>
-                    <option value="MYSQL">Solo Base de Datos</option>
-                </select>
-            </div>
+            <!-- Campo oculto para tipo siempre COMPLETO -->
+            <input type="hidden" id="tipo" name="tipo" value="COMPLETO">
 
             <div class="form-group">
                 <label for="notas">Notas (Opcional)</label>
@@ -641,7 +737,7 @@
 
             <div class="loading" id="loadingCreate">
                 <div class="spinner"></div>
-                <p style="color: var(--text-dark); font-weight: 600;">Creando backup, por favor espera...</p>
+                <p style="color: var(--text-light); font-weight: 600;">Creando backup completo (DB + Sistema), por favor espera...</p>
             </div>
 
             <div class="modal-actions">
@@ -649,6 +745,40 @@
                 <button type="submit" class="btn-primary">
                     <i class="fas fa-save"></i>
                     Crear Backup
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Sincronizar GitHub -->
+<div id="githubModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>
+                <i class="fab fa-github"></i>
+                Sincronizar con GitHub
+            </h2>
+            <span class="close" onclick="closeGithubModal()">&times;</span>
+        </div>
+        
+        <form id="githubSyncForm">
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="mensaje_github">Mensaje del Commit</label>
+                <textarea id="mensaje_github" name="mensaje" placeholder="Ej: Actualización de panel de producción..."></textarea>
+            </div>
+
+            <div class="loading" id="loadingGithub">
+                <div class="spinner"></div>
+                <p style="color: var(--text-light); font-weight: 600;">Sincronizando con el servidor remoto, por favor espera...</p>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" onclick="closeGithubModal()">Cancelar</button>
+                <button type="submit" class="btn-primary">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    Push a GitHub
                 </button>
             </div>
         </form>
@@ -754,11 +884,56 @@ function closeAlertModal() {
     document.getElementById('alertModal').style.display = 'none';
 }
 
+function openGithubModal() {
+    document.getElementById('githubModal').style.display = 'block';
+}
+
+function closeGithubModal() {
+    document.getElementById('githubModal').style.display = 'none';
+    document.getElementById('githubSyncForm').reset();
+    document.getElementById('loadingGithub').classList.remove('active');
+}
+
+// GitHub Sync logic
+document.getElementById('githubSyncForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const loading = document.getElementById('loadingGithub');
+    loading.classList.add('active');
+    
+    const formData = new FormData(this);
+    
+    fetch('{% url "sincronizar_github" %}', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        loading.classList.remove('active');
+        if (data.status === 'success') {
+            closeGithubModal();
+            showAlert('✅ ' + data.message + '\nCommit: ' + data.commit, 'success');
+            setTimeout(() => location.reload(), 2000);
+        } else if (data.status === 'info') {
+            closeGithubModal();
+            showAlert('ℹ️ ' + data.message, 'info');
+        } else {
+            showAlert('❌ ' + data.message, 'error');
+        }
+    })
+    .catch(error => {
+        loading.classList.remove('active');
+        showAlert('❌ Error de red: ' + error, 'error');
+    });
+});
+
 // ========== FUNCIONES DE BACKUP ==========
 
 // Modal Functions
-function openCreateModal(tipo = 'COMPLETO') {
-    document.getElementById('tipo').value = tipo;
+function openCreateModal() {
     document.getElementById('createModal').style.display = 'block';
 }
 
@@ -885,6 +1060,7 @@ function confirmDelete(backupId) {
 window.onclick = function(event) {
     if (event.target.classList.contains('modal')) {
         if (event.target.id === 'createModal') closeCreateModal();
+        if (event.target.id === 'githubModal') closeGithubModal();
         if (event.target.id === 'confirmModal') closeConfirmModal();
         if (event.target.id === 'alertModal') closeAlertModal();
     }

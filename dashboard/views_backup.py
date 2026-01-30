@@ -324,3 +324,127 @@ def eliminar_backup(request, pk):
     except Exception as e:
         messages.error(request, f'❌ Error al eliminar backup: {str(e)}')
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+def sincronizar_github(request):
+    """
+    Sincroniza el código con GitHub realizando commit y push automático
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
+    
+    mensaje_commit = request.POST.get('mensaje', '').strip()
+    if not mensaje_commit:
+        mensaje_commit = f'Backup automático - {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'
+    
+    try:
+        # Verificar que estamos en un repositorio git
+        git_dir = os.path.join(settings.BASE_DIR, '.git')
+        if not os.path.exists(git_dir):
+            raise Exception("Este proyecto no es un repositorio Git. Inicializa Git primero con 'git init'")
+        
+        # Cambiar al directorio del proyecto
+        os.chdir(settings.BASE_DIR)
+        
+        # 1. Verificar estado del repositorio
+        result = subprocess.run(
+            ['git', 'status', '--porcelain'],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        if not result.stdout.strip():
+            return JsonResponse({
+                'status': 'info',
+                'message': 'No hay cambios para sincronizar con GitHub'
+            })
+        
+        # 2. Git add (agregar todos los cambios)
+        subprocess.run(
+            ['git', 'add', '.'],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        # 3. Git commit
+        commit_result = subprocess.run(
+            ['git', 'commit', '-m', mensaje_commit],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        # 4. Git push
+        push_result = subprocess.run(
+            ['git', 'push'],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        # Obtener información del último commit
+        log_result = subprocess.run(
+            ['git', 'log', '-1', '--pretty=format:%h - %s'],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        # Obtener rama actual
+        branch_result = subprocess.run(
+            ['git', 'branch', '--show-current'],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        branch_name = branch_result.stdout.strip()
+        commit_info = log_result.stdout.strip()
+        
+        messages.success(request, f'✅ Código sincronizado con GitHub exitosamente')
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Sincronización con GitHub completada',
+            'branch': branch_name,
+            'commit': commit_info,
+            'mensaje_commit': mensaje_commit
+        })
+        
+    except subprocess.CalledProcessError as e:
+        error_msg = e.stderr.strip() if e.stderr else str(e)
+        
+        # Mensajes de error más amigables
+        if 'not a git repository' in error_msg.lower():
+            error_msg = "Este proyecto no es un repositorio Git"
+        elif 'nothing to commit' in error_msg.lower():
+            return JsonResponse({
+                'status': 'info',
+                'message': 'No hay cambios para sincronizar'
+            })
+        elif 'failed to push' in error_msg.lower() or 'rejected' in error_msg.lower():
+            error_msg = "Error al hacer push. Verifica que tengas permisos y que el repositorio remoto esté configurado"
+        elif 'could not read' in error_msg.lower() or 'authentication' in error_msg.lower():
+            error_msg = "Error de autenticación. Configura tus credenciales de Git o usa SSH"
+        
+        messages.error(request, f'❌ Error al sincronizar con GitHub: {error_msg}')
+        return JsonResponse({
+            'status': 'error',
+            'message': error_msg
+        }, status=500)
+        
+    except FileNotFoundError:
+        error_msg = "Git no está instalado en el sistema. Instala Git desde https://git-scm.com/"
+        messages.error(request, f'❌ {error_msg}')
+        return JsonResponse({
+            'status': 'error',
+            'message': error_msg
+        }, status=500)
+        
+    except Exception as e:
+        messages.error(request, f'❌ Error inesperado: {str(e)}')
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+

@@ -18,7 +18,8 @@ from .views_backup import (
     crear_backup,
     restaurar_backup,
     descargar_backup,
-    eliminar_backup
+    eliminar_backup,
+    sincronizar_github
 )
 
 

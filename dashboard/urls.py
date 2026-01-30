@@ -37,6 +37,7 @@ urlpatterns = [
     path('backup/restaurar/<int:pk>/', views.restaurar_backup, name='restaurar_backup'),
     path('backup/descargar/<int:pk>/', views.descargar_backup, name='descargar_backup'),
     path('backup/eliminar/<int:pk>/', views.eliminar_backup, name='eliminar_backup'),
+    path('backup/sincronizar-github/', views.sincronizar_github, name='sincronizar_github'),
     
     # Mapa de Planta Premium (Geográfico)
     path('mapa-planta/', views.plant_map, name='plant_map'),
