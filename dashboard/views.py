@@ -12,6 +12,15 @@ from django.http import HttpResponse, JsonResponse
 from django.template.loader import get_template
 from xhtml2pdf import pisa
 
+# Importar vistas de backup
+from .views_backup import (
+    gestion_backups,
+    crear_backup,
+    restaurar_backup,
+    descargar_backup,
+    eliminar_backup
+)
+
 
 def dashboard_produccion(request, return_context=False, force_date=None, force_start=None, force_end=None, force_format=None):
     # Rango de fechas: HOY (para ver estado en tiempo real)

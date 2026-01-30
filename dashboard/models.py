@@ -185,9 +185,6 @@ class Mantenimiento(models.Model):
             return 0
         diff = self.fecha_fin - self.fecha_reporte
         return int(diff.total_seconds() / 60)
-from django.db import models
-from django.utils import timezone
-from django.contrib.auth.models import User
 
 class AuditLog(models.Model):
     ACTION_CHOICES = [
@@ -212,3 +209,41 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"{self.fecha} - {self.usuario} - {self.accion} {self.modelo}"
+
+class BackupHistorial(models.Model):
+    """
+    Registra los backups creados y restaurados del sistema
+    """
+    TIPO_CHOICES = [
+        ('MYSQL', 'Base de Datos MySQL'),
+        ('COMPLETO', 'Sistema Completo (DB + Código)'),
+    ]
+    ESTADO_CHOICES = [
+        ('EXITOSO', 'Exitoso'),
+        ('ERROR', 'Error'),
+        ('RESTAURADO', 'Restaurado'),
+    ]
+    
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default='COMPLETO')
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='EXITOSO')
+    archivo_db = models.CharField(max_length=255, null=True, blank=True, verbose_name="Archivo DB")
+    archivo_codigo = models.CharField(max_length=255, null=True, blank=True, verbose_name="Archivo Código")
+    tamano_db_mb = models.FloatField(default=0.0, verbose_name="Tamaño DB (MB)")
+    tamano_codigo_mb = models.FloatField(default=0.0, verbose_name="Tamaño Código (MB)")
+    fecha_creacion = models.DateTimeField(default=timezone.now, verbose_name="Fecha de Creación")
+    usuario = models.CharField(max_length=100, null=True, blank=True, verbose_name="Usuario")
+    notas = models.TextField(null=True, blank=True, verbose_name="Notas")
+    
+    class Meta:
+        managed = True
+        db_table = 'backup_historial'
+        verbose_name = 'Historial de Backup'
+        verbose_name_plural = 'Historial de Backups'
+        ordering = ['-fecha_creacion']
+    
+    def __str__(self):
+        return f"{self.tipo} - {self.fecha_creacion.strftime('%Y-%m-%d %H:%M')}"
+    
+    @property
+    def tamano_total_mb(self):
+        return self.tamano_db_mb + self.tamano_codigo_mb

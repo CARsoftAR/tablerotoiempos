@@ -31,6 +31,13 @@ urlpatterns = [
     # API Alertas
     path('api/check-alerts/', views.check_alerts, name='check_alerts'),
     
+    # Sistema de Backup
+    path('gestion-backups/', views.gestion_backups, name='gestion_backups'),
+    path('backup/crear/', views.crear_backup, name='crear_backup'),
+    path('backup/restaurar/<int:pk>/', views.restaurar_backup, name='restaurar_backup'),
+    path('backup/descargar/<int:pk>/', views.descargar_backup, name='descargar_backup'),
+    path('backup/eliminar/<int:pk>/', views.eliminar_backup, name='eliminar_backup'),
+    
     # Mapa de Planta Premium (Geográfico)
     path('mapa-planta/', views.plant_map, name='plant_map'),
     path('api/update-position/', views.update_machine_position, name='update_machine_position'),

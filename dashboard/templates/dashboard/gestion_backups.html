@@ -1,0 +1,655 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Gestión de Backups - ABBAMAT{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --premium-gold: #d4af37;
+        --premium-gold-dark: #b8941f;
+        --premium-gold-light: #f0d975;
+        --bg-dark: #0f172a;
+        --bg-card: #1e293b;
+        --text-primary: #f1f5f9;
+        --text-secondary: #94a3b8;
+        --border-color: rgba(212, 175, 55, 0.2);
+    }
+
+    body {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        color: var(--text-primary);
+        font-family: 'Inter', sans-serif;
+        min-height: 100vh;
+    }
+
+    .page-header {
+        background: linear-gradient(135deg, rgba(212, 175, 55, 0.1) 0%, rgba(212, 175, 55, 0.05) 100%);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        padding: 32px;
+        margin-bottom: 32px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .page-header h1 {
+        color: var(--premium-gold);
+        font-size: 32px;
+        font-weight: 800;
+        margin: 0 0 12px 0;
+        text-shadow: 0 2px 8px rgba(212, 175, 55, 0.3);
+    }
+
+    .page-header p {
+        color: var(--text-secondary);
+        font-size: 16px;
+        margin: 0;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+        margin-bottom: 32px;
+    }
+
+    .stat-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        transition: all 0.3s ease;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 24px rgba(212, 175, 55, 0.2);
+        border-color: var(--premium-gold);
+    }
+
+    .stat-card .icon {
+        font-size: 32px;
+        color: var(--premium-gold);
+        margin-bottom: 12px;
+    }
+
+    .stat-card .label {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 8px;
+    }
+
+    .stat-card .value {
+        color: var(--text-primary);
+        font-size: 28px;
+        font-weight: 700;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 32px;
+        flex-wrap: wrap;
+    }
+
+    .btn-premium {
+        background: linear-gradient(135deg, var(--premium-gold) 0%, var(--premium-gold-dark) 100%);
+        color: #000;
+        border: none;
+        padding: 14px 28px;
+        border-radius: 8px;
+        font-weight: 700;
+        font-size: 15px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 16px rgba(212, 175, 55, 0.3);
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .btn-premium:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 24px rgba(212, 175, 55, 0.5);
+    }
+
+    .btn-premium i {
+        font-size: 18px;
+    }
+
+    .backups-table {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    }
+
+    .table-header {
+        background: linear-gradient(135deg, rgba(212, 175, 55, 0.15) 0%, rgba(212, 175, 55, 0.05) 100%);
+        padding: 20px 24px;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .table-header h2 {
+        color: var(--premium-gold);
+        font-size: 20px;
+        font-weight: 700;
+        margin: 0;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    thead {
+        background: rgba(212, 175, 55, 0.1);
+    }
+
+    th {
+        padding: 16px;
+        text-align: left;
+        color: var(--premium-gold);
+        font-weight: 700;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    td {
+        padding: 16px;
+        color: var(--text-primary);
+        border-bottom: 1px solid rgba(212, 175, 55, 0.1);
+    }
+
+    tbody tr {
+        transition: all 0.2s ease;
+    }
+
+    tbody tr:hover {
+        background: rgba(212, 175, 55, 0.05);
+    }
+
+    .badge {
+        display: inline-block;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .badge-success {
+        background: rgba(16, 185, 129, 0.2);
+        color: #10b981;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .badge-error {
+        background: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .badge-restored {
+        background: rgba(59, 130, 246, 0.2);
+        color: #3b82f6;
+        border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    .badge-mysql {
+        background: rgba(212, 175, 55, 0.2);
+        color: var(--premium-gold);
+        border: 1px solid var(--border-color);
+    }
+
+    .badge-completo {
+        background: rgba(139, 92, 246, 0.2);
+        color: #8b5cf6;
+        border: 1px solid rgba(139, 92, 246, 0.3);
+    }
+
+    .action-btn {
+        background: transparent;
+        border: 1px solid var(--border-color);
+        color: var(--text-secondary);
+        padding: 8px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 14px;
+        margin-right: 8px;
+    }
+
+    .action-btn:hover {
+        border-color: var(--premium-gold);
+        color: var(--premium-gold);
+        background: rgba(212, 175, 55, 0.1);
+    }
+
+    .action-btn.danger:hover {
+        border-color: #ef4444;
+        color: #ef4444;
+        background: rgba(239, 68, 68, 0.1);
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: var(--text-secondary);
+    }
+
+    .empty-state i {
+        font-size: 64px;
+        color: var(--border-color);
+        margin-bottom: 20px;
+    }
+
+    .empty-state h3 {
+        color: var(--text-primary);
+        font-size: 20px;
+        margin-bottom: 12px;
+    }
+
+    /* Modal Styles */
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        backdrop-filter: blur(4px);
+    }
+
+    .modal-content {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        margin: 10% auto;
+        padding: 32px;
+        width: 90%;
+        max-width: 500px;
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+    }
+
+    .modal-header h2 {
+        color: var(--premium-gold);
+        font-size: 24px;
+        font-weight: 700;
+        margin: 0;
+    }
+
+    .close {
+        color: var(--text-secondary);
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: color 0.2s ease;
+    }
+
+    .close:hover {
+        color: var(--premium-gold);
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        color: var(--text-primary);
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+
+    .form-group select,
+    .form-group textarea {
+        width: 100%;
+        background: var(--bg-dark);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 12px;
+        color: var(--text-primary);
+        font-size: 14px;
+    }
+
+    .form-group textarea {
+        resize: vertical;
+        min-height: 100px;
+    }
+
+    .modal-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+        margin-top: 24px;
+    }
+
+    .btn-secondary {
+        background: transparent;
+        border: 1px solid var(--border-color);
+        color: var(--text-secondary);
+        padding: 12px 24px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .btn-secondary:hover {
+        border-color: var(--premium-gold);
+        color: var(--premium-gold);
+    }
+
+    .loading {
+        display: none;
+        text-align: center;
+        padding: 20px;
+    }
+
+    .loading.active {
+        display: block;
+    }
+
+    .spinner {
+        border: 4px solid rgba(212, 175, 55, 0.2);
+        border-top: 4px solid var(--premium-gold);
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 1400px; margin: 0 auto; padding: 32px;">
+    
+    <!-- Page Header -->
+    <div class="page-header">
+        <h1><i class="fas fa-database"></i> Gestión de Backups</h1>
+        <p>Sistema de respaldo y recuperación de datos</p>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="icon"><i class="fas fa-save"></i></div>
+            <div class="label">Total de Backups</div>
+            <div class="value">{{ total_backups }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="icon"><i class="fas fa-hdd"></i></div>
+            <div class="label">Espacio Utilizado</div>
+            <div class="value">{{ espacio_total_gb|floatformat:2 }} GB</div>
+        </div>
+        <div class="stat-card">
+            <div class="icon"><i class="fas fa-clock"></i></div>
+            <div class="label">Último Backup</div>
+            <div class="value">
+                {% if backups.first %}
+                    {{ backups.first.fecha_creacion|date:"d/m H:i" }}
+                {% else %}
+                    --:--
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="action-buttons">
+        <button class="btn-premium" onclick="openCreateModal()">
+            <i class="fas fa-plus-circle"></i>
+            Crear Nuevo Backup
+        </button>
+    </div>
+
+    <!-- Backups Table -->
+    <div class="backups-table">
+        <div class="table-header">
+            <h2><i class="fas fa-list"></i> Historial de Backups</h2>
+        </div>
+
+        {% if backups %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Tipo</th>
+                    <th>Estado</th>
+                    <th>Tamaño</th>
+                    <th>Usuario</th>
+                    <th>Notas</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for backup in backups %}
+                <tr>
+                    <td>{{ backup.fecha_creacion|date:"d/m/Y H:i" }}</td>
+                    <td>
+                        {% if backup.tipo == 'MYSQL' %}
+                            <span class="badge badge-mysql">MySQL</span>
+                        {% else %}
+                            <span class="badge badge-completo">Completo</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if backup.estado == 'EXITOSO' %}
+                            <span class="badge badge-success">Exitoso</span>
+                        {% elif backup.estado == 'ERROR' %}
+                            <span class="badge badge-error">Error</span>
+                        {% else %}
+                            <span class="badge badge-restored">Restaurado</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ backup.tamano_total_mb|floatformat:2 }} MB</td>
+                    <td>{{ backup.usuario|default:"Sistema" }}</td>
+                    <td>{{ backup.notas|truncatechars:50|default:"--" }}</td>
+                    <td>
+                        {% if backup.archivo_db %}
+                        <button class="action-btn" onclick="downloadBackup({{ backup.id }}, 'db')" title="Descargar DB">
+                            <i class="fas fa-download"></i>
+                        </button>
+                        <button class="action-btn" onclick="confirmRestore({{ backup.id }})" title="Restaurar">
+                            <i class="fas fa-undo"></i>
+                        </button>
+                        {% endif %}
+                        {% if backup.archivo_codigo %}
+                        <button class="action-btn" onclick="downloadBackup({{ backup.id }}, 'codigo')" title="Descargar Código">
+                            <i class="fas fa-file-archive"></i>
+                        </button>
+                        {% endif %}
+                        <button class="action-btn danger" onclick="confirmDelete({{ backup.id }})" title="Eliminar">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-database"></i>
+            <h3>No hay backups disponibles</h3>
+            <p>Crea tu primer backup para comenzar</p>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+
+<!-- Modal: Crear Backup -->
+<div id="createModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2><i class="fas fa-plus-circle"></i> Crear Nuevo Backup</h2>
+            <span class="close" onclick="closeCreateModal()">&times;</span>
+        </div>
+        
+        <form id="createBackupForm" method="POST" action="{% url 'crear_backup' %}">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label for="tipo">Tipo de Backup</label>
+                <select id="tipo" name="tipo" required>
+                    <option value="COMPLETO">Completo (DB + Código)</option>
+                    <option value="MYSQL">Solo Base de Datos</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="notas">Notas (Opcional)</label>
+                <textarea id="notas" name="notas" placeholder="Ej: Backup antes de actualización..."></textarea>
+            </div>
+
+            <div class="loading" id="loadingCreate">
+                <div class="spinner"></div>
+                <p>Creando backup, por favor espera...</p>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" onclick="closeCreateModal()">Cancelar</button>
+                <button type="submit" class="btn-premium">
+                    <i class="fas fa-save"></i>
+                    Crear Backup
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Modal Functions
+function openCreateModal() {
+    document.getElementById('createModal').style.display = 'block';
+}
+
+function closeCreateModal() {
+    document.getElementById('createModal').style.display = 'none';
+    document.getElementById('createBackupForm').reset();
+    document.getElementById('loadingCreate').classList.remove('active');
+}
+
+// Create Backup
+document.getElementById('createBackupForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const loading = document.getElementById('loadingCreate');
+    loading.classList.add('active');
+    
+    const formData = new FormData(this);
+    
+    fetch('{% url "crear_backup" %}', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        loading.classList.remove('active');
+        if (data.status === 'success') {
+            alert('✅ Backup creado exitosamente: ' + data.tamano_mb.toFixed(2) + ' MB');
+            location.reload();
+        } else {
+            alert('❌ Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        loading.classList.remove('active');
+        alert('❌ Error al crear backup: ' + error);
+    });
+});
+
+// Download Backup
+function downloadBackup(backupId, tipo) {
+    window.location.href = `/dashboard/backup/descargar/${backupId}/?tipo=${tipo}`;
+}
+
+// Confirm Restore
+function confirmRestore(backupId) {
+    if (confirm('⚠️ ADVERTENCIA: Esta operación sobrescribirá la base de datos actual.\n\n¿Estás seguro de que deseas restaurar este backup?')) {
+        const loading = document.createElement('div');
+        loading.className = 'loading active';
+        loading.innerHTML = '<div class="spinner"></div><p>Restaurando backup...</p>';
+        document.body.appendChild(loading);
+        
+        fetch(`/dashboard/backup/restaurar/${backupId}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            document.body.removeChild(loading);
+            if (data.status === 'success') {
+                alert('✅ Base de datos restaurada exitosamente');
+                location.reload();
+            } else {
+                alert('❌ Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            document.body.removeChild(loading);
+            alert('❌ Error al restaurar: ' + error);
+        });
+    }
+}
+
+// Confirm Delete
+function confirmDelete(backupId) {
+    if (confirm('¿Estás seguro de que deseas eliminar este backup?\n\nEsta acción no se puede deshacer.')) {
+        fetch(`/dashboard/backup/eliminar/${backupId}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                alert('✅ Backup eliminado exitosamente');
+                location.reload();
+            } else {
+                alert('❌ Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            alert('❌ Error al eliminar: ' + error);
+        });
+    }
+}
+
+// Close modal on outside click
+window.onclick = function(event) {
+    const modal = document.getElementById('createModal');
+    if (event.target == modal) {
+        closeCreateModal();
+    }
+}
+</script>
+
+{% endblock %}
