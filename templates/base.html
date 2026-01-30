@@ -1,11 +1,6 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Tablero de Control - ABBAMAT{% endblock %}</title>
     <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Outfit:wght@300;400;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- ApexCharts -->
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
     <!-- Font Awesome -->
@@ -14,69 +9,118 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root {
-            --primary: #4f46e5;
-            --sidebar-bg: #1e293b;
+            --primary: #fbbf24;
+            --premium-gold: #fbbf24;
+            --premium-gold-glow: rgba(251, 191, 36, 0.4);
+            --deep-bg: #020617;
+            --sidebar-bg: rgba(15, 23, 42, 0.85);
+            --glass-border: rgba(255, 255, 255, 0.1);
         }
-        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; }
+        body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f8fafc; }
         .font-brand { font-family: 'Outfit', sans-serif; }
+        .font-tech { font-family: 'JetBrains Mono', monospace; }
+        
+        /* SLEEK PREMIUM SCROLLBAR */
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.2); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--premium-gold); }
+
+        .glass-panel {
+            background: var(--sidebar-bg);
+            backdrop-filter: blur(15px);
+            border-right: 1px solid var(--glass-border);
+        }
+
+        .gold-border-glow {
+            border-bottom: 2px solid var(--premium-gold);
+            box-shadow: 0 4px 15px rgba(251, 191, 36, 0.1);
+        }
+
+        .gold-glow-hover:hover {
+            box-shadow: 0 0 15px var(--premium-gold-glow);
+        }
+
+        /* Scanline Overlay for whole app */
+        .scanlines::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.05) 50%);
+            background-size: 100% 4px;
+            z-index: 100;
+            pointer-events: none;
+            opacity: 0.1;
+        }
+
+        @keyframes swing {
+            0% { transform: rotate(0); }
+            15% { transform: rotate(15deg); }
+            30% { transform: rotate(-10deg); }
+            45% { transform: rotate(5deg); }
+            60% { transform: rotate(-5deg); }
+            100% { transform: rotate(0); }
+        }
+        .animate-swing { animation: swing 0.6s ease-out; }
+
+        @keyframes gold-pulse {
+            0% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(251, 191, 36, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
+        }
+        .gold-pulse-effect { animation: gold-pulse 2s infinite; }
     </style>
 </head>
-<body class="bg-slate-100 flex h-screen overflow-hidden">
+<body class="bg-[#020617] flex h-screen overflow-hidden">
 
     <!-- Sidebar -->
-    <aside class="w-64 bg-slate-900 text-white flex flex-col shadow-2xl transition-all duration-300 z-[70] hidden md:flex">
-        <div class="p-6 border-b border-slate-800 flex items-center gap-3">
-            <div class="w-10 h-10 rounded-lg bg-white flex items-center justify-center shadow-lg overflow-hidden">
+    <aside class="w-64 glass-panel text-white flex flex-col shadow-2xl transition-all duration-300 z-[70] hidden md:flex">
+        <div class="p-6 border-b border-white/5 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-white flex items-center justify-center shadow-lg overflow-hidden gold-border-glow">
                 <img src="/static/img/logoAbbamat.png" alt="Logo" class="w-full h-full object-contain p-1">
             </div>
-            <span class="text-2xl font-bold font-brand tracking-tight">ABBAMAT</span>
+            <span class="text-2xl font-black font-brand tracking-tighter text-white">ABBA<span class="text-amber-400">MAT</span></span>
         </div>
 
-        <nav class="flex-1 overflow-y-auto py-6 px-3 space-y-2">
-            <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 mb-2">Principal</div>
+        <nav class="flex-1 overflow-y-auto py-6 px-3 space-y-1.5">
+            <div class="text-[10px] font-extrabold text-slate-500 uppercase tracking-[0.2em] px-3 mb-2">Sistemas Operativos</div>
             
-            <a href="{% url 'dashboard_produccion' %}" class="flex items-center gap-3 px-3 py-3 rounded-lg {% if request.resolver_match.url_name == 'dashboard_produccion' or request.resolver_match.url_name == 'home' %}bg-indigo-600 shadow-lg shadow-indigo-900/50 text-white{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %} font-medium group transition-all">
-                <i class="fas fa-chart-line w-6 text-center"></i>
-                Producción
+            <a href="{% url 'dashboard_produccion' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all group {% if request.resolver_match.url_name == 'dashboard_produccion' or request.resolver_match.url_name == 'home' %}bg-white/10 border border-white/10 text-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.15)]{% else %}text-slate-400 hover:bg-white/5 hover:text-white{% endif %}">
+                <i class="fas fa-chart-line w-5 text-center group-hover:scale-110 transition-transform"></i>
+                <span class="text-sm font-bold tracking-wide">Producción</span>
             </a>
-            <a href="{% url 'plant_map' %}" class="flex items-center gap-3 px-3 py-3 rounded-lg {% if request.resolver_match.url_name == 'plant_map' %}bg-cyan-600 shadow-lg shadow-cyan-900/50 text-white{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %} font-medium group transition-all">
-                <i class="fas fa-map-marked-alt w-6 text-center group-hover:text-cyan-400 transition-colors"></i>
-                Mapa de Planta
+            <a href="{% url 'plant_map' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all group {% if request.resolver_match.url_name == 'plant_map' %}bg-white/10 border border-white/10 text-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.15)]{% else %}text-slate-400 hover:bg-white/5 hover:text-white{% endif %}">
+                <i class="fas fa-map-marked-alt w-5 text-center group-hover:scale-110 transition-transform"></i>
+                <span class="text-sm font-bold tracking-wide">Mapa de Planta</span>
             </a>
-            <a href="{% url 'estadisticas' %}" class="flex items-center gap-3 px-3 py-3 rounded-lg {% if 'estadisticas' in request.resolver_match.url_name %}bg-purple-600 shadow-lg shadow-purple-900/50 text-white{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %} font-medium group transition-all">
-                <i class="fas fa-chart-pie w-6 text-center group-hover:text-purple-400 transition-colors"></i>
-                Estadísticas
+            <a href="{% url 'estadisticas' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all group {% if 'estadisticas' in request.resolver_match.url_name %}bg-white/10 border border-white/10 text-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.15)]{% else %}text-slate-400 hover:bg-white/5 hover:text-white{% endif %}">
+                <i class="fas fa-chart-pie w-5 text-center group-hover:scale-110 transition-transform"></i>
+                <span class="text-sm font-bold tracking-wide">Estadísticas</span>
             </a>
-            <a href="{% url 'lista_mantenimiento' %}" class="flex items-center gap-3 px-3 py-3 rounded-lg {% if 'mantenimiento' in request.resolver_match.url_name %}bg-amber-600 shadow-lg shadow-amber-900/40 text-white{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %} transition-all group">
-                <i class="fas fa-tools w-6 text-center group-hover:text-amber-400 transition-colors"></i>
-                Mantenimiento
+            <a href="{% url 'lista_mantenimiento' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all group {% if 'mantenimiento' in request.resolver_match.url_name %}bg-white/10 border border-white/10 text-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.15)]{% else %}text-slate-400 hover:bg-white/5 hover:text-white{% endif %}">
+                <i class="fas fa-tools w-5 text-center group-hover:scale-110 transition-transform"></i>
+                <span class="text-sm font-bold tracking-wide">Mantenimiento</span>
             </a>
-            <!-- Se oculta Calidad por ahora ya que no tiene formulario asociado
-            <a href="#" class="flex items-center gap-3 px-3 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors group">
-                <i class="fas fa-check-circle w-6 text-center group-hover:text-emerald-400 transition-colors"></i>
-                Calidad
-            </a>
-            -->
 
-            <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 mt-8 mb-2">Administración</div>
+            <div class="text-[10px] font-extrabold text-slate-500 uppercase tracking-[0.2em] px-3 mt-8 mb-2">Personal & Hub</div>
             
-            <a href="{% url 'gestion_personal' %}" class="flex items-center gap-3 px-3 py-3 rounded-lg {% if 'gestion_personal' in request.resolver_match.url_name or 'operario' in request.resolver_match.url_name %}bg-blue-600 shadow-lg shadow-blue-900/40 text-white{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %} transition-all group">
-                <i class="fas fa-users w-6 text-center group-hover:text-blue-400 transition-colors"></i>
-                Personal
+            <a href="{% url 'gestion_personal' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all group {% if 'gestion_personal' in request.resolver_match.url_name or 'operario' in request.resolver_match.url_name %}bg-white/10 border border-white/10 text-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.15)]{% else %}text-slate-400 hover:bg-white/5 hover:text-white{% endif %}">
+                <i class="fas fa-users w-5 text-center group-hover:scale-110 transition-transform"></i>
+                <span class="text-sm font-bold tracking-wide">Operarios</span>
             </a>
-            <a href="{% url 'gestion_maquinas' %}" class="flex items-center gap-3 px-3 py-3 rounded-lg {% if 'maquina' in request.resolver_match.url_name %}bg-slate-700 text-white{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %} transition-all group">
-                <i class="fas fa-cog w-6 text-center group-hover:text-slate-200 transition-colors"></i>
-                Configuración
+            <a href="{% url 'gestion_maquinas' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all group {% if 'maquina' in request.resolver_match.url_name %}bg-white/10 border border-white/10 text-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.15)]{% else %}text-slate-400 hover:bg-white/5 hover:text-white{% endif %}">
+                <i class="fas fa-cog w-5 text-center group-hover:scale-110 transition-transform"></i>
+                <span class="text-sm font-bold tracking-wide">Configuración</span>
             </a>
         </nav>
 
-        <div class="p-4 border-t border-slate-800">
-            <div class="flex items-center gap-3 p-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 cursor-pointer transition-colors">
-                <img src="https://ui-avatars.com/api/?name=Admin&background=random" alt="Admin" class="w-10 h-10 rounded-full">
+        <div class="p-4 border-t border-white/5">
+            <div class="flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all cursor-pointer group">
+                <img src="https://ui-avatars.com/api/?name=Admin&background=fbbf24&color=000" alt="Admin" class="w-10 h-10 rounded-xl shadow-lg group-hover:scale-105 transition-transform">
                 <div>
-                    <h4 class="text-sm font-semibold">Administrador</h4>
-                    <span class="text-xs text-green-400 flex items-center gap-1">
-                        <span class="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span> Online
+                    <h4 class="text-sm font-extrabold text-white">Administrador</h4>
+                    <span class="text-[10px] text-amber-400 font-black uppercase tracking-widest flex items-center gap-1.5">
+                        <span class="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse shadow-[0_0_8px_rgba(251,191,36,1)]"></span> Activo
                     </span>
                 </div>
             </div>
@@ -84,61 +128,59 @@
     </aside>
 
     <!-- Main Content -->
-    <main class="flex-1 flex flex-col overflow-hidden relative">
+    <main class="flex-1 flex flex-col overflow-hidden relative scanlines">
         <!-- Topbar -->
-        <header class="h-16 bg-white shadow-sm border-b border-gray-200 flex items-center justify-between px-6 z-[60]">
+        <header class="h-20 glass-panel border-b border-white/5 flex items-center justify-between px-8 z-[60]">
             <div class="flex items-center gap-4">
-                <button class="md:hidden text-gray-500 hover:text-gray-700">
+                <button class="md:hidden text-slate-400 hover:text-white transition-colors">
                     <i class="fas fa-bars text-xl"></i>
                 </button>
                 <div class="hidden md:block">
-                    <h2 class="text-xl font-bold text-gray-800 font-brand">Tablero de Producción</h2>
+                    <h2 class="text-lg font-black text-white font-brand uppercase tracking-tighter">CENTRO DE <span class="text-amber-400">OPERACIONES</span></h2>
                 </div>
             </div>
 
             <div class="flex items-center gap-6">
                 <!-- Search -->
                 <div class="relative hidden sm:block">
-                    <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                    <input type="text" placeholder="Buscar máquina..." class="pl-10 pr-4 py-2 rounded-full border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all w-64">
+                    <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"></i>
+                    <input type="text" placeholder="Monitorizar estación..." class="pl-10 pr-4 py-2.5 rounded-xl border border-white/5 bg-white/5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:bg-white/10 transition-all w-64 text-slate-300 placeholder:text-slate-600 font-bold">
                 </div>
 
                 <!-- Botón de Ayuda -->
                 <button type="button" onclick="openHelpModal()" 
-                    class="relative w-10 h-10 flex items-center justify-center rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all group overflow-hidden shadow-sm"
-                    title="Centro de Ayuda">
+                    class="relative w-10 h-10 flex items-center justify-center rounded-xl bg-amber-400/10 text-amber-400 hover:bg-amber-400 hover:text-black transition-all group shadow-lg gold-glow-hover" title="Centro de Ayuda">
                     <i class="fas fa-question text-lg group-hover:scale-110 transition-transform"></i>
-                    <span class="absolute top-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white animate-pulse"></span>
                 </button>
 
                 <!-- Notifications -->
                 <div class="relative" id="notification-container">
-                    <button class="relative text-gray-500 hover:text-indigo-600 transition-colors" id="notification-btn" onclick="toggleNotifications()">
+                    <button class="relative w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 text-slate-400 hover:text-amber-400 transition-colors" id="notification-btn" onclick="toggleNotifications()">
                         <i class="fas fa-bell text-xl" id="bell-icon"></i>
-                        <span id="notification-count" class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full border-2 border-white hidden">0</span>
+                        <span id="notification-count" class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white text-[10px] font-black flex items-center justify-center rounded-lg border-2 border-slate-900 hidden">0</span>
                     </button>
                     <!-- Dropdown -->
-                    <div id="notification-dropdown" class="hidden absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-2xl border border-gray-100 z-[100] overflow-hidden">
-                        <div class="px-4 py-3 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
-                            <h3 class="font-bold text-gray-700 text-sm">Notificaciones</h3>
-                            <button class="text-xs text-indigo-500 hover:text-indigo-700 font-medium" onclick="clearNotifications()">Limpiar</button>
+                    <div id="notification-dropdown" class="hidden absolute right-0 mt-3 w-[420px] glass-panel rounded-2xl shadow-3xl border border-white/10 z-[100] overflow-hidden">
+                        <div class="px-5 py-4 border-b border-white/5 flex justify-between items-center bg-white/5">
+                            <h3 class="font-black text-white text-xs uppercase tracking-widest">Alertas de Sistema</h3>
+                            <button class="text-[10px] text-amber-400 hover:text-white font-black uppercase tracking-widest" onclick="clearNotifications()">Limpiar</button>
                         </div>
-                        <ul id="notification-list" class="max-h-64 overflow-y-auto">
+                        <ul id="notification-list" class="max-h-80 overflow-y-auto">
                             <!-- Items will be injected here -->
-                            <li class="px-4 py-8 text-center text-gray-400 text-xs italic">No tienes nuevas notificaciones</li>
+                            <li class="px-5 py-10 text-center text-slate-500 text-[10px] font-black uppercase tracking-widest italic">Sincronizado al 100%</li>
                         </ul>
                     </div>
                 </div>
 
                 <!-- Time -->
-                <div class="bg-indigo-50 px-4 py-1.5 rounded-full text-indigo-700 font-medium text-sm border border-indigo-100 hidden sm:block" id="current-time">
-                    --:--
+                <div class="bg-white/5 px-5 py-2 rounded-xl text-amber-400 font-tech font-bold text-xs border border-white/5 hidden sm:block tracking-widest" id="current-time">
+                    00:00:00
                 </div>
             </div>
         </header>
 
         <!-- Scrollable Content -->
-        <div class="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50">
+        <div class="flex-1 overflow-y-auto p-4 md:p-8 bg-[#020617]">
             {% block content %}{% endblock %}
         </div>
     </main>
@@ -392,20 +434,50 @@
         updateTime();
 
         // --- NOTIFICATION SYSTEM ---
+        // NOTIFICATION SYSTEM WITH PERSISTENCE
         const notifDropdown = document.getElementById('notification-dropdown');
         const notifList = document.getElementById('notification-list');
         const notifCount = document.getElementById('notification-count');
         const bellIcon = document.getElementById('bell-icon');
         let notificationStore = [];
-        let notifHistory = []; // Tracks alerts even when UI is cleared to prevent immediate re-alerts
+        let notifHistory = []; 
+        
+        // Load dismissed alerts from LocalStorage
+        let dismissedAlerts = new Set(JSON.parse(localStorage.getItem('dismissedAlerts') || '[]'));
+
+        function getAlertSignature(msg) {
+            // Create a stable signature by replacing variable numbers (like minutes)
+            // Example: "Machine X lleva 180 min..." -> "Machine X lleva {N} min..."
+            return msg.replace(/lleva \d+ min/, 'lleva {N} min').replace(/\d+:\d+:\d+/, '{TIME}'); 
+        }
+
+        function saveDismissed() {
+            localStorage.setItem('dismissedAlerts', JSON.stringify([...dismissedAlerts]));
+        }
 
         function toggleNotifications() {
             notifDropdown.classList.toggle('hidden');
         }
 
         function clearNotifications() {
+            // Dismiss all CURRENT alerts
+            notificationStore.forEach(n => dismissedAlerts.add(getAlertSignature(n.message)));
+            saveDismissed();
+            
             notificationStore = [];
             renderNotifications();
+        }
+
+        function viewAndDismissAlert(index) {
+            const alert = notificationStore[index];
+            if (alert) {
+                dismissedAlerts.add(getAlertSignature(alert.message)); // Add stable signature
+                saveDismissed();
+                
+                openAlertModal(alert);
+                notificationStore.splice(index, 1); 
+                renderNotifications();
+            }
         }
 
         function addNotification(type, title, message) {
@@ -414,13 +486,18 @@
             notificationStore.unshift(notif);
             notifHistory.unshift(notif);
             
-            // Keep history lean (last 50 items)
             if (notifHistory.length > 50) notifHistory.pop();
             
             renderNotifications();
             
-            // Visual Effect
-            bellIcon.classList.add('animate-swing'); 
+            // Visual Effect & Sound
+            bellIcon.classList.add('animate-swing', 'text-amber-400'); 
+            const audio = document.getElementById('notif-sound');
+            if (audio) {
+                audio.currentTime = 0;
+                audio.play().catch(e => console.log("Audio play blocked by browser."));
+            }
+            
             setTimeout(() => bellIcon.classList.remove('animate-swing'), 1000);
         }
 
@@ -439,17 +516,17 @@
             const btnAction = document.getElementById('alert-btn-action');
 
             if (alert.type === 'error') {
-                iconBg.className = "w-20 h-20 rounded-full flex items-center justify-center mb-6 bg-red-50 text-red-500 shadow-xl shadow-red-100";
-                icon.className = "fas fa-exclamation-triangle text-3xl";
-                btnAction.className = "flex-1 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-red-200 transition-all text-sm transform hover:-translate-y-0.5";
-                btnAction.textContent = "Reportar Falla";
+                iconBg.className = "w-24 h-24 rounded-2xl flex items-center justify-center mb-6 bg-amber-400/10 text-amber-400 shadow-[0_0_30px_rgba(251,191,36,0.2)] border border-amber-400/20";
+                icon.className = "fas fa-warning text-4xl";
+                btnAction.className = "flex-1 bg-amber-400 hover:bg-white text-black font-black uppercase tracking-widest py-4 rounded-2xl shadow-lg transition-all text-[10px] transform hover:-translate-y-1";
+                btnAction.textContent = "ABRIR MANTENIMIENTO";
                 btnAction.href = "{% url 'lista_mantenimiento' %}"; 
             } else {
-                iconBg.className = "w-20 h-20 rounded-full flex items-center justify-center mb-6 bg-amber-50 text-amber-500 shadow-xl shadow-amber-100";
-                icon.className = "fas fa-info-circle text-3xl";
-                btnAction.className = "flex-1 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-amber-200 transition-all text-sm transform hover:-translate-y-0.5";
-                btnAction.textContent = "Ver Detalles";
-                btnAction.href = "#"; // Could link to specific machine stats if we parsed the ID
+                iconBg.className = "w-24 h-24 rounded-2xl flex items-center justify-center mb-6 bg-white/5 text-slate-400 shadow-xl border border-white/5";
+                icon.className = "fas fa-info-circle text-4xl";
+                btnAction.className = "flex-1 bg-white/10 hover:bg-white/20 text-white font-black uppercase tracking-widest py-4 rounded-2xl transition-all text-[10px] transform hover:-translate-y-1";
+                btnAction.textContent = "IGNORAR";
+                btnAction.href = "#"; 
             }
 
             // Show
@@ -508,7 +585,7 @@
             document.querySelectorAll('.help-content-tab').forEach(t => t.classList.add('hidden'));
             // Remove active style from all btns
             document.querySelectorAll('.help-tab-btn').forEach(b => {
-                b.className = "help-tab-btn flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-slate-100";
+                b.className = "help-tab-btn flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-white/5";
             });
             
             // Show new tab
@@ -516,13 +593,13 @@
             // Style active btn
             const activeBtn = document.querySelector(`.help-tab-btn[data-tab="${tabId}"]`);
             if (activeBtn) {
-                activeBtn.className = "help-tab-btn flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-bold transition-all text-emerald-700 bg-white shadow-sm border border-emerald-100";
+                activeBtn.className = "help-tab-btn flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-bold transition-all text-amber-400 bg-white/10 shadow-sm border border-white/5";
             }
         }
 
         function renderNotifications() {
             if (notificationStore.length === 0) {
-                notifList.innerHTML = '<li class="px-4 py-8 text-center text-gray-400 text-xs italic">No tienes nuevas notificaciones</li>';
+                notifList.innerHTML = '<li class="px-5 py-10 text-center text-slate-500 text-[10px] font-black uppercase tracking-widest italic">Sincronizado al 100%</li>';
                 notifCount.classList.add('hidden');
                 return;
             }
@@ -540,14 +617,17 @@
                 // Simple trick: attach it to window or use index.
                 // Better: Pass index to click handler.
                 html += `
-                <li onclick='openAlertModal(notificationStore[${index}])' class="cursor-pointer px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors flex gap-3 text-left group">
-                    <div class="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center ${iconClass.split(' ').slice(1).join(' ')} group-hover:scale-110 transition-transform">
-                        <i class="fas ${iconClass.split(' ')[0]}"></i>
+                <li onclick='viewAndDismissAlert(${index})' class="cursor-pointer px-6 py-5 border-b border-white/5 hover:bg-white/[0.03] transition-colors flex gap-5 text-left group">
+                    <div class="w-12 h-12 rounded-2xl flex-shrink-0 flex items-center justify-center ${iconClass.split(' ').slice(1).join(' ')} group-hover:scale-110 transition-transform shadow-inner border border-white/5">
+                        <i class="fas ${iconClass.split(' ')[0]} text-xl"></i>
                     </div>
-                    <div>
-                        <p class="text-xs font-bold text-gray-800">${n.title}</p>
-                        <p class="text-[11px] text-gray-500 leading-snug line-clamp-2">${n.message}</p>
-                        <span class="text-[9px] text-gray-400 mt-1 block">${n.time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    <div class="flex-1">
+                        <p class="text-[11px] font-black text-white uppercase tracking-wider">${n.title}</p>
+                        <p class="text-[12px] text-slate-400 leading-relaxed mt-1">${n.message}</p>
+                        <div class="flex items-center gap-2 mt-3">
+                            <span class="w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]"></span>
+                            <span class="text-[9px] text-slate-500 font-tech font-bold uppercase tracking-widest">${n.time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second: '2-digit'})}</span>
+                        </div>
                     </div>
                 </li>`;
             });
@@ -561,15 +641,38 @@
                 const data = await response.json();
                 
                 if (data.alerts && data.alerts.length > 0) {
+                    
+                    // 1. Sync Dismissed Alerts: Remove signature if alert is no longer active on server
+                    // This ensures that if the machine starts and stops again later, it alerts again.
+                    const activeSignatures = new Set(data.alerts.map(a => getAlertSignature(a.message)));
+                    let changed = false;
+                    for (let sig of dismissedAlerts) {
+                        if (!activeSignatures.has(sig)) {
+                            dismissedAlerts.delete(sig);
+                            changed = true;
+                        }
+                    }
+                    if (changed) saveDismissed();
+
                     data.alerts.forEach(alert => {
-                        // Avoid duplicates using history (suppress same message for 20 minutes)
-                        const exists = notifHistory.some(n => n.message === alert.message && (new Date() - n.time) < 1200000); 
-                        if (!exists) {
-                            addNotification(alert.type, alert.title, alert.message);
+                        const signature = getAlertSignature(alert.message);
+                        const isDismissed = dismissedAlerts.has(signature);
+
+                        // Only proceed if NOT dismissed
+                        if (!isDismissed) {
+                            // Avoid duplicates in visual LIST (UI Store)
+                            const alreadyInStore = notificationStore.some(n => getAlertSignature(n.message) === signature);
                             
-                            // Audio Alert if function exists (from dashboard/produccion.html)
-                            if (typeof speak === 'function') {
-                                speak(alert.message);
+                            if (!alreadyInStore) {
+                                // Check history just for SOUND/POPUP throttling (don't annoying every minute)
+                                const inHistory = notifHistory.some(n => getAlertSignature(n.message) === signature && (new Date() - n.time) < 1200000); // 20 min debounce
+                                
+                                if (!inHistory) {
+                                     // Audio Alert
+                                    if (typeof speak === 'function') speak(alert.message);
+                                }
+                                
+                                addNotification(alert.type, alert.title, alert.message);
                             }
                         }
                     });
@@ -595,6 +698,7 @@
             }
         });
     </script>
+    <audio id="notif-sound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto"></audio>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

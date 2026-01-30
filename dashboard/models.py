@@ -111,6 +111,28 @@ class MaquinaConfig(models.Model):
     def __str__(self):
         return f"{self.nombre} ({self.id_maquina})"
 
+class AlertaHistorial(models.Model):
+    """
+    Registra alertas críticas (ej: máquinas detenidas > 20 min) para 
+    gestionar el envío a WhatsApp/Telegram y evitar spam.
+    """
+    maquina = models.ForeignKey(MaquinaConfig, on_delete=models.CASCADE, verbose_name="Máquina")
+    tipo = models.CharField(max_length=50, default='DETENCION_CRITICA')
+    mensaje = models.TextField()
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_notificacion_ext = models.DateTimeField(null=True, blank=True, verbose_name="Enviado a WA/TG")
+    resuelta = models.BooleanField(default=False)
+    
+    class Meta:
+        managed = True
+        db_table = 'alerta_historial'
+        verbose_name = 'Historial de Alerta'
+        verbose_name_plural = 'Historial de Alertas'
+        ordering = ['-fecha_creacion']
+
+    def __str__(self):
+        return f"{self.tipo} - {self.maquina.nombre} ({self.fecha_creacion})"
+
 class OperarioConfig(models.Model):
     # Sin 'use_db', irá a 'default' que es MySQL
     legajo = models.CharField(max_length=50, unique=True, verbose_name="Legajo")

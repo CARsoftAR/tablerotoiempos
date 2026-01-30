@@ -114,6 +114,21 @@
                                            class="w-full border-emerald-200 rounded-lg shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-xs py-2 bg-emerald-50/30 font-semibold text-emerald-700">
                                 </div>
                             </div>
+
+                            {% if maquina.frecuencia_preventivo_horas > 0 %}
+                            <!-- Golden Life Counter -->
+                            <div class="pt-2">
+                                <div class="flex justify-between items-end mb-2">
+                                    <span class="text-[10px] font-black text-amber-600 uppercase tracking-widest leading-none">Contador de Vida Útil (Uso Real)</span>
+                                    <span class="text-xs font-black text-slate-700 leading-none">{{ maquina.maint_hours }} / {{ maquina.frecuencia_preventivo_horas }} HS</span>
+                                </div>
+                                <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200 p-0.5 shadow-inner">
+                                    <div class="h-full rounded-full bg-gradient-to-r from-amber-600 via-yellow-400 to-amber-200 shadow-[0_0_10px_rgba(251,191,36,0.4)] transition-all duration-1000"
+                                         style="width: {{ maquina.maint_progress }}%"></div>
+                                </div>
+                                <p class="text-[9px] text-slate-400 mt-2 italic">Basado en horas de proceso reportadas al ERP desde el último service.</p>
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
 

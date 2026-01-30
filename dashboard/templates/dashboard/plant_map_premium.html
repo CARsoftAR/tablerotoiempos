@@ -32,8 +32,8 @@
         body {
             margin: 0;
             padding: 0;
-            background-color: #f1f5f9;
-            color: var(--text-main);
+            background-color: #0f172a;
+            color: #f1f5f9;
             font-family: 'Inter', system-ui, -apple-system, sans-serif; /* Standard modern font */
             overflow: hidden;
             height: 100vh;
@@ -85,12 +85,13 @@
             justify-content: space-between;
             align-items: center;
             padding: 0 30px;
-            background: #ffffff;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
             border-bottom: 2px solid var(--premium-gold);
             height: 70px;
             position: relative;
             z-index: 1000;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
         }
 
         .top-bar::after {
@@ -112,7 +113,7 @@
             font-size: 20px;
             font-weight: 700;
             margin: 0;
-            color: var(--primary-blue);
+            color: #fff;
             letter-spacing: -0.5px;
             display: flex;
             align-items: center;
@@ -120,9 +121,9 @@
         }
 
         .btn-home {
-            background: #eff6ff;
-            color: #3b82f6;
-            border: 1px solid #dbeafe;
+            background: rgba(30, 41, 59, 0.5);
+            color: #94a3b8;
+            border: 1px solid rgba(255,255,255,0.1);
             width: 36px;
             height: 36px;
             border-radius: 8px;
@@ -134,8 +135,10 @@
             text-decoration: none;
         }
         .btn-home:hover {
-            background: #3b82f6;
-            color: white;
+            background: var(--premium-gold);
+            color: #000;
+            border-color: var(--premium-gold);
+            box-shadow: 0 0 10px var(--premium-gold-glow);
         }
 
         /* SIDEBAR - CLEAN WHITE */
@@ -145,8 +148,8 @@
             top: 60px;
             bottom: 0;
             width: 350px;
-            background: #ffffff;
-            border-left: 1px solid var(--border-color);
+            background: #0f172a;
+            border-left: 1px solid rgba(255,255,255,0.1);
             overflow-y: auto;
             z-index: 1000;
             transition: transform 0.3s ease;
@@ -156,10 +159,11 @@
         .sidebar.hidden { transform: translateX(100%); }
 
         /* CONTROLS - STANDARD BUTTONS */
+        /* CONTROLS - STANDARD BUTTONS */
         .btn {
-            background: white;
-            border: 1px solid #cbd5e1;
-            color: #475569;
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #94a3b8;
             padding: 6px 14px;
             border-radius: 6px;
             cursor: pointer;
@@ -171,14 +175,14 @@
         }
 
         .btn:hover {
-            background: #f1f5f9;
-            color: #0f172a;
-            border-color: #94a3b8;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            background: var(--premium-gold);
+            color: #000;
+            border-color: var(--premium-gold);
+            box-shadow: 0 0 10px var(--premium-gold-glow);
         }
 
         .btn-active {
-            background: #eff6ff;
+            background: #dbeafe;
             color: #2563eb;
             border-color: #2563eb;
         }
@@ -200,17 +204,17 @@
         .section-title {
             font-size: 11px;
             font-weight: 800;
-            color: #64748b;
+            color: #94a3b8;
             text-transform: uppercase;
             letter-spacing: 1.5px;
             margin: 0;
             padding-bottom: 8px;
-            border-bottom: 2px solid #f1f5f9;
+            border-bottom: 2px solid rgba(255,255,255,0.05);
         }
 
         .kpi-card {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid rgba(255,255,255,0.05);
             padding: 15px;
             border-radius: 12px;
             display: flex;
@@ -218,19 +222,19 @@
             gap: 5px;
             transition: all 0.2s;
         }
-        .kpi-card:hover { border-color: #cbd5e1; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
+        .kpi-card:hover { border-color: rgba(255,255,255,0.2); box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
 
         .kpi-title {
             font-size: 10px;
             font-weight: 800;
-            color: #475569;
+            color: #64748b;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
 
         .kpi-value {
             font-weight: 800;
-            color: #0f172a;
+            color: #fff;
             line-height: 1;
         }
 
@@ -238,8 +242,8 @@
         .sidebar-machine-item {
             display: flex;
             align-items: center;
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid rgba(255,255,255,0.05);
             padding: 12px 15px;
             border-radius: 12px;
             margin-bottom: 10px;
@@ -248,8 +252,8 @@
             position: relative;
         }
         .sidebar-machine-item:hover {
-            border-color: #3b82f6;
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.08);
+            border-color: var(--premium-gold);
+            box-shadow: 0 4px 12px rgba(251, 191, 36, 0.1);
             transform: translateX(4px);
         }
 
@@ -261,8 +265,8 @@
         }
 
         .btn-toggle-eye {
-            background: #f1f5f9;
-            border: 1px solid #e2e8f0;
+            background: rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.1);
             color: #64748b;
             width: 28px;
             height: 28px;
@@ -274,13 +278,13 @@
             transition: all 0.2s;
         }
         .btn-toggle-eye:hover {
-            background: #3b82f6;
-            color: white;
-            border-color: #3b82f6;
+            background: var(--premium-gold);
+            color: #000;
+            border-color: var(--premium-gold);
         }
         .btn-toggle-eye.off {
             opacity: 0.4;
-            background: #f8fafc;
+            background: transparent;
         }
 
 
@@ -625,36 +629,36 @@
             right: 20px;
             top: 80px;
             width: 360px;
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
+            background: #1e293b;
+            border: 1px solid rgba(255,255,255,0.1);
             border-radius: 12px;
             z-index: 6000;
             display: none;
-            color: #1e293b;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            color: #f1f5f9;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
             overflow: hidden;
             font-family: 'Inter', sans-serif;
         }
         .prop-header {
-            background: #f8fafc;
+            background: #0f172a;
             padding: 12px 15px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid #e2e8f0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
             cursor: move; /* Indicate draggable */
         }
-        .prop-header span { font-weight: 700; font-size: 14px; color: #0f172a; text-transform: uppercase; }
-        .prop-header button { background: none; border: none; color: #64748b; cursor: pointer; font-size: 18px; }
+        .prop-header span { font-weight: 700; font-size: 14px; color: #fff; text-transform: uppercase; }
+        .prop-header button { background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 18px; }
         .prop-body { padding: 20px; display: flex; flex-direction: column; gap: 15px; }
         .prop-group { display: flex; flex-direction: column; gap: 5px; }
         .prop-row { display: flex; gap: 12px; }
         .prop-row .prop-group { flex: 1; }
-        .prop-group label { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 700; }
+        .prop-group label { font-size: 11px; text-transform: uppercase; color: #94a3b8; font-weight: 700; }
         .prop-group input, .prop-group select {
-            background: #ffffff;
-            border: 1px solid #cbd5e1;
-            color: #1e293b;
+            background: #0f172a;
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #fff;
             padding: 10px;
             border-radius: 8px;
             font-size: 14px;
@@ -744,27 +748,42 @@
 
         .legend-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; }
 
-        /* PREMIUM OPERATOR INDICATOR */
-        .operator-indicator {
+        /* PREMIUM OPERATOR INDICATOR GROUP */
+        .operator-group {
             position: absolute;
-            top: -10px;
-            right: -10px;
-            width: 22px;
-            height: 22px;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            pointer-events: none; /* Allow clicks to pass to machine, but chilren have pointer events */
+        }
+
+        .operator-indicator {
+            width: 24px;
+            height: 24px;
             background: var(--premium-gold);
             color: #000;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 11px;
-            z-index: 100;
+            font-size: 12px;
             box-shadow: 0 0 15px var(--premium-gold-glow);
             border: 2px solid #fff;
             transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            /* Removed negative margin for separation */
+            margin-right: 2px; 
+            pointer-events: auto;
+            position: relative;
         }
-        .machine-marker:hover .operator-indicator {
-            transform: scale(1.2) rotate(15deg);
+        .operator-indicator:last-child { margin-right: 0; }
+        
+        .operator-indicator:hover {
+            transform: scale(1.3) translateY(-5px);
+            z-index: 200 !important;
         }
 
         /* PREMIUM SCROLLBAR */
@@ -794,6 +813,23 @@
         .system-time-value { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
         .heartbeat-dot { width: 6px; height: 6px; background: #10b981; border-radius: 50%; box-shadow: 0 0 5px #10b981; animation: heartbeat 1s infinite; }
         
+        .design-mode-indicator {
+             position:fixed; 
+             top:70px; 
+             left:50%; 
+             transform:translateX(-50%); 
+             background: var(--premium-gold); 
+             color:black; 
+             padding:5px 15px; 
+             border-radius:20px; 
+             font-weight:bold; 
+             z-index:50;
+             box-shadow: 0 0 20px var(--premium-gold-glow);
+             text-transform: uppercase;
+             font-size: 11px;
+             letter-spacing: 1px;
+        }
+
         @keyframes heartbeat {
             0% { transform: scale(1); opacity: 0.5; }
             50% { transform: scale(1.5); opacity: 1; }
@@ -834,7 +870,7 @@
         </div>
     </div>
 
-    <div class="design-mode-indicator" id="designIndicator" style="display:none; position:fixed; top:70px; left:50%; transform:translateX(-50%); background:orange; color:black; padding:5px 15px; border-radius:20px; font-weight:bold; z-index:50;">MODO DISEÑO ACTIVADO</div>
+    <div class="design-mode-indicator" id="designIndicator" style="display:none;">MODO DISEÑO ACTIVADO</div>
 
     <div class="map-container sidebar-open" id="mapContainer">
         <div class="plant-floor" id="plantFloor" 
@@ -858,14 +894,28 @@
                      data-performance="{{ m.performance|default:0 }}"
                      data-availability="{{ m.availability|default:0 }}"
                      data-qty="{{ m.qty|floatformat:0 }}"
+                     data-active-ops='{{ m.active_operators_js|safe }}'
                      onmousedown="onMarkerMouseDown(event, this)">
                     
                     <div class="machine-icon-container">
-                        <!-- Operator Indicator -->
-                        {% if m.operario and m.operario != 'S/A' and m.status != 'STOPPED' and m.status != 'OFFLINE' %}
-                        <div class="operator-indicator" title="Operario: {{ m.operario }}">
-                            <i class="fa-solid fa-user-check"></i>
-                        </div>
+                        <!-- Operator Indicator Group -->
+                         {% if m.active_operators %}
+                            <div class="operator-group">
+                                {% for op_name, op_info in m.active_operators %}
+                                <div class="operator-indicator" 
+                                     style="z-index: {{ 100|add:forloop.counter0 }};" 
+                                     onmousemove="showOperatorTooltip(event, '{{ op_name }}', '{{ op_info.process }}', '{{ op_info.article }}', '{{ op_info.perf|floatformat:2 }}', '{{ op_info.avail|floatformat:2 }}')"
+                                     onmouseleave="hideTooltip(event)">
+                                    <i class="fa-solid fa-user-check"></i>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        {% elif m.operario and m.operario != 'S/A' and m.status != 'STOPPED' and m.status != 'OFFLINE' %}
+                            <div class="operator-group">
+                                <div class="operator-indicator" title="Operario: {{ m.operario }}">
+                                    <i class="fa-solid fa-user-check"></i>
+                                </div>
+                            </div>
                         {% endif %}
 
                         {% if m.type == 'CNC' %}
@@ -987,16 +1037,20 @@
                          ondragstart="onSidebarDragStart(event, '{{ m.id }}')">
                         <div style="flex:1;">
                             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                                <span style="color:#0f172a; font-weight:800; font-size:14px;">{{ m.name }}</span>
+                                <span style="color:#f1f5f9; font-weight:800; font-size:14px;">{{ m.name }}</span>
                                 <div class="machine-status-dot" style="background: {% if m.status == 'RUNNING' %}#10b981{% elif m.status == 'REPAIR' %}#f59e0b{% elif m.status == 'WAIT' %}#facc15{% elif m.status == 'BREAK' %}#3b82f6{% else %}#ef4444{% endif %}; box-shadow: 0 0 8px {% if m.status == 'RUNNING' %}rgba(16,185,129,0.4){% elif m.status == 'REPAIR' %}rgba(245,158,11,0.4){% elif m.status == 'WAIT' %}rgba(250,204,21,0.4){% elif m.status == 'BREAK' %}rgba(59,130,246,0.4){% else %}rgba(239,68,68,0.4){% endif %};"></div>
                             </div>
-                            <div style="font-size:12px; color:#3b82f6; display:flex; align-items:center; gap:6px; margin-bottom:4px; font-weight: 700;">
+                            
+                            <!-- Clean Operator Line -->
+                            <div style="font-size:12px; color:var(--premium-gold); display:flex; align-items:center; gap:6px; margin-bottom:4px; font-weight: 700;">
                                 <i class="fa-solid fa-user-gear" style="font-size:10px; opacity:0.7;"></i>
-                                {{ m.operario|default:"Sin Operario"|truncatechars:25 }}
+                                <span>{{ m.operario|default:"Sin Operario"|truncatechars:25 }}</span>
                             </div>
-                            <div style="font-size:11px; color:#64748b; line-height:1.4; opacity:0.8;">
-                                <i class="fa-solid fa-microchip" style="font-size:9px; margin-right:4px; opacity:0.5;"></i>
-                                {{ m.detalle|default:"Sin Actividad"|truncatechars:45 }}
+                            
+                            <!-- Clean Detail Line -->
+                            <div style="font-size:11px; color:#cbd5e1; line-height:1.4; opacity:0.6; display:flex; align-items:center; gap:4px;">
+                                <i class="fa-solid fa-microchip" style="font-size:9px; opacity:0.5;"></i>
+                                <span>{{ m.detalle|default:"Sin Actividad"|truncatechars:45 }}</span>
                             </div>
                         </div>
                         
@@ -1013,7 +1067,7 @@
         <!-- SECCIÓN 3: REFERENCIAS -->
         <div id="sec-legend" class="sidebar-section">
             <h3 class="section-title">REFERENCIAS</h3>
-            <div style="display:flex; flex-direction:column; gap:10px; font-size:12px; color:#475569; padding-left: 5px;">
+            <div style="display:flex; flex-direction:column; gap:10px; font-size:12px; color:#94a3b8; padding-left: 5px;">
                 <div style="display:flex; align-items:center; gap:12px;">
                     <div style="width:12px; height:12px; border-radius:50%; background:#10b981; box-shadow:0 0 10px rgba(16,185,129,0.2);"></div>
                     <span style="font-weight: 600;">ENCENDIDA</span>
@@ -1133,6 +1187,13 @@
         let is3D = false;
         let draggedElement = null;
 
+        // Global store for operators to avoid HTML attribute escaping issues
+        const machineOperatorsData = {
+            {% for m in machines %}
+            "{{ m.id }}": {{ m.active_operators_js|safe }},
+            {% endfor %}
+        };
+        
         const tooltip = document.getElementById('tooltip');
         const container = document.getElementById('mapContainer');
 
@@ -1348,7 +1409,11 @@
                 const avail = marker.getAttribute('data-availability');
                 const qty = marker.getAttribute('data-qty');
                 
-                // Logic for Status Display
+                const boxId = marker.getAttribute('data-id');
+                // Lookup ops from global safe object (solo para referencia, no para override)
+                let activeOps = machineOperatorsData[boxId] || [];
+
+
                 let displayStatus = status;
                 if (status === 'RUNNING') displayStatus = 'ONLINE / PRODUCCIÓN';
                 if (status === 'STOPPED') displayStatus = 'DETENIDA / PARADA';
@@ -1410,7 +1475,67 @@
             if (status === 'REPAIR') return '#f59e0b';
             if (status === 'WAIT') return '#facc15';
             if (status === 'BREAK') return '#3b82f6';
-            return 'var(--status-gray)';
+            return 'var(--status-red)';
+        }
+        
+        // Helper removed
+        function getKPIColor(val) {
+            val = parseFloat(val);
+            if (val >= 85) return '#10b981';
+            if (val >= 60) return '#facc15';
+            return '#ef4444';
+        }
+
+        // NEW: Specific Tooltip for Operator Icons - Matches Main Tooltip Style (Full Detail)
+        function showOperatorTooltip(e, name, process, article, perf, avail) {
+            e.stopPropagation(); // Prevent machine tooltip
+            
+            tooltip.style.display = 'block';
+            tooltip.style.left = (e.clientX + 15) + 'px';
+            tooltip.style.top = (e.clientY + 15) + 'px';
+            
+            // Boundary checks
+            const rect = tooltip.getBoundingClientRect();
+            if (e.clientX + rect.width + 15 > window.innerWidth) tooltip.style.left = (e.clientX - rect.width - 15) + 'px';
+            if (e.clientY + rect.height + 15 > window.innerHeight) tooltip.style.top = (e.clientY - rect.height - 15) + 'px';
+
+            // Determine status color based on keywords just for visual consistency
+            let statusColor = '#10b981'; // Default Green/Online
+            let statusText = 'ONLINE';
+            
+            if (process === 'STOPPED' || process.includes('PARADA')) { statusColor = '#ef4444'; statusText = 'OFFLINE'; }
+            if (process === 'REPAIR' || process.includes('MANT')) { statusColor = '#f59e0b'; statusText = 'MANTENIMIENTO'; }
+
+            tooltip.innerHTML = `
+                <div class="tooltip-header">
+                    <div class="tooltip-title">${name}</div>
+                    <div class="tooltip-status" style="background:${statusColor}; color:${statusText === 'WAIT' ? '#000' : '#fff'}">${statusText}</div>
+                </div>
+                <div class="tooltip-row">
+                     <span class="tooltip-label">Proceso:</span>
+                     <span class="tooltip-value description-truncate">${process || '---'}</span>
+                </div>
+                <div class="tooltip-row">
+                     <span class="tooltip-label">Artículo:</span>
+                     <span class="tooltip-value description-truncate">${article || '---'}</span>
+                </div>
+                <!-- Footer with Stats (from Machine) -->
+                <div class="tooltip-footer">
+                    <div class="kpi-item">
+                        <div class="kpi-label">RENDIMIENTO</div>
+                        <div class="kpi-value" style="color: ${getKPIColor(perf)}">${perf}%</div>
+                    </div>
+                    <div class="kpi-item">
+                        <div class="kpi-label">DISPONIBILIDAD</div>
+                        <div class="kpi-value" style="color: ${getKPIColor(avail)}">${avail}%</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function hideTooltip(e) {
+             if(e) e.stopPropagation();
+             tooltip.style.display = 'none';
         }
 
         function getKPIColor(val) {

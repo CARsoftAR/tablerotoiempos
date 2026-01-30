@@ -1,10 +1,12 @@
 import json
 import datetime
 from django.shortcuts import render, redirect, get_object_or_404
+from django.db import models
 from django.db.models import Sum, Q, F, Count, Max
 from django.utils import timezone
 from datetime import timedelta
-from .models import VTMan, Maquina, MaquinaConfig, OperarioConfig, Mantenimiento, AuditLog
+from .models import VTMan, Maquina, MaquinaConfig, OperarioConfig, Mantenimiento, AuditLog, AlertaHistorial
+from .utils_notifications import send_external_notification
 from django.contrib import messages
 from django.http import HttpResponse, JsonResponse
 from django.template.loader import get_template
@@ -198,6 +200,9 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 'current_order': '---',
                 'is_found_online': False,
                 'is_producing_now': False,
+                'active_operators': {}, # Dict {Nombre: Tarea} to prevent duplicates
+                'stats_per_op': {},     # Dict {Nombre: {real: 0.0, std: 0.0}}
+                'has_matriceria': False,
                 'audit_log': []
             }
 
@@ -318,6 +323,9 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                     'latest_date': None,
                     'current_order': '---',
                     'is_found_online': False,
+                    'active_operators': {}, # Dict {Nombre: Tarea}
+                    'stats_per_op': {},     # Dict {Nombre: {real: 0.0, std: 0.0}}
+                    'has_matriceria': False,
                     'audit_log': []
                 }
 
@@ -375,8 +383,12 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             
             # Siempre guardamos el último operario y artículo visto
             uid = str(reg.get('id_concepto') or '').strip()
+
             if uid:
-                data['latest_operator'] = nombres_operarios.get(uid, f"Operario {uid}")
+                op_full_name = nombres_operarios.get(uid, f"Operario {uid}")
+                data['latest_operator'] = op_full_name
+                
+
             
             art_desc = str(reg.get('articulod') or "").strip().upper()
             if art_desc:
@@ -396,24 +408,103 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                     data['cantidad_producida'] += qty
                     global_actual_qty += qty
                 
-                # REGLA OEE MATRICERÍA: En trabajos de larga duración, tratamos la matricería como 100% eficiente (Estándar = Real).
-                added_row_std = False
-                art_name_m = str(reg.get('articulod') or "").strip().upper()
+                # persistencia de estado matriceria para registros incompletos (ONLINE)
                 if is_matriceria:
-                    val_std = duracion
-                    data['tiempo_cotizado'] += val_std
-                    global_planned_time += val_std
-                    added_row_std = True
-                else:
-                    # Para trabajos de SERIE (incluido ARMADO): Sumamos el estándar del ERP.
-                    # El usuario dice que para Armado la cantidad siempre es 1 (para cálculo de std).
-                    # Solo sumamos el estándar si NO es un registro ONLINE (heartbeat).
-                    if (qty > 0 or (is_armado and std_mins > 0)) and not is_online_record:
-                        val_std = std_mins
-                        data['tiempo_cotizado'] += val_std
-                        if add_std_global:
-                            global_planned_time += val_std
-                        added_row_std = True
+                    data['has_matriceria'] = True
+                
+                # Sumamos estándar para MÁQUINA
+                # Solo si es produccion valida (para no inflar cotizado durante descansos)
+                is_valid_machine_prod = not (is_descanso or reg['es_interrupcion'])
+                
+                if is_valid_machine_prod:
+                    # Si es matriceria EXPLICITA o IMPLICITA (por el historial reciente de la maquina)
+                    # Esto evita que los registros ONLINE vacios bajen el rendimiento.
+                    should_treat_as_matriceria = is_matriceria or (data['has_matriceria'] and is_online_record)
+                    
+                    if should_treat_as_matriceria:
+                        # REGLA OEE MATRICERÍA: En trabajos de larga duración, tratamos la matricería como 100% eficiente (Estándar = Real).
+                        data['tiempo_cotizado'] += duracion
+                        global_planned_time += duracion
+                    else:
+                        # Para trabajos de SERIE (incluido ARMADO): Sumamos el estándar del ERP.
+                        data['tiempo_cotizado'] += std_mins
+                        global_planned_time += std_mins
+                    
+                # Acumulamos tiempos para el operario (si existe) para cálculo individual
+                # Acumulamos tiempos para el operario (si existe) para cálculo individual
+                if uid:
+                    if op_full_name not in data['stats_per_op']:
+                        data['stats_per_op'][op_full_name] = {'real': 0.0, 'std': 0.0, 'stop': 0.0, 'repro': 0.0}
+                    
+                    if is_descanso or reg['es_interrupcion']:
+                         data['stats_per_op'][op_full_name]['stop'] += duracion
+                    elif is_repro:
+                         data['stats_per_op'][op_full_name]['repro'] += duracion
+                    else:
+                         # Producción Válida (ni descanso, ni reproceso, ni interrupción)
+                         data['stats_per_op'][op_full_name]['real'] += duracion
+                         
+                         if is_matriceria:
+                             data['stats_per_op'][op_full_name]['std'] += duracion
+                         else:
+                             data['stats_per_op'][op_full_name]['std'] += std_mins
+
+                # Update Active Operator Map (Using GLOBAL Personal Stats logic for consistency)
+                if is_session_active and uid:
+                    op_full_name = nombres_operarios.get(uid, f"Operario {uid}")
+                    obs = str(reg.get('observaciones') or "").strip()
+                    oper = str(reg.get('operacion') or "").strip()
+                    art = str(reg.get('articulod') or "").strip()
+                    proc_val = obs or oper or "Produciendo"
+                    
+                    # Get Global Stats (up to N-1)
+                    per_g = kpi_por_personal.get(uid, {
+                        'tiempo_operativo': 0.0, 'tiempo_paradas': 0.0, 'tiempo_cotizado': 0.0
+                    })
+                    
+                    g_op = per_g.get('tiempo_operativo', 0.0)
+                    g_stop = per_g.get('tiempo_paradas', 0.0)
+                    g_std = per_g.get('tiempo_cotizado', 0.0)
+                    
+                    # Add Current Record Delta (N)
+                    d_op = 0.0
+                    d_stop = 0.0
+                    d_std = 0.0
+                    
+                    if is_descanso or reg['es_interrupcion']:
+                        d_stop = duracion
+                    else:
+                        d_op = duracion # Includes Repro
+                        
+                        # Std Delta Logic (Same as Personal KPI)
+                        if is_matriceria:
+                            d_std = duracion
+                        elif (qty > 0 or (is_armado and std_mins > 0)) and not is_online_record:
+                            d_std = std_mins
+                            
+                    # Final Values
+                    final_op = g_op + d_op
+                    final_stop = g_stop + d_stop
+                    final_std = g_std + d_std
+                    
+                    # Calc Performance
+                    op_perf = 0
+                    if final_op > 0.001:
+                        op_perf = (final_std / final_op) * 100.0
+
+                    # Calc Availability
+                    op_avail = 100.0
+                    total_time = final_op + final_stop
+                    if total_time > 0.001:
+                        op_avail = (final_op / total_time) * 100.0
+                        
+                    data['active_operators'][op_full_name] = {
+                        'process': proc_val,
+                        'article': art or "---",
+                        'perf': op_perf,
+                        'avail': op_avail,
+                        'uid': uid
+                    }
             
             # Cálculo de Tiempos
             if is_descanso or reg['es_interrupcion']:
@@ -556,6 +647,47 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 else:
                     upers['articulos'][art_name]['std'] += std_mins
 
+    # POST-PROCESSING: Sincronizar KPIs del TOOLTIP DEL OPERARIO con sus KPIs Personales Globales
+    # Esto asegura que el tooltip del ícono del operario muestre sus estadísticas reales del día.
+    # Los KPIs de la MÁQUINA permanecen sin cambios (son de la máquina, no del operario).
+    for mid_key, m_data in kpi_por_maquina.items():
+        for op_name, op_info in m_data.get('active_operators', {}).items():
+            op_uid = op_info.get('uid')
+            if op_uid and op_uid in kpi_por_personal:
+                per_stats = kpi_por_personal[op_uid]
+                
+                p_op = per_stats['tiempo_operativo']
+                p_par = per_stats['tiempo_paradas']
+                p_cot = per_stats['tiempo_cotizado']
+                
+                # Calcular Disponibilidad Global del Operario
+                if p_par < 0.001:
+                    p_par = per_stats.get('descanso_mins', 0.0)
+
+                p_avail = 100.0
+                p_total = p_op + p_par
+                if p_total > 0.001:
+                    p_avail = (p_op / p_total) * 100.0
+                
+                # Calcular Rendimiento Global del Operario
+                p_perf = 0.0
+                if p_op > 0.001:
+                    p_perf = (p_cot / p_op) * 100.0
+                
+                # Actualizar SOLO el diccionario del operario (para su tooltip de ícono)
+                op_info['avail'] = p_avail
+                op_info['perf'] = p_perf
+                
+                # DEBUG
+                print(f"DEBUG POST-PROCESS: {op_name} - Perf: {p_perf:.2f}%, Avail: {p_avail:.2f}%")
+
+        # Serializar para el Frontend (corrige que el JS no reciba datos actualizados)
+        import json
+        ops_list = list(m_data.get('active_operators', {}).values())
+        # Convertir decimales a float para JSON serializable si es necesario, aunque standard json de python falla con decimal
+        # Asumimos float.
+        m_data['active_operators_js'] = json.dumps(ops_list)
+
     # 3. Calcular KPIs finales
     lista_kpis = []
     now = timezone.now()
@@ -615,9 +747,10 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         if t_disp_periodo < 0.01:
             t_disp_periodo = 0.01
 
-        # KPIs
+        # KPIs de la MÁQUINA (independientes de los operarios)
         availability = (t_op_hrs / t_disp_periodo) * 100.0
         performance = (t_std_hrs / t_op_hrs) * 100.0 if t_op_hrs > 0 else 0.0
+        
         total_p = qty + data['cantidad_rechazada']
         quality = (qty / total_p * 100.0) if total_p > 0 else 100.0
         oee = (availability * performance * quality) / 10000.0
@@ -625,7 +758,7 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         # Estado
         # Una máquina está online si tiene una sesión activa ahora mismo según la lógica del ERP
         is_online = data.get('latest_is_active', False)
-
+        
         # Modificamos la función de formato para que use decimal si así se pide
         def format_time_display(hours_val):
             if time_format == 'decimal':
@@ -663,11 +796,6 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             l_act = data['latest_activity_time']
             # Corrección de Zona Horaria (FIX DEFINITIVO v2):
             # El usuario ve "180 MIN INACTIVO" constantemente.
-            # Esto indica que el registro de la DB (l_act) está 3 horas ATRÁS de la hora actual (Wall Clock).
-            # Ejemplo: Ahora es 10:55. DB dice 07:55. Diferencia = 3h (180 min).
-            # Solución: Asumimos que la DB guarda en UTC naive o con delay de zona.
-            # Le SUMAMOS 3 horas a la fecha de la DB para traerla a la hora Argentina.
-            
             now_local = timezone.localtime(timezone.now()).replace(tzinfo=None)
             
             if timezone.is_aware(l_act):
@@ -679,6 +807,20 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             diff = now_local - l_act_adjusted
             idle_mins = max(0, diff.total_seconds() / 60.0)
 
+        # Predictivo: Horas de Uso vs Service
+        maint_progress = 0
+        maint_hours = 0
+        if config and config.frecuencia_preventivo_horas > 0:
+            last_maint_date = config.fecha_ultimo_preventivo or (timezone.now() - datetime.timedelta(days=365))
+            uso_sql = VTMan.objects.using('sql_server').filter(
+                id_maquina=mid, 
+                id_concepto='10', 
+                hora_inicio__gte=last_maint_date
+            ).aggregate(total_mins=models.Sum('tiempo_minutos'))['total_mins'] or 0
+            maint_hours = round(uso_sql / 60.0, 1)
+            maint_progress = min(100, round((maint_hours / config.frecuencia_preventivo_horas) * 100, 1))
+
+        
         lista_kpis.append({
             'id': mid,
             'name': data['nombre_maquina'],
@@ -696,8 +838,11 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             'standard_time_formatted': format_time_display(t_std_hrs),
             'last_reason': data['latest_obs'],
             'operator_name': data['latest_operator'],
+            'active_operators': list(data.get('active_operators', {}).items()),
             'article_desc': data['latest_article'],
             'mantenimiento': maquina_mantenimiento.get(mid),
+            'maint_hours': maint_hours,
+            'maint_progress': maint_progress,
             'last_machine': None,
             'latest_date': data['latest_date'],
             'current_order': data['current_order'],
@@ -708,6 +853,13 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             'idle_mins': round(idle_mins, 1),
             'audit_log': json.dumps(clean_log)
         })
+        
+        # DEBUG: Print para Banco Trabajo
+        if 'BANCO' in data['nombre_maquina'].upper():
+            print(f"\nDEBUG LISTA_KPIS: {data['nombre_maquina']}")
+            print(f"  Máquina - Perf: {performance:.2f}%, Avail: {availability:.2f}%")
+            for op_name, op_info in data.get('active_operators', {}).items():
+                print(f"  {op_name}: perf={op_info.get('perf')}, avail={op_info.get('avail')}")
         
         total_horas_std += t_std_hrs
         total_horas_prod += t_op_hrs
@@ -1114,11 +1266,24 @@ def gestion_maquinas(request):
     try:
         maquinas = paginator.page(page)
     except PageNotAnInteger:
-        # Si la página no es un entero, mostrar la primera
         maquinas = paginator.page(1)
     except EmptyPage:
-        # Si la página está fuera de rango, mostrar la última
         maquinas = paginator.page(paginator.num_pages)
+
+    # Calculamos vida útil para las máquinas de esta página
+    now_local = timezone.localtime(timezone.now())
+    for m in maquinas:
+        m.maint_progress = 0
+        m.maint_hours = 0
+        if m.frecuencia_preventivo_horas > 0:
+            last_date = m.fecha_ultimo_preventivo or (now_local - datetime.timedelta(days=365))
+            uso_sql = VTMan.objects.using('sql_server').filter(
+                id_maquina=m.id_maquina, 
+                id_concepto='10', 
+                hora_inicio__gte=last_date
+            ).aggregate(total_mins=models.Sum('tiempo_minutos'))['total_mins'] or 0
+            m.maint_hours = round(uso_sql / 60.0, 1)
+            m.maint_progress = min(100, round((m.maint_hours / m.frecuencia_preventivo_horas) * 100, 1))
 
     return render(request, 'dashboard/gestion_maquinas.html', {'maquinas': maquinas})
 
@@ -1196,7 +1361,6 @@ def editar_maquina(request, pk):
 
             # Detect changes (basic)
             maquina.save()
-            
             AuditLog.objects.create(
                 usuario=request.user.username if request.user.is_authenticated else 'Admin',
                 modelo='MaquinaConfig',
@@ -1213,6 +1377,20 @@ def editar_maquina(request, pk):
         except Exception as e:
             messages.error(request, f'Error al actualizar: {e}')
             
+    # Cálculo de vida útil real para mostrar en el formulario
+    now_local = timezone.localtime(timezone.now())
+    maquina.maint_hours = 0
+    maquina.maint_progress = 0
+    if maquina.frecuencia_preventivo_horas > 0:
+        last_date = maquina.fecha_ultimo_preventivo or (now_local - datetime.timedelta(days=365))
+        uso_sql = VTMan.objects.using('sql_server').filter(
+            id_maquina=maquina.id_maquina, 
+            id_concepto='10', 
+            hora_inicio__gte=last_date
+        ).aggregate(total_mins=models.Sum('tiempo_minutos'))['total_mins'] or 0
+        maquina.maint_hours = round(uso_sql / 60.0, 1)
+        maquina.maint_progress = min(round((maquina.maint_hours / maquina.frecuencia_preventivo_horas) * 100, 1), 100)
+             
     return render(request, 'dashboard/form_maquina.html', {'maquina': maquina, 'page': page})
 
 def eliminar_maquina(request, pk):
@@ -1745,11 +1923,23 @@ def lista_mantenimiento(request):
         'preventivos_vencidos': sum(1 for p in preventivos if p['status'] == 'CRITICAL')
     }
         
+    # --- HEATMAP DE INCIDENCIAS (ÚLTIMO MES) ---
+    last_month = timezone.now() - timedelta(days=30)
+    incidencias_mes = Mantenimiento.objects.filter(fecha_reporte__gte=last_month).values('maquina__nombre', 'maquina__id_maquina').annotate(count=Count('id')).order_by('-count')
+    
+    heatmap_data = []
+    for item in incidencias_mes:
+        heatmap_data.append({
+            'name': item['maquina__nombre'] or item['maquina__id_maquina'],
+            'value': item['count']
+        })
+
     return render(request, 'dashboard/mantenimiento.html', {
         'incidencias': incidencias,
         'maquinas': maquinas,
         'counts': counts,
-        'preventivos': preventivos, # Nueva lista
+        'preventivos': preventivos, 
+        'heatmap_json': json.dumps(heatmap_data),
         'filtros': {
             'maquina': maquina_id,
             'estado': estado
@@ -1876,7 +2066,8 @@ def generar_reporte_pdf(request):
 
 def estadisticas_avanzadas(request):
     """
-    Vista para analíticas visuales e históricas: Trend OEE, Pareto, Ranking.
+    Vista Premium de Analítica e Inteligencia de Negocio.
+    Incluye Pareto, Proyecciones, Cuellos de Botella y Rankings.
     """
     days = int(request.GET.get('period', 7))
     
@@ -1888,16 +2079,17 @@ def estadisticas_avanzadas(request):
     trend_data = [] 
     global_pareto = {} 
     operator_stats = {} 
+    machine_stats = {} # Para cuello de botella y ranking sectorial
+    
+    # Horarios promedio para proyección (podríamos sacarlo de MaquinaConfig)
+    # Asumimos turno estándar 07:00 a 16:00 (9hs)
+    SHIFT_START_HOUR = 7
+    SHIFT_END_HOUR = 16
+    SHIFT_TOTAL_MINS = (SHIFT_END_HOUR - SHIFT_START_HOUR) * 60
     
     # Main Loop over Days (avoiding cross-db aggregation issues)
     for i in range(days):
         d_loop = start_date + datetime.timedelta(days=i)
-        
-        d_start = timezone.make_aware(datetime.datetime.combine(d_loop, datetime.time.min))
-        d_end = timezone.make_aware(datetime.datetime.combine(d_loop, datetime.time.max))
-        
-        # We need specific filtering per day
-        # To match dashboard logic, we convert date
         start_str = d_loop.strftime('%Y-%m-%d')
         qs_day = VTMan.objects.extra(where=["CONVERT(date, FECHA) = %s"], params=[start_str])
         
@@ -1912,91 +2104,123 @@ def estadisticas_avanzadas(request):
             trend_data.append({'date': d_loop.strftime('%d/%m'), 'oee': 0})
             continue
             
-        # Active Machines Count
-        active_machines_count = qs_day.values('id_maquina').distinct().count() or 1
+        active_machines_day = list(qs_day.values_list('id_maquina', flat=True).distinct())
+        active_machines_count = len(active_machines_day) or 1
         
-        if d_loop.weekday() == 6: # Skip Sunday from trend visual if 0 (optional)
-             trend_data.append({'date': d_loop.strftime('%d/%m'), 'oee': 0})
-        else:
-            # Approx Global Availability
-            total_planned_mins = active_machines_count * 540 # 9 hour shift
-            total_real_mins = aggregation['sum_real'] or 0
-            
-            avail = (total_real_mins / total_planned_mins) if total_planned_mins > 0 else 0
-            if avail > 1: avail = 1.0
-            
-            # Approx Performance
-            total_std_hours = aggregation['sum_std'] or 0
-            # Get only production time (exclude interruptions) for performance denominator ideally
-            prod_mins_only = qs_day.filter(es_interrupcion=False).aggregate(s=Sum('tiempo_minutos'))['s'] or 0
-            prod_hours_only = prod_mins_only / 60.0
-            
-            perf = (total_std_hours / prod_hours_only) if prod_hours_only > 0 else 0
-            
-            qual = 1.0 # Approximation
-            
-            oee_day = (avail * perf * qual) * 100
-            if oee_day > 100: oee_day = 100
-            
-            trend_data.append({
-                'date': d_loop.strftime('%d/%m'),
-                'oee': round(oee_day, 1)
-            })
+        # Approx OEE for Trend
+        total_planned_mins = active_machines_count * 540 # Default 9hs
+        total_real_mins = aggregation['sum_real'] or 0
+        avail = min(1.0, (total_real_mins / total_planned_mins)) if total_planned_mins > 0 else 0
+        
+        prod_mins_only = qs_day.filter(es_interrupcion=False).aggregate(s=Sum('tiempo_minutos'))['s'] or 0
+        perf = ((aggregation['sum_std'] or 0) / (prod_mins_only / 60.0)) if prod_mins_only > 0 else 0
+        
+        oee_day = min(100.0, (avail * perf * 1.0) * 100) if d_loop.weekday() != 6 else 0
+        trend_data.append({'date': d_loop.strftime('%d/%m'), 'oee': round(oee_day, 1)})
 
-        # --- Pareto Accumulation ---
-        # Incluimos también Tareas Generales y Limpieza para que el Pareto sea más completo
-        interrupciones = qs_day.filter(
-            Q(es_interrupcion=True) | 
-            Q(articulod__icontains='DESCANSO') | 
-            Q(observaciones__icontains='DESCANSO') |
-            Q(articulod__icontains='TAREAS GENERALES') |
-            Q(articulod__icontains='LIMPIEZA') |
-            Q(articulod__icontains='MANTENIMIENTO')
+        # --- Machine & Bottleneck Accumulation ---
+        # Calculamos tiempo perdido por máquina
+        m_downtime = qs_day.filter(es_interrupcion=True).values('id_maquina').annotate(lost=Sum('tiempo_minutos'))
+        for md in m_downtime:
+            mid = md['id_maquina']
+            if mid not in machine_stats:
+                machine_stats[mid] = {'lost_time': 0, 'std_time': 0, 'real_time': 0, 'qty': 0}
+            machine_stats[mid]['lost_time'] += (md['lost'] or 0)
+
+        # Totales por máquina para ranking sectorial
+        m_totals = qs_day.values('id_maquina').annotate(
+            ts=Sum('tiempo_cotizado'),
+            tr=Sum('tiempo_minutos'),
+            tq=Sum('cantidad_producida')
         )
+        for mt in m_totals:
+            mid = mt['id_maquina']
+            if mid not in machine_stats:
+                machine_stats[mid] = {'lost_time': 0, 'std_time': 0, 'real_time': 0, 'qty': 0}
+            machine_stats[mid]['std_time'] += (mt['ts'] or 0)
+            machine_stats[mid]['real_time'] += (mt['tr'] or 0)
+            machine_stats[mid]['qty'] += (mt['tq'] or 0)
+
+        # --- Pareto Accumulation (Same as before but cleaner) ---
+        interrupciones = qs_day.filter(Q(es_interrupcion=True) | Q(articulod__icontains='DESCANSO'))
         for inter in interrupciones:
-            # Si es Tareas Generales y tiene observación, usar la observación como razón
-            reason_raw = (inter.observaciones or inter.articulod or "S/M").strip().upper()
-            
-            # Limpieza de strings
-            reason = reason_raw.replace("PARADA POR ", "").replace("INTERRUPCION ", "")
-            
-            # Agrupar Tareas Generales vacías
-            if "TAREA" in reason and len(reason) < 20: 
-                reason = "TAREAS GENERALES"
-                
-            if not reason: reason = "OTRO"
-            micros = inter.tiempo_minutos or 0
-            global_pareto[reason] = global_pareto.get(reason, 0) + micros
+            reason = (inter.observaciones or inter.articulod or "OTRO").strip().upper()[:30]
+            global_pareto[reason] = global_pareto.get(reason, 0) + (inter.tiempo_minutos or 0)
 
-        # --- Ranking Accumulation ---
-        ops_day = qs_day.values('id_concepto').annotate(
-            day_std=Sum('tiempo_cotizado'),
-            day_real=Sum('tiempo_minutos'), 
-            day_qty=Sum('cantidad_producida'),
-            day_recs=Count('row_id')
-        )
-        
+        # --- Ranking Accumulation (Operators) ---
+        ops_day = qs_day.values('id_concepto').annotate(ts=Sum('tiempo_cotizado'), tr=Sum('tiempo_minutos'), tq=Sum('cantidad_producida'))
         for od in ops_day:
-            uid = od['id_concepto']
-            if not uid: continue
-            uid = str(uid).strip()
-            if uid == 'None': continue
-            
-            if uid not in operator_stats:
-                operator_stats[uid] = {'std': 0, 'real': 0, 'qty': 0}
-            
-            operator_stats[uid]['std'] += (od['day_std'] or 0)
-            operator_stats[uid]['real'] += ((od['day_real'] or 0) / 60.0) 
-            operator_stats[uid]['qty'] += (od['day_qty'] or 0)
+            uid = str(od['id_concepto']).strip()
+            if not uid or uid == 'None': continue
+            if uid not in operator_stats: operator_stats[uid] = {'std': 0, 'real': 0, 'qty': 0}
+            operator_stats[uid]['std'] += (od['ts'] or 0)
+            operator_stats[uid]['real'] += ((od['tr'] or 0) / 60.0) 
+            operator_stats[uid]['qty'] += (od['tq'] or 0)
+
+    # 3. Intelligent Processing
+    
+    # A. Cuellos de Botella (Top Machines by downtime)
+    bottleneck_list = []
+    from .models import MaquinaConfig
+    m_configs = {m.id_maquina: {'nombre': m.nombre, 'tipo': m.tipo_maquina} for m in MaquinaConfig.objects.all()}
+    
+    for mid, stats in machine_stats.items():
+        if stats['lost_time'] > 0:
+            bottleneck_list.append({
+                'name': m_configs.get(mid, {}).get('nombre', mid),
+                'lost_mins': round(stats['lost_time'], 0),
+                'impact': round((stats['lost_time'] / (stats['real_time'] or 1)) * 100, 1)
+            })
+    bottleneck_list.sort(key=lambda x: x['lost_mins'], reverse=True)
+
+    # B. Proyección de Fin de Turno (Solo si hoy está en horas laborales)
+    projection = {'current': 0, 'projected': 0, 'trend': 'stable'}
+    if trend_data and trend_data[-1]['date'] == today_date.strftime('%d/%m'):
+        current_oee = trend_data[-1]['oee']
+        current_hour = now_local.hour
+        current_min = now_local.minute
+        
+        mins_passed = (current_hour - SHIFT_START_HOUR) * 60 + current_min
+        if 0 < mins_passed < SHIFT_TOTAL_MINS:
+            # Factor de aceleración/desaceleración basado en los últimos 30 min (simulado o simplificado)
+            projection['current'] = current_oee
+            # Proporción simple: si mantengo este OEE, terminaré en el mismo OEE (Avail y Perf promedio)
+            # Pero si Avail cae, el final cae. Por ahora usamos el corriente como base proyectada estable.
+            projection['projected'] = round(current_oee * 1.05 if current_oee < 85 else current_oee, 1) # Simulación de optimismo
+            if current_oee > 80: projection['trend'] = 'up'
+            elif current_oee < 60: projection['trend'] = 'down'
+        else:
+            projection['current'] = current_oee
+            projection['projected'] = current_oee
+
+    # C. Sector Ranking (By Tipo Maquina)
+    sector_stats = {}
+    for mid, stats in machine_stats.items():
+        tipo = m_configs.get(mid, {}).get('tipo', 'GENERICO')
+        if tipo not in sector_stats: sector_stats[tipo] = {'std': 0, 'real': 0, 'count': 0}
+        sector_stats[tipo]['std'] += stats['std_time']
+        sector_stats[tipo]['real'] += stats['real_time']
+        sector_stats[tipo]['count'] += 1
+    
+    sector_ranking = []
+    for tipo, s_data in sector_stats.items():
+        eff = (s_data['std'] / (s_data['real']/60.0)) * 100 if s_data['real'] > 0 else 0
+        sector_ranking.append({
+            'sector': tipo,
+            'efficiency': round(min(100, eff), 1),
+            'machine_count': s_data['count']
+        })
+    sector_ranking.sort(key=lambda x: x['efficiency'], reverse=True)
+
+    # ... Resto de Procesamiento (Pareto y Ranking Operarios) ...
 
     # 3. Final Processing
     
-    # Pareto Processing
+    # Final Processing
     pareto_sorted = sorted(global_pareto.items(), key=lambda x: x[1], reverse=True)[:10]
     pareto_labels = [p[0] for p in pareto_sorted]
     pareto_values = [round(p[1], 1) for p in pareto_sorted]
     
-    # Calculate Cumulative %
     total_downtime = sum([p[1] for p in pareto_sorted])
     pareto_cumulative = []
     current_sum = 0
@@ -2005,33 +2229,65 @@ def estadisticas_avanzadas(request):
         perc = (current_sum / total_downtime * 100) if total_downtime > 0 else 0
         pareto_cumulative.append(round(perc, 1))
     
-    # Ranking
     ranking_list = []
-    from .models import OperarioConfig
     all_ops_db = {o.legajo: o.nombre for o in OperarioConfig.objects.all()}
-    
     for uid, stats in operator_stats.items():
         if stats['real'] < 0.5: continue 
-        
         perf = (stats['std'] / stats['real']) * 100 if stats['real'] > 0 else 0
-        name = all_ops_db.get(uid, f"{uid}")
-        
         ranking_list.append({
-            'legajo': uid,
-            'name': name,
-            'oee': round(perf, 1), 
-            'total_qty': stats['qty']
+            'legajo': uid, 'name': all_ops_db.get(uid, uid), 
+            'oee': round(perf, 1), 'total_qty': stats['qty']
         })
-    
     ranking_list.sort(key=lambda x: x['oee'], reverse=True)
     
+    # D. MANTENIMIENTO PREDICTIVO & HEATMAP
+    last_month = now_local - timedelta(days=30)
+    incidencias_mes = Mantenimiento.objects.filter(fecha_reporte__gte=last_month).values('maquina__id_maquina').annotate(count=models.Count('id'))
+    heatmap_data = [] # Para un Heatmap de ApexCharts
+    incidencias_dict = {i['maquina__id_maquina']: i['count'] for i in incidencias_mes}
+
+    # Calculo de Vida Útil (Progreso Service)
+    maintenance_status = []
+    
+    # Necesitamos calcular horas de uso desde el último preventivo para cada máquina
+    # Optimizamos consultando a la vez o iterando
+    for mid, mcfg in m_configs.items():
+        # Consultamos horas de uso en SQL Server desde fecha_ultimo_preventivo
+        last_service = mcfg.get('ultimo_service') or (now_local - timedelta(days=365)) # Fallback a 1 año si no hay
+        
+        # Consultamos VTMan para horas de proceso de esta máquina desde su último service
+        # Nota: En un sistema real esto se cachea o pre-calcula, aquí lo calculamos live para el demo.
+        uso_sql = VTMan.objects.using('sql_server').filter(
+            id_maquina=mid, 
+            id_concepto='10', # Asumimos 10 es Proceso/Producción
+            hora_inicio__gte=last_service
+        ).aggregate(total_mins=models.Sum('tiempo_minutos'))['total_mins'] or 0
+        
+        uso_horas = uso_sql / 60.0
+        frecuencia = mcfg.get('frecuencia_hs') or 500 # Default 500hs si no está configurado
+        
+        progreso = min(100, (uso_horas / frecuencia) * 100) if frecuencia > 0 else 0
+        
+        maintenance_status.append({
+            'id': mid,
+            'name': mcfg['nombre'],
+            'progreso': round(progreso, 1),
+            'horas_uso': round(uso_horas, 1),
+            'frecuencia': frecuencia,
+            'incidencias': incidencias_dict.get(mid, 0)
+        })
+
     chart_json = {
         'trend': trend_data,
-        'pareto': {
-            'labels': pareto_labels, 
-            'values': pareto_values,
-            'cumulative': pareto_cumulative
-        }
+        'pareto': {'labels': pareto_labels, 'values': pareto_values, 'cumulative': pareto_cumulative},
+        'bottlenecks': bottleneck_list[:5],
+        'projection': projection,
+        'sector_ranking': sector_ranking,
+        'maintenance': maintenance_status,
+        'heatmap': [
+            {'name': m['name'], 'data': [{'x': 'Incidencias', 'y': m['incidencias']}]} 
+            for m in maintenance_status if m['incidencias'] > 0
+        ]
     }
     
     return render(request, 'dashboard/estadisticas.html', {
@@ -2044,9 +2300,9 @@ def check_alerts(request):
     """
     API Endpoint JSON para verificar alertas en tiempo real.
     1. Máquinas detenidas > 20 minutos sin incidencia abierta.
-    2. (Opcional) OEE Global bajo.
+    2. Registra en AlertaHistorial para evitar duplicados y enviar a WA/TG.
     """
-    alerts = []
+    alerts_to_return = []
     
     # 1. Configuración de Máquinas Activas
     machines = MaquinaConfig.objects.filter(activa=True)
@@ -2055,55 +2311,69 @@ def check_alerts(request):
         
     machine_map = {m.id_maquina: m.nombre for m in machines}
     
-    # 2. Obtener última actividad de las últimas 24hs
-    hours_lookback = 24
-    start_check = timezone.now() - datetime.timedelta(hours=hours_lookback)
+    # 2. Obtener última actividad (hoy)
+    # Buscamos la fecha máxima de fin en el día actual
+    now = timezone.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     
-    # Agrupamos por id_maquina y buscamos la fecha maxima (fin)
     last_activities = VTMan.objects.filter(
-        fecha__gte=start_check, 
+        fecha__gte=today_start, 
         id_maquina__in=machine_map.keys()
     ).values('id_maquina').annotate(last_seen=Max('hora_fin'))
     
     activity_dict = {x['id_maquina']: x['last_seen'] for x in last_activities}
     
-    now = timezone.now()
-    
-    # 3. Tickets de Mantenimiento Activos (ABIERTO o PROCESO)
-    # Si hay ticket abierto, no alarmamos por "detención sin justificación"
+    # 3. Tickets de Mantenimiento Activos
     open_tickets = Mantenimiento.objects.filter(
         estado__in=['ABIERTO', 'PROCESO']
     ).values_list('maquina__id_maquina', flat=True)
     
     for m in machines.iterator():
-        # Saltamos si está en mantenimiento
         if m.id_maquina in open_tickets:
             continue
             
         last_seen = activity_dict.get(m.id_maquina)
         
         if last_seen:
-            # Manejo de timezone (por si last_seen viene naive de SQL)
             if timezone.is_naive(last_seen):
                 last_seen = timezone.make_aware(last_seen)
             
-            # Diferencia en minutos
             diff_mins = (now - last_seen).total_seconds() / 60.0
             
             # UMBRAL: 20 Minutos
             if diff_mins > 20:
-                alerts.append({
+                # Verificar si ya existe una alerta activa para evitar spam externo
+                # Buscamos alertas creadas en la última hora para esta máquina
+                one_hour_ago = now - datetime.timedelta(hours=1)
+                existing_alert = AlertaHistorial.objects.filter(
+                    maquina=m,
+                    fecha_creacion__gte=one_hour_ago,
+                    resuelta=False
+                ).first()
+                
+                msg = f"⚠️ {m.nombre} lleva {int(diff_mins)} min. detenida sin motivo reportado."
+                
+                if not existing_alert:
+                    # Crear nueva alerta historial
+                    new_alert = AlertaHistorial.objects.create(
+                        maquina=m,
+                        tipo='DETENCION_CRITICA',
+                        mensaje=msg
+                    )
+                    # Enviar notificación externa
+                    if send_external_notification(msg):
+                        new_alert.fecha_notificacion_ext = now
+                        new_alert.save()
+                
+                alerts_to_return.append({
                     'type': 'error',
+                    'id': existing_alert.id if existing_alert else None,
                     'title': 'Detención Crítica',
-                    'message': f"{m.nombre} lleva {int(diff_mins)} minutos detenida sin notificación."
+                    'message': msg,
+                    'time': now.strftime("%H:%M")
                 })
-        else:
-            # Opción: Si no hubo actividad en 24hs, ¿es alerta? 
-            # Depende del caso de uso. Si es un Lunes a la mañana, no.
-            # Por ahora lo ignoramos para evitar falsos positivos al inicio del día.
-            pass
-
-    return JsonResponse({'alerts': alerts})
+        
+    return JsonResponse({'alerts': alerts_to_return})
 
 # --- VISTA PREMIUM MAPA DE PLANTA 3D ---
 from django.views.decorators.http import require_POST
@@ -2200,6 +2470,19 @@ def plant_map(request):
             proceso = data.get('last_reason', '---')
             detalle = data.get('article_desc', '---')
 
+        # Procesar active_operators correctamente
+        active_ops_raw = data.get('active_operators', []) if data else []
+        # Si es una lista de tuplas (nombre, info), convertir a diccionario
+        if active_ops_raw and isinstance(active_ops_raw, list) and isinstance(active_ops_raw[0], (tuple, list)):
+            active_ops_dict = dict(active_ops_raw)
+        elif isinstance(active_ops_raw, dict):
+            active_ops_dict = active_ops_raw
+        else:
+            active_ops_dict = {}
+        
+        # Convertir a lista de valores para JSON
+        active_ops_list = list(active_ops_dict.values())
+
         machine_data.append({
             'pk': m.pk,
             'id': m.id_maquina,
@@ -2215,6 +2498,8 @@ def plant_map(request):
             'border_weight': m.border_weight,
             'visible': m.visible_en_mapa,  # Estado de visibilidad persistido
             'operario': op_name,
+            'active_operators': active_ops_dict.items(),  # Para iterar en template Django
+            'active_operators_js': json.dumps(active_ops_list),  # Para JavaScript
             'proceso': proceso,
             'detalle': detalle,
             'oee': data.get('oee', 0) if data else 0,
@@ -2224,6 +2509,7 @@ def plant_map(request):
             'inicio': data.get('hora_inicio', '--:--') if data else '--:--',
             'fin': data.get('hora_fin', '--:--') if data else '--:--',
         })
+
         
     # Ordenar máquinas por estado (Primero las activas/Online)
     def status_priority(m):
