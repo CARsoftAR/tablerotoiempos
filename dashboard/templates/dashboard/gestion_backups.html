@@ -1,250 +1,296 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Gestión de Backups - ABBAMAT{% endblock %}
+{% block title %}Sistema de Backup - ABBAMAT{% endblock %}
 
 {% block content %}
 <style>
     :root {
-        --premium-gold: #d4af37;
-        --premium-gold-dark: #b8941f;
-        --premium-gold-light: #f0d975;
-        --bg-dark: #0f172a;
-        --bg-card: #1e293b;
-        --text-primary: #f1f5f9;
-        --text-secondary: #94a3b8;
-        --border-color: rgba(212, 175, 55, 0.2);
+        --premium-gold: #fbbf24;
+        --purple: #8b5cf6;
+        --pink: #ec4899;
+        --cyan: #06b6d4;
+        --dark-bg: #1e293b;
+        --card-bg: #ffffff;
+        --text-dark: #1e293b;
+        --text-light: #64748b;
+        --border: #e2e8f0;
     }
 
-    .page-header {
-        background: linear-gradient(135deg, rgba(212, 175, 55, 0.1) 0%, rgba(212, 175, 55, 0.05) 100%);
-        border: 1px solid var(--border-color);
-        border-radius: 16px;
-        padding: 32px;
+    .backup-header {
+        background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+        border-radius: 20px;
+        padding: 40px;
         margin-bottom: 32px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        color: white;
+        box-shadow: 0 10px 40px rgba(139, 92, 246, 0.3);
     }
 
-    .page-header h1 {
-        color: var(--premium-gold);
+    .backup-header h1 {
         font-size: 32px;
         font-weight: 800;
         margin: 0 0 12px 0;
-        text-shadow: 0 2px 8px rgba(212, 175, 55, 0.3);
+        display: flex;
+        align-items: center;
+        gap: 12px;
     }
 
-    .page-header p {
-        color: var(--text-secondary);
+    .backup-header p {
         font-size: 16px;
+        opacity: 0.9;
         margin: 0;
     }
 
-    .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 20px;
-        margin-bottom: 32px;
-    }
-
-    .stat-card {
-        background: var(--bg-card);
-        border: 1px solid var(--border-color);
-        border-radius: 12px;
+    .github-info {
+        background: white;
+        border-radius: 16px;
         padding: 24px;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-        transition: all 0.3s ease;
+        margin-bottom: 32px;
+        border: 2px solid var(--border);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
     }
 
-    .stat-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 8px 24px rgba(212, 175, 55, 0.2);
-        border-color: var(--premium-gold);
-    }
-
-    .stat-card .icon {
-        font-size: 32px;
-        color: var(--premium-gold);
+    .github-info-header {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--text-light);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
         margin-bottom: 12px;
     }
 
-    .stat-card .label {
-        color: var(--text-secondary);
-        font-size: 14px;
-        margin-bottom: 8px;
-    }
-
-    .stat-card .value {
-        color: var(--text-primary);
-        font-size: 28px;
-        font-weight: 700;
-    }
-
-    .action-buttons {
+    .github-link {
+        color: #2563eb;
+        text-decoration: none;
+        font-weight: 600;
         display: flex;
-        gap: 16px;
-        margin-bottom: 32px;
-        flex-wrap: wrap;
-    }
-
-    .btn-premium {
-        background: linear-gradient(135deg, var(--premium-gold) 0%, var(--premium-gold-dark) 100%);
-        color: #000;
-        border: none;
-        padding: 14px 28px;
-        border-radius: 8px;
-        font-weight: 700;
-        font-size: 15px;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 16px rgba(212, 175, 55, 0.3);
-        display: inline-flex;
         align-items: center;
-        gap: 10px;
+        gap: 8px;
     }
 
-    .btn-premium:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 24px rgba(212, 175, 55, 0.5);
+    .github-link:hover {
+        text-decoration: underline;
     }
 
-    .btn-premium i {
-        font-size: 18px;
+    .github-meta {
+        display: flex;
+        gap: 32px;
+        margin-top: 12px;
+        font-size: 14px;
+        color: var(--text-light);
     }
 
-    .backups-table {
-        background: var(--bg-card);
-        border: 1px solid var(--border-color);
+    .github-meta span {
+        font-weight: 600;
+    }
+
+    .action-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 24px;
+        margin-bottom: 40px;
+    }
+
+    .action-card {
+        background: white;
+        border-radius: 16px;
+        padding: 28px;
+        border: 2px solid var(--border);
+        transition: all 0.3s ease;
+        cursor: pointer;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+    }
+
+    .action-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+    }
+
+    .action-card-icon {
+        width: 56px;
+        height: 56px;
         border-radius: 12px;
-        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        margin-bottom: 20px;
+        color: white;
+    }
+
+    .action-card-icon.purple { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }
+    .action-card-icon.pink { background: linear-gradient(135deg, #ec4899 0%, #db2777 100%); }
+    .action-card-icon.dark { background: linear-gradient(135deg, #334155 0%, #1e293b 100%); }
+    .action-card-icon.cyan { background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); }
+
+    .action-card h3 {
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--text-dark);
+        margin: 0 0 8px 0;
+    }
+
+    .action-card p {
+        font-size: 14px;
+        color: var(--text-light);
+        margin: 0 0 20px 0;
+        line-height: 1.5;
+    }
+
+    .action-card-btn {
+        width: 100%;
+        padding: 12px;
+        border: none;
+        border-radius: 10px;
+        font-weight: 700;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        color: white;
+    }
+
+    .action-card-btn.purple { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }
+    .action-card-btn.pink { background: linear-gradient(135deg, #ec4899 0%, #db2777 100%); }
+    .action-card-btn.dark { background: linear-gradient(135deg, #334155 0%, #1e293b 100%); }
+    .action-card-btn.cyan { background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); }
+
+    .action-card-btn:hover {
+        transform: scale(1.02);
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
     }
 
-    .table-header {
-        background: linear-gradient(135deg, rgba(212, 175, 55, 0.15) 0%, rgba(212, 175, 55, 0.05) 100%);
-        padding: 20px 24px;
-        border-bottom: 1px solid var(--border-color);
+    .history-section {
+        background: white;
+        border-radius: 16px;
+        padding: 0;
+        border: 2px solid var(--border);
+        overflow: hidden;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
     }
 
-    .table-header h2 {
-        color: var(--premium-gold);
+    .history-header {
+        padding: 24px 28px;
+        border-bottom: 2px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .history-header h2 {
         font-size: 20px;
-        font-weight: 700;
+        font-weight: 800;
+        color: var(--text-dark);
         margin: 0;
     }
 
-    .backups-table table {
+    .history-table {
         width: 100%;
         border-collapse: collapse;
     }
 
-    .backups-table thead {
-        background: rgba(212, 175, 55, 0.1);
+    .history-table thead {
+        background: #f8fafc;
     }
 
-    .backups-table th {
-        padding: 16px;
+    .history-table th {
+        padding: 16px 28px;
         text-align: left;
-        color: var(--premium-gold);
+        font-size: 12px;
         font-weight: 700;
-        font-size: 13px;
+        color: var(--text-light);
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        border-bottom: 1px solid var(--border-color);
+        border-bottom: 2px solid var(--border);
     }
 
-    .backups-table td {
-        padding: 16px;
-        color: var(--text-primary);
-        border-bottom: 1px solid rgba(212, 175, 55, 0.1);
+    .history-table td {
+        padding: 20px 28px;
+        color: var(--text-dark);
+        border-bottom: 1px solid var(--border);
+        font-size: 14px;
     }
 
-    .backups-table tbody tr {
-        transition: all 0.2s ease;
-    }
-
-    .backups-table tbody tr:hover {
-        background: rgba(212, 175, 55, 0.05);
+    .history-table tbody tr:hover {
+        background: #f8fafc;
     }
 
     .badge {
         display: inline-block;
         padding: 6px 12px;
-        border-radius: 6px;
+        border-radius: 8px;
         font-size: 12px;
-        font-weight: 600;
-        text-transform: uppercase;
+        font-weight: 700;
+        text-transform: capitalize;
     }
 
     .badge-success {
-        background: rgba(16, 185, 129, 0.2);
-        color: #10b981;
-        border: 1px solid rgba(16, 185, 129, 0.3);
+        background: #d1fae5;
+        color: #065f46;
     }
 
     .badge-error {
-        background: rgba(239, 68, 68, 0.2);
-        color: #ef4444;
-        border: 1px solid rgba(239, 68, 68, 0.3);
-    }
-
-    .badge-restored {
-        background: rgba(59, 130, 246, 0.2);
-        color: #3b82f6;
-        border: 1px solid rgba(59, 130, 246, 0.3);
+        background: #fee2e2;
+        color: #991b1b;
     }
 
     .badge-mysql {
-        background: rgba(212, 175, 55, 0.2);
-        color: var(--premium-gold);
-        border: 1px solid var(--border-color);
+        background: #dbeafe;
+        color: #1e40af;
     }
 
     .badge-completo {
-        background: rgba(139, 92, 246, 0.2);
-        color: #8b5cf6;
-        border: 1px solid rgba(139, 92, 246, 0.3);
+        background: #e9d5ff;
+        color: #6b21a8;
     }
 
-    .action-btn {
-        background: transparent;
-        border: 1px solid var(--border-color);
-        color: var(--text-secondary);
-        padding: 8px 12px;
-        border-radius: 6px;
+    .action-btns {
+        display: flex;
+        gap: 8px;
+    }
+
+    .icon-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        border: 2px solid var(--border);
+        background: white;
+        color: var(--text-dark);
         cursor: pointer;
         transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         font-size: 14px;
-        margin-right: 8px;
     }
 
-    .action-btn:hover {
-        border-color: var(--premium-gold);
-        color: var(--premium-gold);
-        background: rgba(212, 175, 55, 0.1);
+    .icon-btn:hover {
+        background: var(--text-dark);
+        color: white;
+        border-color: var(--text-dark);
     }
 
-    .action-btn.danger:hover {
-        border-color: #ef4444;
-        color: #ef4444;
-        background: rgba(239, 68, 68, 0.1);
+    .icon-btn.danger:hover {
+        background: #dc2626;
+        border-color: #dc2626;
+        color: white;
     }
 
     .empty-state {
         text-align: center;
         padding: 60px 20px;
-        color: var(--text-secondary);
+        color: var(--text-light);
     }
 
     .empty-state i {
         font-size: 64px;
-        color: var(--border-color);
+        color: #cbd5e1;
         margin-bottom: 20px;
     }
 
     .empty-state h3 {
-        color: var(--text-primary);
+        color: var(--text-dark);
         font-size: 20px;
-        margin-bottom: 12px;
+        margin-bottom: 8px;
     }
 
     /* Modal Styles */
@@ -256,67 +302,86 @@
         top: 0;
         width: 100%;
         height: 100%;
-        background: rgba(0, 0, 0, 0.8);
+        background: rgba(0, 0, 0, 0.6);
         backdrop-filter: blur(4px);
     }
 
     .modal-content {
-        background: var(--bg-card);
-        border: 1px solid var(--border-color);
-        border-radius: 16px;
-        margin: 10% auto;
-        padding: 32px;
+        background: white;
+        border-radius: 20px;
+        margin: 8% auto;
+        padding: 40px;
         width: 90%;
         max-width: 500px;
-        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     }
 
     .modal-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 24px;
+        margin-bottom: 28px;
     }
 
     .modal-header h2 {
-        color: var(--premium-gold);
+        color: var(--text-dark);
         font-size: 24px;
-        font-weight: 700;
+        font-weight: 800;
         margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 12px;
     }
 
     .close {
-        color: var(--text-secondary);
+        color: var(--text-light);
         font-size: 28px;
         font-weight: bold;
         cursor: pointer;
         transition: color 0.2s ease;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
     }
 
     .close:hover {
-        color: var(--premium-gold);
+        background: #f1f5f9;
+        color: var(--text-dark);
     }
 
     .form-group {
-        margin-bottom: 20px;
+        margin-bottom: 24px;
     }
 
     .form-group label {
         display: block;
-        color: var(--text-primary);
-        font-weight: 600;
+        color: var(--text-dark);
+        font-weight: 700;
         margin-bottom: 8px;
+        font-size: 14px;
     }
 
     .form-group select,
     .form-group textarea {
         width: 100%;
-        background: var(--bg-dark);
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        padding: 12px;
-        color: var(--text-primary);
+        background: #f8fafc;
+        border: 2px solid var(--border);
+        border-radius: 12px;
+        padding: 14px;
+        color: var(--text-dark);
         font-size: 14px;
+        font-family: inherit;
+        transition: all 0.2s ease;
+    }
+
+    .form-group select:focus,
+    .form-group textarea:focus {
+        outline: none;
+        border-color: #8b5cf6;
+        background: white;
     }
 
     .form-group textarea {
@@ -328,22 +393,41 @@
         display: flex;
         gap: 12px;
         justify-content: flex-end;
-        margin-top: 24px;
+        margin-top: 32px;
     }
 
     .btn-secondary {
-        background: transparent;
-        border: 1px solid var(--border-color);
-        color: var(--text-secondary);
-        padding: 12px 24px;
-        border-radius: 8px;
+        background: #f1f5f9;
+        border: none;
+        color: var(--text-dark);
+        padding: 14px 24px;
+        border-radius: 10px;
         cursor: pointer;
+        font-weight: 700;
         transition: all 0.2s ease;
     }
 
     .btn-secondary:hover {
-        border-color: var(--premium-gold);
-        color: var(--premium-gold);
+        background: #e2e8f0;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+        border: none;
+        color: white;
+        padding: 14px 24px;
+        border-radius: 10px;
+        cursor: pointer;
+        font-weight: 700;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .btn-primary:hover {
+        transform: scale(1.02);
+        box-shadow: 0 4px 16px rgba(139, 92, 246, 0.4);
     }
 
     .loading {
@@ -357,8 +441,8 @@
     }
 
     .spinner {
-        border: 4px solid rgba(212, 175, 55, 0.2);
-        border-top: 4px solid var(--premium-gold);
+        border: 4px solid #e2e8f0;
+        border-top: 4px solid #8b5cf6;
         border-radius: 50%;
         width: 40px;
         height: 40px;
@@ -372,106 +456,146 @@
     }
 </style>
 
-<div class="container" style="max-width: 1400px; margin: 0 auto; padding: 32px;">
+<div style="max-width: 1400px; margin: 0 auto; padding: 32px;">
     
-    <!-- Page Header -->
-    <div class="page-header">
-        <h1><i class="fas fa-database"></i> Gestión de Backups</h1>
-        <p>Sistema de respaldo y recuperación de datos</p>
+    <!-- Header -->
+    <div class="backup-header">
+        <h1>
+            <i class="fas fa-shield-alt"></i>
+            Sistema de Backup y Restauración
+        </h1>
+        <p>Protege tu información con backups automáticos de base de datos y código fuente</p>
     </div>
 
-    <!-- Stats Grid -->
-    <div class="stats-grid">
-        <div class="stat-card">
-            <div class="icon"><i class="fas fa-save"></i></div>
-            <div class="label">Total de Backups</div>
-            <div class="value">{{ total_backups }}</div>
+    <!-- GitHub Info (opcional - puedes quitar esto si no usas GitHub) -->
+    <div class="github-info">
+        <div class="github-info-header">REPOSITORIO GITHUB</div>
+        <a href="https://github.com/CARsoftAR/tablerotoiempos.git" target="_blank" class="github-link">
+            <i class="fab fa-github"></i>
+            https://github.com/CARsoftAR/tablerotoiempos.git
+        </a>
+        <div class="github-meta">
+            <div><span>RAMA ACTUAL:</span> main</div>
+            <div><span>ÚLTIMO PUSH:</span> {% now "d/m/Y H:i" %}</div>
         </div>
-        <div class="stat-card">
-            <div class="icon"><i class="fas fa-hdd"></i></div>
-            <div class="label">Espacio Utilizado</div>
-            <div class="value">{{ espacio_total_gb|floatformat:2 }} GB</div>
-        </div>
-        <div class="stat-card">
-            <div class="icon"><i class="fas fa-clock"></i></div>
-            <div class="label">Último Backup</div>
-            <div class="value">
-                {% if backups.first %}
-                    {{ backups.first.fecha_creacion|date:"d/m H:i" }}
-                {% else %}
-                    --:--
-                {% endif %}
+    </div>
+
+    <!-- Action Cards -->
+    <div class="action-cards">
+        <!-- Backup DB -->
+        <div class="action-card">
+            <div class="action-card-icon purple">
+                <i class="fas fa-database"></i>
             </div>
+            <h3>Backup de Base de Datos</h3>
+            <p>Crea una copia de seguridad completa de la base de datos MySQL</p>
+            <button class="action-card-btn purple" onclick="openCreateModal('MYSQL')">
+                Crear Backup DB
+            </button>
+        </div>
+
+        <!-- Backup ZIP -->
+        <div class="action-card">
+            <div class="action-card-icon pink">
+                <i class="fas fa-file-archive"></i>
+            </div>
+            <h3>Backup ZIP de Código</h3>
+            <p>Genera un archivo ZIP descargable con todo el código fuente</p>
+            <button class="action-card-btn pink" onclick="openCreateModal('COMPLETO')">
+                Generar ZIP
+            </button>
+        </div>
+
+        <!-- Sincronizar GitHub (placeholder) -->
+        <div class="action-card">
+            <div class="action-card-icon dark">
+                <i class="fab fa-github"></i>
+            </div>
+            <h3>Sincronizar GitHub</h3>
+            <p>Realiza commit y push automático de los cambios a GitHub</p>
+            <button class="action-card-btn dark" onclick="alert('Función disponible próximamente')">
+                Push a GitHub
+            </button>
+        </div>
+
+        <!-- Backup Completo -->
+        <div class="action-card">
+            <div class="action-card-icon cyan">
+                <i class="fas fa-cloud-upload-alt"></i>
+            </div>
+            <h3>Backup Completo</h3>
+            <p>Realiza un backup completo de base de datos y código fuente</p>
+            <button class="action-card-btn cyan" onclick="openCreateModal('COMPLETO')">
+                Crear Backup Completo
+            </button>
         </div>
     </div>
 
-    <!-- Action Buttons -->
-    <div class="action-buttons">
-        <button class="btn-premium" onclick="openCreateModal()">
-            <i class="fas fa-plus-circle"></i>
-            Crear Nuevo Backup
-        </button>
-    </div>
-
-    <!-- Backups Table -->
-    <div class="backups-table">
-        <div class="table-header">
-            <h2><i class="fas fa-list"></i> Historial de Backups</h2>
+    <!-- History Section -->
+    <div class="history-section">
+        <div class="history-header">
+            <i class="fas fa-history"></i>
+            <h2>Historial de Backups</h2>
         </div>
 
         {% if backups %}
-        <table>
+        <table class="history-table">
             <thead>
                 <tr>
-                    <th>Fecha</th>
                     <th>Tipo</th>
-                    <th>Estado</th>
-                    <th>Tamaño</th>
+                    <th>Fecha</th>
                     <th>Usuario</th>
-                    <th>Notas</th>
+                    <th>Tamaño</th>
+                    <th>Estado</th>
                     <th>Acciones</th>
                 </tr>
             </thead>
             <tbody>
                 {% for backup in backups %}
                 <tr>
-                    <td>{{ backup.fecha_creacion|date:"d/m/Y H:i" }}</td>
                     <td>
                         {% if backup.tipo == 'MYSQL' %}
-                            <span class="badge badge-mysql">MySQL</span>
+                            <span class="badge badge-mysql">
+                                <i class="fas fa-database"></i> MySQL
+                            </span>
                         {% else %}
-                            <span class="badge badge-completo">Completo</span>
+                            <span class="badge badge-completo">
+                                <i class="fas fa-cloud"></i> Completo
+                            </span>
+                        {% endif %}
+                    </td>
+                    <td>{{ backup.fecha_creacion|date:"d/m/Y H:i" }}</td>
+                    <td>{{ backup.usuario|default:"Sistema" }}</td>
+                    <td>
+                        {% if backup.tamano_total_mb < 1 %}
+                            {{ backup.tamano_total_mb|floatformat:2 }} MB
+                        {% else %}
+                            {{ backup.tamano_total_mb|floatformat:0 }} MB
                         {% endif %}
                     </td>
                     <td>
                         {% if backup.estado == 'EXITOSO' %}
-                            <span class="badge badge-success">Exitoso</span>
+                            <span class="badge badge-success">Completado</span>
                         {% elif backup.estado == 'ERROR' %}
                             <span class="badge badge-error">Error</span>
                         {% else %}
-                            <span class="badge badge-restored">Restaurado</span>
+                            <span class="badge badge-success">Restaurado</span>
                         {% endif %}
                     </td>
-                    <td>{{ backup.tamano_total_mb|floatformat:2 }} MB</td>
-                    <td>{{ backup.usuario|default:"Sistema" }}</td>
-                    <td>{{ backup.notas|truncatechars:50|default:"--" }}</td>
                     <td>
-                        {% if backup.archivo_db %}
-                        <button class="action-btn" onclick="downloadBackup({{ backup.id }}, 'db')" title="Descargar DB">
-                            <i class="fas fa-download"></i>
-                        </button>
-                        <button class="action-btn" onclick="confirmRestore({{ backup.id }})" title="Restaurar">
-                            <i class="fas fa-undo"></i>
-                        </button>
-                        {% endif %}
-                        {% if backup.archivo_codigo %}
-                        <button class="action-btn" onclick="downloadBackup({{ backup.id }}, 'codigo')" title="Descargar Código">
-                            <i class="fas fa-file-archive"></i>
-                        </button>
-                        {% endif %}
-                        <button class="action-btn danger" onclick="confirmDelete({{ backup.id }})" title="Eliminar">
-                            <i class="fas fa-trash"></i>
-                        </button>
+                        <div class="action-btns">
+                            {% if backup.archivo_db %}
+                            <button class="icon-btn" onclick="downloadBackup({{ backup.id }}, 'db')" title="Descargar DB">
+                                <i class="fas fa-download"></i>
+                            </button>
+                            <button class="icon-btn" onclick="confirmRestore({{ backup.id }})" title="Restaurar">
+                                <i class="fas fa-undo"></i>
+                            </button>
+                            {% endif %}
+                            <button class="icon-btn danger" onclick="confirmDelete({{ backup.id }})" title="Eliminar">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}
@@ -492,7 +616,10 @@
 <div id="createModal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
-            <h2><i class="fas fa-plus-circle"></i> Crear Nuevo Backup</h2>
+            <h2>
+                <i class="fas fa-plus-circle"></i>
+                Crear Nuevo Backup
+            </h2>
             <span class="close" onclick="closeCreateModal()">&times;</span>
         </div>
         
@@ -514,12 +641,12 @@
 
             <div class="loading" id="loadingCreate">
                 <div class="spinner"></div>
-                <p>Creando backup, por favor espera...</p>
+                <p style="color: var(--text-dark); font-weight: 600;">Creando backup, por favor espera...</p>
             </div>
 
             <div class="modal-actions">
                 <button type="button" class="btn-secondary" onclick="closeCreateModal()">Cancelar</button>
-                <button type="submit" class="btn-premium">
+                <button type="submit" class="btn-primary">
                     <i class="fas fa-save"></i>
                     Crear Backup
                 </button>
@@ -528,9 +655,110 @@
     </div>
 </div>
 
+<!-- Modal: Confirmación Premium -->
+<div id="confirmModal" class="modal">
+    <div class="modal-content" style="max-width: 450px;">
+        <div class="modal-header">
+            <h2 id="confirmTitle" style="font-size: 20px;">
+                <i class="fas fa-exclamation-triangle" style="color: #f59e0b;"></i>
+                Confirmar Acción
+            </h2>
+            <span class="close" onclick="closeConfirmModal()">&times;</span>
+        </div>
+        
+        <div style="padding: 20px 0;">
+            <p id="confirmMessage" style="color: var(--text-dark); line-height: 1.6; margin: 0;"></p>
+        </div>
+
+        <div class="modal-actions">
+            <button type="button" class="btn-secondary" onclick="closeConfirmModal()">Cancelar</button>
+            <button type="button" class="btn-primary" id="confirmButton" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">
+                <i class="fas fa-check"></i>
+                Aceptar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Alerta Premium -->
+<div id="alertModal" class="modal">
+    <div class="modal-content" style="max-width: 450px;">
+        <div class="modal-header">
+            <h2 id="alertTitle" style="font-size: 20px;">
+                <i id="alertIcon" class="fas fa-info-circle" style="color: #3b82f6;"></i>
+                <span id="alertTitleText">Información</span>
+            </h2>
+            <span class="close" onclick="closeAlertModal()">&times;</span>
+        </div>
+        
+        <div style="padding: 20px 0;">
+            <p id="alertMessage" style="color: var(--text-dark); line-height: 1.6; margin: 0;"></p>
+        </div>
+
+        <div class="modal-actions" style="justify-content: center;">
+            <button type="button" class="btn-primary" onclick="closeAlertModal()" style="min-width: 120px;">
+                <i class="fas fa-check"></i>
+                Aceptar
+            </button>
+        </div>
+    </div>
+</div>
+
 <script>
+// ========== FUNCIONES DE MODALES PREMIUM ==========
+
+// Modal de Confirmación
+function showConfirm(message, title = 'Confirmar Acción', callback) {
+    document.getElementById('confirmMessage').textContent = message;
+    document.getElementById('confirmModal').style.display = 'block';
+    
+    document.getElementById('confirmButton').onclick = function() {
+        closeConfirmModal();
+        if (callback) callback();
+    };
+}
+
+function closeConfirmModal() {
+    document.getElementById('confirmModal').style.display = 'none';
+}
+
+// Modal de Alerta
+function showAlert(message, type = 'info') {
+    const alertIcon = document.getElementById('alertIcon');
+    const alertTitle = document.getElementById('alertTitleText');
+    
+    // Configurar ícono y título según el tipo
+    if (type === 'success') {
+        alertIcon.className = 'fas fa-check-circle';
+        alertIcon.style.color = '#10b981';
+        alertTitle.textContent = 'Éxito';
+    } else if (type === 'error') {
+        alertIcon.className = 'fas fa-times-circle';
+        alertIcon.style.color = '#ef4444';
+        alertTitle.textContent = 'Error';
+    } else if (type === 'warning') {
+        alertIcon.className = 'fas fa-exclamation-triangle';
+        alertIcon.style.color = '#f59e0b';
+        alertTitle.textContent = 'Advertencia';
+    } else {
+        alertIcon.className = 'fas fa-info-circle';
+        alertIcon.style.color = '#3b82f6';
+        alertTitle.textContent = 'Información';
+    }
+    
+    document.getElementById('alertMessage').textContent = message;
+    document.getElementById('alertModal').style.display = 'block';
+}
+
+function closeAlertModal() {
+    document.getElementById('alertModal').style.display = 'none';
+}
+
+// ========== FUNCIONES DE BACKUP ==========
+
 // Modal Functions
-function openCreateModal() {
+function openCreateModal(tipo = 'COMPLETO') {
+    document.getElementById('tipo').value = tipo;
     document.getElementById('createModal').style.display = 'block';
 }
 
@@ -559,16 +787,18 @@ document.getElementById('createBackupForm').addEventListener('submit', function(
     .then(response => response.json())
     .then(data => {
         loading.classList.remove('active');
+        closeCreateModal();
         if (data.status === 'success') {
-            alert('✅ Backup creado exitosamente: ' + data.tamano_mb.toFixed(2) + ' MB');
-            location.reload();
+            showAlert('Backup creado exitosamente: ' + data.tamano_mb.toFixed(2) + ' MB', 'success');
+            setTimeout(() => location.reload(), 1500);
         } else {
-            alert('❌ Error: ' + data.message);
+            showAlert(data.message, 'error');
         }
     })
     .catch(error => {
         loading.classList.remove('active');
-        alert('❌ Error al crear backup: ' + error);
+        closeCreateModal();
+        showAlert('Error al crear backup: ' + error, 'error');
     });
 });
 
@@ -579,66 +809,84 @@ function downloadBackup(backupId, tipo) {
 
 // Confirm Restore
 function confirmRestore(backupId) {
-    if (confirm('⚠️ ADVERTENCIA: Esta operación sobrescribirá la base de datos actual.\n\n¿Estás seguro de que deseas restaurar este backup?')) {
-        const loading = document.createElement('div');
-        loading.className = 'loading active';
-        loading.innerHTML = '<div class="spinner"></div><p>Restaurando backup...</p>';
-        document.body.appendChild(loading);
-        
-        fetch(`/dashboard/backup/restaurar/${backupId}/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': '{{ csrf_token }}',
-                'Content-Type': 'application/json'
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            document.body.removeChild(loading);
-            if (data.status === 'success') {
-                alert('✅ Base de datos restaurada exitosamente');
-                location.reload();
-            } else {
-                alert('❌ Error: ' + data.message);
-            }
-        })
-        .catch(error => {
-            document.body.removeChild(loading);
-            alert('❌ Error al restaurar: ' + error);
-        });
-    }
+    showConfirm(
+        '⚠️ ADVERTENCIA: Esta operación sobrescribirá la base de datos actual.\n\n¿Estás seguro de que deseas restaurar este backup?',
+        'Confirmar Restauración',
+        function() {
+            const loading = document.createElement('div');
+            loading.className = 'loading active';
+            loading.style.position = 'fixed';
+            loading.style.top = '50%';
+            loading.style.left = '50%';
+            loading.style.transform = 'translate(-50%, -50%)';
+            loading.style.background = 'white';
+            loading.style.padding = '40px';
+            loading.style.borderRadius = '20px';
+            loading.style.boxShadow = '0 20px 60px rgba(0,0,0,0.3)';
+            loading.style.zIndex = '10000';
+            loading.innerHTML = '<div class="spinner"></div><p style="color: var(--text-dark); font-weight: 600;">Restaurando backup...</p>';
+            document.body.appendChild(loading);
+            
+            fetch(`/dashboard/backup/restaurar/${backupId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.body.removeChild(loading);
+                if (data.status === 'success') {
+                    showAlert('Base de datos restaurada exitosamente', 'success');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showAlert(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                document.body.removeChild(loading);
+                showAlert('Error al restaurar: ' + error, 'error');
+            });
+        }
+    );
 }
 
 // Confirm Delete
 function confirmDelete(backupId) {
-    if (confirm('¿Estás seguro de que deseas eliminar este backup?\n\nEsta acción no se puede deshacer.')) {
-        fetch(`/dashboard/backup/eliminar/${backupId}/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': '{{ csrf_token }}',
-                'Content-Type': 'application/json'
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                alert('✅ Backup eliminado exitosamente');
-                location.reload();
-            } else {
-                alert('❌ Error: ' + data.message);
-            }
-        })
-        .catch(error => {
-            alert('❌ Error al eliminar: ' + error);
-        });
-    }
+    showConfirm(
+        '¿Estás seguro de que deseas eliminar este backup?\n\nEsta acción no se puede deshacer.',
+        'Confirmar Eliminación',
+        function() {
+            fetch(`/dashboard/backup/eliminar/${backupId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showAlert('Backup eliminado exitosamente', 'success');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showAlert(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showAlert('Error al eliminar: ' + error, 'error');
+            });
+        }
+    );
 }
 
 // Close modal on outside click
 window.onclick = function(event) {
-    const modal = document.getElementById('createModal');
-    if (event.target == modal) {
-        closeCreateModal();
+    if (event.target.classList.contains('modal')) {
+        if (event.target.id === 'createModal') closeCreateModal();
+        if (event.target.id === 'confirmModal') closeConfirmModal();
+        if (event.target.id === 'alertModal') closeAlertModal();
     }
 }
 </script>

@@ -68,9 +68,45 @@ def crear_backup(request):
             db_host = os.getenv('MYSQL_HOST', 'localhost')
             db_port = os.getenv('MYSQL_PORT', '3306')
             
+            # Función para encontrar mysqldump
+            def find_mysqldump():
+                """Busca mysqldump en rutas comunes de Windows"""
+                # Primero intentar desde PATH
+                try:
+                    subprocess.run(['mysqldump', '--version'], capture_output=True, check=True)
+                    return 'mysqldump'
+                except (subprocess.CalledProcessError, FileNotFoundError):
+                    pass
+                
+                # Buscar en rutas comunes de MySQL en Windows
+                common_paths = [
+                    r'C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqldump.exe',
+                    r'C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqldump.exe',
+                    r'C:\Program Files\MySQL\MySQL Server 5.7\bin\mysqldump.exe',
+                    r'C:\Program Files (x86)\MySQL\MySQL Server 8.0\bin\mysqldump.exe',
+                    r'C:\Program Files (x86)\MySQL\MySQL Server 5.7\bin\mysqldump.exe',
+                    r'C:\xampp\mysql\bin\mysqldump.exe',
+                    r'C:\wamp64\bin\mysql\mysql8.0.27\bin\mysqldump.exe',
+                ]
+                
+                for path in common_paths:
+                    if os.path.exists(path):
+                        return path
+                
+                return None
+            
+            mysqldump_cmd = find_mysqldump()
+            
+            if not mysqldump_cmd:
+                raise Exception(
+                    "mysqldump no está disponible en el sistema. "
+                    "Por favor, instala MySQL o agrega la carpeta bin de MySQL al PATH del sistema. "
+                    "Ejemplo: C:\\Program Files\\MySQL\\MySQL Server 8.0\\bin"
+                )
+            
             # Construir comando mysqldump
             cmd = [
-                'mysqldump',
+                mysqldump_cmd,  # Usar la ruta encontrada
                 f'-h{db_host}',
                 f'-P{db_port}',
                 f'-u{db_user}',
@@ -82,16 +118,29 @@ def crear_backup(request):
             cmd.append(db_name)
             
             # Ejecutar mysqldump
-            with open(db_filepath, 'w', encoding='utf-8') as f:
-                result = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE, text=True)
-            
-            if result.returncode != 0:
-                raise Exception(f"Error en mysqldump: {result.stderr}")
+            try:
+                with open(db_filepath, 'w', encoding='utf-8') as f:
+                    result = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE, text=True)
+                
+                if result.returncode != 0:
+                    error_msg = result.stderr.strip()
+                    # Limpiar mensaje de error
+                    if 'Access denied' in error_msg:
+                        raise Exception("Error de autenticación: Usuario o contraseña incorrectos en MySQL")
+                    elif 'Unknown database' in error_msg:
+                        raise Exception(f"Base de datos '{db_name}' no encontrada")
+                    else:
+                        raise Exception(f"Error en mysqldump: {error_msg}")
+            except FileNotFoundError:
+                raise Exception("No se pudo ejecutar mysqldump. Verifica que MySQL esté instalado correctamente.")
             
             # Calcular tamaño del archivo
-            db_size_mb = os.path.getsize(db_filepath) / (1024 * 1024)
-            backup_record.archivo_db = db_filename
-            backup_record.tamano_db_mb = db_size_mb
+            if os.path.exists(db_filepath):
+                db_size_mb = os.path.getsize(db_filepath) / (1024 * 1024)
+                backup_record.archivo_db = db_filename
+                backup_record.tamano_db_mb = db_size_mb
+            else:
+                raise Exception("El archivo de backup no se creó correctamente")
         
         # 2. BACKUP DEL CÓDIGO FUENTE
         if tipo == 'COMPLETO':
@@ -115,7 +164,11 @@ def crear_backup(request):
                         
                         file_path = os.path.join(root, file)
                         arcname = os.path.relpath(file_path, settings.BASE_DIR)
-                        zipf.write(file_path, arcname)
+                        try:
+                            zipf.write(file_path, arcname)
+                        except Exception as e:
+                            # Ignorar archivos que no se pueden leer
+                            print(f"Advertencia: No se pudo incluir {file_path}: {e}")
             
             # Calcular tamaño del archivo
             code_size_mb = os.path.getsize(code_filepath) / (1024 * 1024)
@@ -136,6 +189,11 @@ def crear_backup(request):
         backup_record.estado = 'ERROR'
         backup_record.notas = f"Error: {str(e)}"
         backup_record.save()
+        
+        # Log del error para depuración
+        import traceback
+        print(f"Error al crear backup: {str(e)}")
+        print(traceback.format_exc())
         
         messages.error(request, f'❌ Error al crear backup: {str(e)}')
         return JsonResponse({
