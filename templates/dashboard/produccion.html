@@ -176,7 +176,7 @@
                 <a href="?date=today" class="px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 {% if is_today and not is_range %}bg-blue-500 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)]{% else %}text-slate-400 hover:text-white hover:bg-white/5{% endif %}">
                     <i class="fas fa-calendar-day"></i> Hoy
                 </a>
-                <a href="?date=yesterday" class="px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 {% if not is_today and not is_range %}bg-white/10 text-white shadow-lg{% else %}text-slate-400 hover:text-white hover:bg-white/5{% endif %}">
+                <a href="?date=yesterday" class="px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 {% if is_yesterday %}bg-white/10 text-white shadow-lg{% else %}text-slate-400 hover:text-white hover:bg-white/5{% endif %}">
                     <i class="fas fa-history"></i> Ayer
                 </a>
                 <div class="relative">

@@ -108,9 +108,16 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         fecha_target_end = found_date
         is_viewing_today = (fecha_target_start == today_date)
 
+    # DETERMINAR ESTADOS PARA LA UI (Botones)
+    is_viewing_today = (fecha_target_start == today_date)
+    is_yesterday = (fecha_target_start == today_date - datetime.timedelta(days=1))
+    is_range = (fecha_target_start != fecha_target_end)
+
     # RANGO DE CONSULTA UTC
     fecha_inicio_utc = timezone.make_aware(datetime.datetime.combine(fecha_target_start, datetime.time.min), datetime.timezone.utc)
     fecha_fin_utc = timezone.make_aware(datetime.datetime.combine(fecha_target_end, datetime.time.max), datetime.timezone.utc)
+    f_start_naive = datetime.datetime.combine(fecha_target_start, datetime.time.min)
+    f_end_naive = datetime.datetime.combine(fecha_target_end, datetime.time.max)
     
     # 1. Obtener nombres y configs
     maquinas_db = Maquina.objects.all()
@@ -248,11 +255,15 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         raw_obs = str(reg.get('observaciones') or "").strip().upper()
 
         non_prod_keywords = ['REPROCESO', 'RETRABAJO', 'DESCARTE', 'SCRAP']
-        descanso_keywords = [
-            'DESCANSO', 'ALMUERZO', 'PAUSA', 'CAPACI', 'CAPACIT', 'TENSI', 'TENSION', 
-            'HERRAMIENTA', 'MANTEN', 'REPAR', 'CORRECTIVO', 'PREVENTIVO', 
-            'AJUST', 'SET-UP', 'SETUP', 'LIMPIEZA', 'REUNION', 'REUNIÓN', 
-            'MATERIAL', 'ESPERA', 'ENSAYO', 'INSPEC', 'ASIST', 'AUXILIO'
+        # Sincronizado con obtener_auditoria: Solo descansos reales restan disponibilidad total
+        descanso_keywords = ['DESCANSO', 'ALMUERZO', 'PAUSA']
+        
+        # Estas tareas son laborales pero no tienen estándar productivo, usamos Regla 1:1
+        special_keywords = [
+            'MATRICER', 'TAREAS GENERALES', 'AJUSTES', 'REBABADO', 'GRABADO', 'ARMADO',
+            'CAPACI', 'CAPACIT', 'TENSI', 'TENSION', 'HERRAMIENTA', 'MANTEN', 'REPAR',
+            'CORRECTIVO', 'PREVENTIVO', 'AJUST', 'SET-UP', 'SETUP', 'LIMPIEZA', 
+            'REUNION', 'REUNIÓN', 'MATERIAL', 'ESPERA', 'ENSAYO', 'INSPEC', 'ASIST', 'AUXILIO'
         ]
         
         is_repro = (
@@ -287,12 +298,9 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             is_online_record
         )
 
-        # Lógica especial para MATRICERÍA, TAREAS GENERALES y TAREAS MANUALES (Ajustes, Rebabado, etc.)
-        # El estándar en estas tareas suele ser nulo en el ERP, así que las tratamos como 100% eficientes.
-        raw_clean = str(reg.get('articulod') or "").upper() + " " + str(reg.get('operacion') or "").upper()
-        special_keywords = ['MATRICER', 'TAREAS GENERALES', 'AJUSTES', 'REBABADO', 'GRABADO']
-        is_matriceria = any(k in raw_clean for k in special_keywords)
-        is_armado = ('ARMADO' in raw_clean) and not is_matriceria
+        raw_clean = f"{raw_art_d} {raw_op_d}"
+        is_matriceria = any(k in raw_clean for k in special_keywords) or any(k in raw_obs for k in special_keywords)
+        is_armado = False # Ya incluido en special_keywords
         
         id_orden = reg.get('id_orden')
         
@@ -621,17 +629,14 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             if not is_online_record:
                 upers['cantidad_producida'] += qty
             
-            # REGLA OEE MATRICERÍA para Personal
+            # REGLA OEE MATRICERÍA para Personal (Sincronizada)
             added_row_std_p = False
-            art_name_p = str(reg.get('articulod') or "").strip().upper()
             if is_matriceria:
                 upers['has_matriceria'] = True
                 upers['tiempo_cotizado'] += duracion
                 added_row_std_p = True
             else:
-                # Trabajos normales: Sumar estándar si hay piezas (o si es Armado con estándar)
-                # Solo si NO es un registro ONLINE (heartbeat) para evitar duplicar estándar.
-                if (qty > 0 or (is_armado and std_mins > 0)) and not is_online_record:
+                if (qty > 0) and not is_online_record:
                     upers['tiempo_cotizado'] += std_mins
                     added_row_std_p = True
         
@@ -834,6 +839,7 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         lista_kpis.append({
             'id': mid,
             'name': data['nombre_maquina'],
+            'nombre_maquina': data['nombre_maquina'], # Backward compatibility
             'is_online': is_online,
             'oee': round(oee, 2),
             'availability': round(availability, 2),
@@ -842,12 +848,16 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             'id_orden': data['current_order'],
             'horas_std': t_std_hrs,
             'horas_prod': t_op_hrs,
+            'tiempo_operativo': data['tiempo_operativo'], # Backward compatibility (mins)
+            'tiempo_cotizado': data['tiempo_cotizado'],   # Backward compatibility (mins)
+            'tiempo_paradas': data['tiempo_paradas'],     # Backward compatibility (mins)
             'actual_qty': data['cantidad_producida'],
             'rejected_qty': data['cantidad_rechazada'],
             'actual_time_formatted': format_time_display(t_op_hrs),
             'standard_time_formatted': format_time_display(t_std_hrs),
             'last_reason': data['latest_obs'],
             'operator_name': data['latest_operator'],
+            'latest_operator': data['latest_operator'], # Backward compatibility
             'active_operators': list(data.get('active_operators', {}).items()),
             'article_desc': data['latest_article'],
             'mantenimiento': maquina_mantenimiento.get(mid),
@@ -861,7 +871,8 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             'is_currently_interrupted': data.get('latest_is_interrupcion', False),
             'is_producing_now': data.get('is_producing_now', False),
             'idle_mins': round(idle_mins, 1),
-            'audit_log': json.dumps(clean_log)
+            'audit_log': json.dumps(clean_log),
+            'audit_log_list': clean_log # For backend scripts
         })
         
         # DEBUG: Print para Banco Trabajo
@@ -1169,8 +1180,11 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
     # 1. Interrupciones de Producción (VTMan)
     # 2. Pareto de Paradas (Motivos de interrupción)
     # OPTIMIZACIÓN Y CORRECCIÓN PARETO: Incluir Mantenimientos y Fix Query
-    # 1. Interrupciones de Producción (VTMan)
+    # DETERMINAR SI ES HOY PARA EL CÁLCULO DE DISPONIBILIDAD
+    is_viewing_today = (fecha_target_start == today_date)
     
+    # 2. Loop principal de procesamiento
+    kpi_por_maquina = {}
     interrupciones = VTMan.objects.filter(
         fecha__range=(f_start_naive, f_end_naive)
     ).filter(Q(es_interrupcion=True) | Q(articulod__icontains='DESCANSO'))
@@ -1245,7 +1259,8 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         'fecha_target': fecha_target_start,
         'fecha_fin_target': fecha_target_end,
         'is_today': is_viewing_today,
-        'is_range': (fecha_target_start != fecha_target_end),
+        'is_yesterday': is_yesterday,
+        'is_range': is_range,
         'time_format': time_format,
         'resumen': resumen_maquinas,
         'view_type': view_type,
@@ -1555,8 +1570,15 @@ def obtener_auditoria(request):
                        any(k in raw_art_d for k in descanso_keywords) or
                        any(k in raw_obs for k in descanso_keywords))
 
-        special_audit_keywords = ['MATRICER', 'TAREAS GENERALES', 'AJUSTES', 'REBABADO', 'GRABADO', 'ARMADO']
-        is_matriceria = any(k in raw_art_d or k in raw_op_d for k in special_audit_keywords)
+        # Lista Unificada de Tareas Especiales (Regla 1:1 - Eficiencia Neutra)
+        # Sincronizado estrictamente con dashboard_produccion
+        special_audit_keywords = [
+            'MATRICER', 'TAREAS GENERALES', 'AJUSTES', 'REBABADO', 'GRABADO', 'ARMADO',
+            'CAPACI', 'CAPACIT', 'TENSI', 'TENSION', 'HERRAMIENTA', 'MANTEN', 'REPAR',
+            'CORRECTIVO', 'PREVENTIVO', 'AJUST', 'SET-UP', 'SETUP', 'LIMPIEZA', 
+            'REUNION', 'REUNIÓN', 'MATERIAL', 'ESPERA', 'ENSAYO', 'INSPEC', 'ASIST', 'AUXILIO'
+        ]
+        is_matriceria = any(k in raw_art_d or k in raw_op_d for k in special_audit_keywords) or any(k in raw_obs for k in special_audit_keywords)
         id_orden = reg_obj.id_orden
         
         this_std = std_mins
