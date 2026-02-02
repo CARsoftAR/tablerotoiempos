@@ -878,6 +878,8 @@
              ondrop="onMapDrop(event)">
             <!-- Blueprint background inside plant-floor for proper relative positioning -->
             <div class="blueprint-bg"></div>
+            <!-- FLOW OVERLAY SVG -->
+            <svg id="flowOverlay" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10; display:none;"></svg>
             <!-- Marcadores de máquinas -->
             {% for m in machines %}
                 <div class="machine-marker status-{{ m.status|lower }} {% if m.type == 'TORNO' or m.type == 'PRENSA' or m.type == 'AGUJEREADORA' %}shape-rect{% elif m.type == 'GENERICO' or m.type == 'ROBOT' %}shape-circle{% else %}shape-square{% endif %}" 
@@ -894,6 +896,7 @@
                      data-performance="{{ m.performance|default:0 }}"
                      data-availability="{{ m.availability|default:0 }}"
                      data-qty="{{ m.qty|floatformat:0 }}"
+                     data-downtime="{{ m.downtime_mins|default:0 }}"
                      data-active-ops='{{ m.active_operators_js|safe }}'
                      onmousedown="onMarkerMouseDown(event, this)">
                     
@@ -994,6 +997,12 @@
                 </button>
                 <button class="btn-mini-toggle active" onclick="toggleSection('sec-legend')" style="background: #3b82f6; color: white; border: none; padding: 8px; border-radius: 8px; cursor: pointer;" title="Referencias">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                </button>
+                <button class="btn-mini-toggle" id="btnHeatmap" onclick="toggleHeatmap()" style="background: rgba(30, 41, 59, 0.5); color: #ef4444; border: 1px solid rgba(255,255,255,0.1); padding: 8px; border-radius: 8px; cursor: pointer;" title="Mapa de Calor (Interrupciones)">
+                    <i class="fa-solid fa-fire"></i>
+                </button>
+                <button class="btn-mini-toggle" id="btnFlow" onclick="toggleFlow()" style="background: rgba(30, 41, 59, 0.5); color: #00f3ff; border: 1px solid rgba(255,255,255,0.1); padding: 8px; border-radius: 8px; cursor: pointer;" title="Flujo de Material">
+                    <i class="fa-solid fa-share-nodes"></i>
                 </button>
             </div>
         </div>
@@ -1869,6 +1878,241 @@
             legend.classList.toggle('show');
         }
 
+        // --- HEATMAP LOGIC ---
+        let isHeatmapMode = false;
+
+        function toggleHeatmap() {
+            isHeatmapMode = !isHeatmapMode;
+            const btn = document.getElementById('btnHeatmap');
+            
+            if (isHeatmapMode) {
+                btn.classList.add('active');
+                btn.style.background = '#ef4444';
+                btn.style.color = 'white';
+                renderHeatmap();
+                showToast("Heatmap Activado: Rojo = Alta Interrupción");
+            } else {
+                btn.classList.remove('active');
+                btn.style.background = 'rgba(30, 41, 59, 0.5)';
+                btn.style.color = '#ef4444';
+                resetVisualsToStatus();
+                showToast("Heatmap Desactivado");
+            }
+        }
+
+        function renderHeatmap() {
+            if (!isHeatmapMode) return;
+
+            const markers = document.querySelectorAll('.machine-marker');
+            
+            // 1. Calcular Máximo para Normalizar
+            let maxDowntime = 1;
+            markers.forEach(m => {
+                const val = parseFloat(m.getAttribute('data-downtime') || 0);
+                if (val > maxDowntime) maxDowntime = val;
+            });
+            // Ensure a reasonable baseline (e.g. at least 60 mins to be fully red)
+            if (maxDowntime < 60) maxDowntime = 60;
+
+            markers.forEach(m => {
+                const val = parseFloat(m.getAttribute('data-downtime') || 0);
+                const ratio = Math.min(val / maxDowntime, 1.0); // 0 to 1
+                
+                // Colors:
+                // Green: 16, 185, 129 (Tailwind emerald-500)
+                // Yellow: 250, 204, 21 (Tailwind amber-400)
+                // Red: 239, 68, 68 (Tailwind red-500)
+                
+                let r, g, b;
+                
+                if (ratio < 0.5) {
+                    // Green to Yellow (0.0 to 1.0 relative)
+                    const rel = ratio * 2;
+                    r = Math.round(16 + (250 - 16) * rel);
+                    g = Math.round(185 + (204 - 185) * rel);
+                    b = Math.round(129 + (21 - 129) * rel);
+                } else {
+                    // Yellow to Red (0.0 to 1.0 relative)
+                    const rel = (ratio - 0.5) * 2;
+                    r = Math.round(250 + (239 - 250) * rel);
+                    g = Math.round(204 + (68 - 204) * rel);
+                    b = Math.round(21 + (68 - 21) * rel);
+                }
+                
+                // Override Styles
+                // Background: Low opacity
+                m.style.setProperty('background', `rgba(${r}, ${g}, ${b}, 0.3)`, 'important');
+                // Border: Full opaque
+                m.style.setProperty('border-color', `rgb(${r}, ${g}, ${b})`, 'important');
+                // Shadow: Dynamic glow size
+                const glowSize = 10 + (ratio * 25);
+                m.style.setProperty('box-shadow', `0 0 ${glowSize}px rgba(${r}, ${g}, ${b}, 0.6)`, 'important');
+                
+                // Animation: Only pulse if heat is significant (>0.3)
+                if (ratio > 0.3) {
+                     m.style.setProperty('animation', `pulse-green ${1.5 - ratio}s infinite`, 'important'); 
+                     // Note: pulse-green uses border-color which we overrode, so it pulses our color!
+                } else {
+                    m.style.removeProperty('animation');
+                }
+            });
+        }
+
+        function resetVisualsToStatus() {
+            const markers = document.querySelectorAll('.machine-marker');
+            markers.forEach(m => {
+                // Remove inline overrides
+                m.style.removeProperty('background');
+                m.style.removeProperty('border-color');
+                m.style.removeProperty('box-shadow');
+                m.style.removeProperty('animation');
+                
+                // Re-apply status class logic (which is CSS based)
+                // Just removing inline styles should let CSS take over BUT
+                // The auto-refresh logic adds/removes properties too.
+            });
+        }
+
+        // --- FLOW / TRAFFIC LOGIC ---
+        let isFlowMode = false;
+        
+        function toggleFlow() {
+            isFlowMode = !isFlowMode;
+            const btn = document.getElementById('btnFlow');
+            const svg = document.getElementById('flowOverlay');
+            
+            if (isFlowMode) {
+                btn.classList.add('active');
+                btn.style.background = '#00f3ff';
+                btn.style.color = 'black';
+                svg.style.display = 'block';
+                renderFlow();
+                showToast("Flujo de Material Activado");
+            } else {
+                btn.classList.remove('active');
+                btn.style.background = 'rgba(30, 41, 59, 0.5)';
+                btn.style.color = '#00f3ff';
+                svg.style.display = 'none';
+                svg.innerHTML = ''; // Clear
+                showToast("Flujo Desactivado");
+            }
+        }
+        
+        function renderFlow() {
+            if (!isFlowMode) return;
+            const svg = document.getElementById('flowOverlay');
+            svg.innerHTML = ''; // Clear existing
+            
+            const markers = Array.from(document.querySelectorAll('.machine-marker'))
+                                .filter(m => m.style.display !== 'none');
+            
+            // Sort by ID to create a logical chain for demo purposes using numeric ID comparison
+            markers.sort((a, b) => {
+                const idA = parseInt(a.getAttribute('data-id'));
+                const idB = parseInt(b.getAttribute('data-id'));
+                return idA - idB;
+            });
+            
+            if (markers.length < 2) return;
+            
+            // Create defs for marker
+            const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+            defs.innerHTML = `
+                <marker id="arrowhead" markerWidth="10" markerHeight="7" 
+                refX="9" refY="3.5" orient="auto">
+                  <polygon points="0 0, 10 3.5, 0 7" fill="#00f3ff" />
+                </marker>
+                <filter id="glow-flow">
+                    <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+                    <feMerge>
+                        <feMergeNode in="coloredBlur"/>
+                        <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                </filter>
+            `;
+            svg.appendChild(defs);
+
+            for (let i = 0; i < markers.length - 1; i++) {
+                const startEl = markers[i];
+                const endEl = markers[i+1];
+                
+                // Get centers
+                // Since markers are percentage based relative to plant-floor, we can use their style.left/top
+                // BUT transforming to pixels is safer for SVG lines
+                 
+                 const floor = document.getElementById('plantFloor');
+                 const floorRect = floor.getBoundingClientRect();
+                 
+                 // Helper to get center relative to floor
+                 const getCenter = (el) => {
+                     const rect = el.getBoundingClientRect();
+                     return {
+                         x: (rect.left + rect.width/2) - floorRect.left,
+                         y: (rect.top + rect.height/2) - floorRect.top
+                     };
+                 };
+                 
+                 const p1 = getCenter(startEl);
+                 const p2 = getCenter(endEl);
+                 
+                 // Skip if distance is too long (likely not related) or too short
+                 const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+                 if (dist > floorRect.width * 0.5) continue; // Don't connect across entire map
+                 
+                 // Draw Curve
+                 const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                 
+                 // Control points for curve
+                 const c1x = p1.x + (p2.x - p1.x) / 2;
+                 const c1y = p1.y;
+                 const c2x = p1.x + (p2.x - p1.x) / 2;
+                 const c2y = p2.y;
+                 
+                 const d = `M ${p1.x} ${p1.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${p2.x} ${p2.y}`;
+                 
+                 path.setAttribute("d", d);
+                 path.setAttribute("stroke", "#00f3ff");
+                 path.setAttribute("stroke-width", "2");
+                 path.setAttribute("fill", "none");
+                 path.setAttribute("marker-end", "url(#arrowhead)");
+                 path.setAttribute("stroke-dasharray", "5,5");
+                 path.setAttribute("opacity", "0.6");
+                 path.setAttribute("filter", "url(#glow-flow)");
+                 
+                 // Animation
+                 const anim = document.createElementNS("http://www.w3.org/2000/svg", "animate");
+                 anim.setAttribute("attributeName", "stroke-dashoffset");
+                 anim.setAttribute("from", "20");
+                 anim.setAttribute("to", "0");
+                 anim.setAttribute("dur", "1s");
+                 anim.setAttribute("repeatCount", "indefinite");
+                 
+                 path.appendChild(anim);
+                 svg.appendChild(path);
+                 
+                 // Particle
+                 const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                 circle.setAttribute("r", "4");
+                 circle.setAttribute("fill", "#fff");
+                 
+                 const motion = document.createElementNS("http://www.w3.org/2000/svg", "animateMotion");
+                 motion.setAttribute("dur", "2s");
+                 motion.setAttribute("repeatCount", "indefinite");
+                 motion.setAttribute("path", d);
+                 
+                 circle.appendChild(motion);
+                 svg.appendChild(circle);
+            }
+        }
+        
+        // Re-render flow on resize
+        window.addEventListener('resize', () => {
+            if(isFlowMode) {
+                setTimeout(renderFlow, 500);
+            }
+        });
+
+
         // AUTO-REFRESH LOGIC (30 Seconds)
         setInterval(() => {
             if (isDesignMode) return; // Don't refresh while editing
@@ -1894,6 +2138,7 @@
                                 marker.setAttribute('data-performance', m.performance || 0);
                                 marker.setAttribute('data-availability', m.availability || 0);
                                 marker.setAttribute('data-qty', Math.round(m.qty || 0));
+                                marker.setAttribute('data-downtime', m.downtime_mins || 0); // Update Heatmap Data
                                 
                                 // Update Label if needed (optional)
                                                                 // Update Operator Indicator
@@ -1911,6 +2156,11 @@
                                  } else if (indicator) {
                                      indicator.remove();
                                  }
+                            }
+                            
+                            // Re-apply Heatmap if active
+                            if (isHeatmapMode) {
+                                renderHeatmap();
                             }
                             
                             // Update Sidebar Item

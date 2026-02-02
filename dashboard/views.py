@@ -2540,6 +2540,7 @@ def plant_map(request):
             'qty': data.get('actual_qty', 0) if data else 0,
             'inicio': data.get('hora_inicio', '--:--') if data else '--:--',
             'fin': data.get('hora_fin', '--:--') if data else '--:--',
+            'downtime_mins': data.get('stopped_mins', 0) if data else 0, # Needed for Heatmap
         })
 
         
