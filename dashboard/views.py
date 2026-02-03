@@ -1,3 +1,4 @@
+from django.db import connections
 import json
 import datetime
 from django.shortcuts import render, redirect, get_object_or_404
@@ -96,9 +97,9 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             check_date = today_date
             for _ in range(15): 
                 if check_date.weekday() == 6: check_date -= datetime.timedelta(days=1)
-                c_start = timezone.make_aware(datetime.datetime.combine(check_date, datetime.time.min), datetime.timezone.utc)
-                c_end = timezone.make_aware(datetime.datetime.combine(check_date, datetime.time.max), datetime.timezone.utc)
-                if VTMan.objects.filter(fecha__range=(c_start, c_end)).exists():
+                # FIX: Usar misma lógica de filtrado que la consulta principal para evitar discrepancias de Timezone
+                check_str = check_date.strftime('%Y-%m-%d')
+                if VTMan.objects.extra(where=["CONVERT(date, FECHA) = %s"], params=[check_str]).exists():
                     found_date = check_date
                     break
                 check_date -= datetime.timedelta(days=1)
@@ -239,6 +240,7 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
 
     machine_orders = {} 
     kpi_por_personal = {}
+    active_unassigned_ops = {} # Para mostrar detalle en tarjeta "Sin Asignar"
     
     # Acumuladores Globales
 
@@ -322,8 +324,16 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             else:
                 unassigned_qty += qty
                 global_actual_qty += qty
-                if add_std_global:
+            if add_std_global:
                     unassigned_std += std_mins
+            
+            # Detalle para tarjeta "Sin Asignar": Quiénes están trabajando aquí AHORA
+            if is_session_active:
+                u_uid = str(reg.get('id_concepto') or '').strip()
+                if u_uid and u_uid != 'None':
+                     u_name = nombres_operarios.get(u_uid, f"Op {u_uid}")
+                     u_task = raw_art_d or raw_op_d or raw_obs or "S/D"
+                     active_unassigned_ops[u_uid] = {'name': u_name, 'task': u_task}
         
         # 2. Caso: Máquina Asignada (Solo si no es unassigned)
         data = None
@@ -420,11 +430,9 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 # El descanso NO suma cantidad ni tiempo cotizado
                 pass
             else:
-                # REGLA FUNDAMENTAL: Ignorar cantidad de registros 'ONLINE' (heartbeats) 
-                # porque a veces el ERP manda qty=1 solo para marcar que la máquina está viva.
-                if not is_online_record:
-                    data['cantidad_producida'] += qty
-                    global_actual_qty += qty
+                # REGLA ACTUALIZADA: Sumamos cantidad incluso si es ONLINE para coincidir con el ERP (Total 40 vs 38)
+                data['cantidad_producida'] += qty
+                global_actual_qty += qty
                 
                 # persistencia de estado matriceria para registros incompletos (ONLINE)
                 if is_matriceria:
@@ -770,10 +778,15 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         quality = (qty / total_p * 100.0) if total_p > 0 else 100.0
         oee = (availability * performance * quality) / 10000.0
         
-        # Estado
-        # Una máquina está online si tiene una sesión activa ahora mismo según la lógica del ERP
-        is_online = data.get('latest_is_active', False)
+        # Estado de la Máquina
+        # REGLA SIMPLE: La máquina está ONLINE si tiene una sesión activa, OFFLINE si no.
+        # Una sesión está activa si:
+        #   - hora_fin es None (no terminó), O
+        #   - hora_fin es futuro (según reloj DB), O
+        #   - tiene observación 'ONLINE'
         
+        is_online = data.get('latest_is_active', False)
+
         # Modificamos la función de formato para que use decimal si así se pide
         def format_time_display(hours_val):
             if time_format == 'decimal':
@@ -788,39 +801,13 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             else:
                 return f"{m} min"
 
-        # Preparar log para serializar SIN modificar el original (porque se comparte con personal)
-        serializable_log = []
-        for entry in data['audit_log']:
-            copy_entry = entry.copy()
-            copy_entry.pop('fecha_dt', None)
-            serializable_log.append(copy_entry)
-
-        # Ordenar log por fecha (usando los originales que si tienen fecha_dt)
-        sorted_log = sorted(serializable_log, key=lambda x: data['audit_log'][serializable_log.index(x)]['fecha_dt'] if data['audit_log'][serializable_log.index(x)]['fecha_dt'] else datetime.datetime.min)
-        
         # Simplificamos: Ordenamos el original y sacamos copia limpia
-        temp_sorted = sorted(data['audit_log'], key=lambda x: x['fecha_dt'] if x['fecha_dt'] else datetime.datetime.min)
+        temp_sorted = sorted(data['audit_log'], key=lambda x: x['fecha_dt'] if x.get('fecha_dt') else datetime.datetime.min)
         clean_log = []
         for entry in temp_sorted:
             c = entry.copy()
             c.pop('fecha_dt', None)
             clean_log.append(c)
-
-        idle_mins = 0
-        if is_viewing_today and data['latest_activity_time']:
-            l_act = data['latest_activity_time']
-            # Corrección de Zona Horaria (FIX DEFINITIVO v2):
-            # El usuario ve "180 MIN INACTIVO" constantemente.
-            now_local = timezone.localtime(timezone.now()).replace(tzinfo=None)
-            
-            if timezone.is_aware(l_act):
-                l_act = timezone.make_naive(l_act)
-            
-            # Compensación del Offset de 3 horas
-            l_act_adjusted = l_act + datetime.timedelta(hours=3)
-            
-            diff = now_local - l_act_adjusted
-            idle_mins = max(0, diff.total_seconds() / 60.0)
 
         # Predictivo: Horas de Uso vs Service
         maint_progress = 0
@@ -848,6 +835,7 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             'id_orden': data['current_order'],
             'horas_std': t_std_hrs,
             'horas_prod': t_op_hrs,
+            'horas_disp': t_disp_periodo,
             'tiempo_operativo': data['tiempo_operativo'], # Backward compatibility (mins)
             'tiempo_cotizado': data['tiempo_cotizado'],   # Backward compatibility (mins)
             'tiempo_paradas': data['tiempo_paradas'],     # Backward compatibility (mins)
@@ -870,7 +858,6 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             'is_session_open': data.get('latest_is_active', False),
             'is_currently_interrupted': data.get('latest_is_interrupcion', False),
             'is_producing_now': data.get('is_producing_now', False),
-            'idle_mins': round(idle_mins, 1),
             'audit_log': json.dumps(clean_log),
             'audit_log_list': clean_log # For backend scripts
         })
@@ -1134,6 +1121,7 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         'unassigned_process_formatted': fmt_mins_global(unassigned_process_time),
         'unassigned_interruption_formatted': fmt_mins_global(unassigned_interruption_time),
         'unassigned_std_formatted': fmt_mins_global(unassigned_std),
+        'active_unassigned_list': list(active_unassigned_ops.values()),
     }
 
     resumen_personal_dict = {
@@ -1254,6 +1242,18 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         'cumulative': pareto_cumulative
     }
 
+    # Preparar detalle de operarios sin asignar
+    unassigned_operators_list = []
+    for uid, info in active_unassigned_ops.items():
+        unassigned_operators_list.append({
+            'uid': uid,
+            'name': info['name'],
+            'task': info['task']
+        })
+    
+    # Ordenar por nombre
+    unassigned_operators_list.sort(key=lambda x: x['name'])
+
     context = {
         'kpis': lista_kpis,
         'fecha_target': fecha_target_start,
@@ -1270,7 +1270,8 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         'resumen_personal': resumen_personal_dict,
         'is_tv_mode': is_tv_mode,
         'history_trend': json.dumps(history_trend),
-        'pareto_data': json.dumps(pareto_data)
+        'pareto_data': json.dumps(pareto_data),
+        'unassigned_operators': unassigned_operators_list
     }
     if return_context:
         return context
@@ -2460,6 +2461,15 @@ def plant_map(request):
             detalle = "Incidencia Abierta"
 
         if data:
+            # Procesar active_operators primero
+            active_ops_raw = data.get('active_operators', [])
+            if active_ops_raw and isinstance(active_ops_raw, list) and isinstance(active_ops_raw[0], (tuple, list)):
+                active_ops_dict = dict(active_ops_raw)
+            elif isinstance(active_ops_raw, dict):
+                active_ops_dict = active_ops_raw
+            else:
+                active_ops_dict = {}
+
             # VÍNCULO DIRECTO CON EL TABLERO DE TARJETAS
             # Relaxed Logic: Consider 'Online' if active session OR recent activity (< 20 mins)
             idle_val = data.get('idle_mins', 999)
@@ -2479,41 +2489,51 @@ def plant_map(request):
             wait_keywords = ['HERRAMIENTA', 'AJUST', 'TENSI', 'CAPACI', 'CAPACIT', 'ESPERA', 'SET-UP', 'SETUP', 'LIMPIEZA', 'MATERIAL', 'ENSAYO', 'INSPEC', 'ASIST', 'AUXILIO']
             break_keywords = ['DESCANSO', 'ALMUERZO', 'PAUSA', 'REUNION', 'REUNIÓN', 'PERSONAL']
             
-            # REPARACIÓN permanece aunque esté offline si hay ticket abierto
+            # Convertir a lista de valores para JSON
+            active_ops_list = list(active_ops_dict.values())
+            has_active_ops = len(active_ops_list) > 0
+
+            # --- NUEVA LÓGICA DE PRIORIDAD DE ESTADOS ---
+            # 1. MANTENIMIENTO (Prioridad máxima)
             if m.id in maquinas_en_reparacion or any(k in reason_text for k in repair_keywords):
                 status = 'REPAIR'
-            elif data.get('is_producing_now'):
-                # Prioridad absoluta: Si hay producción activa, la máquina está VERDE.
+            
+            # 2. ESPERA / SETUP (Si hay operario o está online pero con motivo de espera)
+            elif (is_effectively_online or has_active_ops) and any(k in reason_text for k in wait_keywords):
+                status = 'WAIT'
+            
+            # 3. DESCANSOS
+            elif (is_effectively_online or has_active_ops) and any(k in reason_text for k in break_keywords):
+                status = 'BREAK'
+            
+            # 4. PRODUCCIÓN ACTIVA (Si el sensor dice produciendo O hay operarios trabajando)
+            elif data.get('is_producing_now') or has_active_ops:
                 status = 'RUNNING'
+            
+            # 5. ONLINE SIN PRODUCCIÓN (Idle)
             elif is_effectively_online:
-                if any(k in reason_text for k in wait_keywords):
-                    status = 'WAIT'
-                elif any(k in reason_text for k in break_keywords):
-                    status = 'BREAK'
-                elif 'ONLINE' in reason_text:
+                if 'ONLINE' in reason_text:
                     status = 'RUNNING'
                 else:
                     status = 'STOPPED'
+            
+            # 6. DEFAULT: APAGADA
             else:
                 status = 'STOPPED'
 
-                
             op_name = data.get('operator_name', 'S/A')
             proceso = data.get('last_reason', '---')
             detalle = data.get('article_desc', '---')
-
-        # Procesar active_operators correctamente
-        active_ops_raw = data.get('active_operators', []) if data else []
-        # Si es una lista de tuplas (nombre, info), convertir a diccionario
-        if active_ops_raw and isinstance(active_ops_raw, list) and isinstance(active_ops_raw[0], (tuple, list)):
-            active_ops_dict = dict(active_ops_raw)
-        elif isinstance(active_ops_raw, dict):
-            active_ops_dict = active_ops_raw
         else:
+            # Si no hay datos, pero hay ticket de mantenimiento, sigue en REPAIR
+            if m.id in maquinas_en_reparacion:
+                status = 'REPAIR'
+                proceso = "MANTENIMIENTO"
+                detalle = "Incidencia Abierta"
+            
             active_ops_dict = {}
-        
-        # Convertir a lista de valores para JSON
-        active_ops_list = list(active_ops_dict.values())
+            active_ops_list = []
+            has_active_ops = False
 
         machine_data.append({
             'pk': m.pk,
@@ -2530,7 +2550,7 @@ def plant_map(request):
             'border_weight': m.border_weight,
             'visible': m.visible_en_mapa,  # Estado de visibilidad persistido
             'operario': op_name,
-            'active_operators': active_ops_dict.items(),  # Para iterar en template Django
+            'active_operators': list(active_ops_dict.items()),  # Para iterar en template Django
             'active_operators_js': json.dumps(active_ops_list),  # Para JavaScript
             'proceso': proceso,
             'detalle': detalle,
@@ -2540,7 +2560,7 @@ def plant_map(request):
             'qty': data.get('actual_qty', 0) if data else 0,
             'inicio': data.get('hora_inicio', '--:--') if data else '--:--',
             'fin': data.get('hora_fin', '--:--') if data else '--:--',
-            'downtime_mins': data.get('stopped_mins', 0) if data else 0, # Needed for Heatmap
+            'downtime_mins': (data.get('horas_disp', 0) - data.get('horas_prod', 0)) * 60.0 if data else 0,
         })
 
         
@@ -2556,11 +2576,29 @@ def plant_map(request):
 
     machine_data.sort(key=lambda x: (status_priority(x), x['name']))
 
+    # 4. Identificar operadores sin asignar
+    # Sincronizamos con el motor principal de dashboard_produccion para obtener los 4 operarios exactos
+    unassigned_operators = []
+    for u_op in prod_ctx.get('unassigned_operators', []):
+        # Adaptamos el formato al esperado por el template del mapa
+        unassigned_operators.append({
+            'name': u_op.get('name'),
+            'process': u_op.get('task', '---'),
+            'article': 'TAREA GENERAL / VARIOS', # En sin asignar suele ser tarea general
+            'perf': 0,
+            'avail': 0,
+        })
+    
+    # Ordenar por nombre
+    unassigned_operators.sort(key=lambda x: x['name'])
+
     context = {
         'machines': machine_data,
         'global_stats': global_stats,
         'total_count': machines_config.count(),
         'active_count': sum(1 for m in machine_data if m['status'] != 'OFFLINE'),
+        'unassigned_operators': unassigned_operators,
+        'unassigned_count': len(unassigned_operators),
     }
 
     if request.GET.get('format') == 'json':
@@ -2613,3 +2651,96 @@ def update_machine_position(request):
         return JsonResponse({'status': 'success'})
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+def trazabilidad_piezas(request):
+    """
+    Vista para visualizar la trazabilidad de una pieza (MSTNMBR)
+    Ordenando los niveles de Mayor a Menor (Flujo de entrada a salida)
+    """
+    # Tomamos la lista de parámetros porque el template usa el mismo nombre para select e input
+    mst_params = request.GET.getlist('mstnmbr')
+    mstnmbr = None
+    
+    # Buscamos el primer valor que sea numérico y válido
+    for m in mst_params:
+        if m and str(m).strip() and str(m).strip().upper() != 'NONE' and str(m).strip().isdigit():
+            mstnmbr = str(m).strip()
+            break
+
+    mst_list = []
+    piezas_data = []
+
+    with connections['sql_server'].cursor() as cursor:
+        if not mstnmbr:
+            # Obtenemos las últimas 50 órdenes madre para elegir
+            cursor.execute("""
+                SELECT DISTINCT TOP 50 T.MSTNMBR, T2.Descri, MAX(T.Vto) as Vto
+                FROM Tman050 T
+                INNER JOIN tman050 T2 ON (T.MSTNMBR = T2.IdOrden)
+                WHERE T.Idestado IN ('1', '2') 
+                  AND SUBSTRING(T.Articulo, 1, 1) = 'P'
+                  AND T2.Descri NOT LIKE '%PROCESOS NO PRODUCTIVOS%'
+                GROUP BY T.MSTNMBR, T2.Descri
+                ORDER BY Vto DESC
+            """)
+            columns = [col[0] for col in cursor.description]
+            mst_list = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+        if mstnmbr:
+            # Query principal de trazabilidad basada en la lógica del usuario
+            query = """
+                SELECT 
+                  T.Formula,
+                  T.Mstnmbr,
+                  T2.Descri AS Denominacion,
+                  T.Idorden,
+                  T.Articulo,
+                  T.Descri,
+                  T.Vto,
+                  T.Idprioridad,
+                  Oe.Descripcion AS Estadod,
+                  T.Lote,
+                  T3.Nivel,
+                  T3.Nivel_Planificacion,
+                  T3.IDConcepto AS [SECTOR PERSONA],
+                  Isnull(T3.QConcepto, 1) AS [NIVEL PERSONA ],
+                  Isnull(T.Idmaquina, '') AS Idmaquina,
+                  MAC.MAQUINAD,
+                  SEC.SECTORD,
+                  Isnull(T3.QMaquina, 1) AS [NIVEL MAQUINA],
+                  Cast(CASE WHEN T3.Cantidad <> 0 AND T.idorganismo NOT IN('1', '2', '3') THEN Isnull((CASE WHEN T3.DENSIDAD <> 0 THEN T3.TIEMPO / T3.cantidad ELSE T3.TIEMPO END), 0) ELSE 0 END AS FLOAT) AS Tiempo,
+                  T.Cantidad,
+                  ISNULL((SELECT SUM(T54.CANTIDAD) FROM TMAN054 T54 WHERE T54.HORA_D <= CAST(GETDATE() AS DATE) AND T54.IDORDEN = T.Idorden), 0) AS Cantidadpp
+                FROM Tman050 T
+                INNER JOIN tman050 T2 ON (T.MSTNMBR = T2.IdOrden)
+                LEFT OUTER JOIN TMAN002 T3 ON (T.Articulo = T3.ArticuloH AND T.Formula = T3.Formula AND T2.Articulo = T3.ArticuloP)
+                LEFT OUTER JOIN Tman006 SEC ON (T.Idsector = SEC.Idsector)
+                LEFT OUTER JOIN Tman007 Oe ON (T.Idestado = Oe.Idestado)
+                LEFT OUTER JOIN Tman010 MAC ON (T.Idmaquina = MAC.Idmaquina)
+                WHERE T.MSTNMBR = %s
+                  AND T.Idestado IN ('1', '2')
+                  AND (T.Cantidad - ISNULL((SELECT SUM(T54.CANTIDAD) FROM TMAN054 T54 WHERE T54.IDORDEN = T.Idorden), 0)) > 0
+                  AND T.Descri NOT LIKE ('%%DTO. TEC%%')
+                  AND T.Descri NOT LIKE ('%%CONTROL%%')
+                ORDER BY T3.Nivel DESC, T.Idorden DESC
+            """
+            cursor.execute(query, [mstnmbr])
+            columns = [col[0] for col in cursor.description]
+            piezas_data = []
+            for row in cursor.fetchall():
+                item = dict(zip(columns, row))
+                # Calcular progreso manualmente
+                cant = float(item.get('Cantidad') or 0)
+                cant_pp = float(item.get('Cantidadpp') or 0)
+                progreso = 0
+                if cant > 0:
+                    progreso = min((cant_pp / cant) * 100, 100)
+                item['progreso_porcentaje'] = progreso
+                piezas_data.append(item)
+
+    context = {
+        'mst_list': mst_list,
+        'piezas_data': piezas_data,
+        'selected_mst': mstnmbr,
+    }
+    return render(request, 'dashboard/trazabilidad.html', context)

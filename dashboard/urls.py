@@ -42,4 +42,7 @@ urlpatterns = [
     # Mapa de Planta Premium (Geográfico)
     path('mapa-planta/', views.plant_map, name='plant_map'),
     path('api/update-position/', views.update_machine_position, name='update_machine_position'),
+    
+    # Trazabilidad
+    path('trazabilidad/', views.trazabilidad_piezas, name='trazabilidad_piezas'),
 ]
