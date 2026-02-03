@@ -2426,6 +2426,29 @@ def plant_map(request):
     maquinas_en_reparacion = [m.maquina_id for m in mants_activos]
     global_stats = prod_ctx.get('resumen', {})
 
+    # 1.1 Obtener la lista de MSTs recientes para el buscador de trazabilidad
+    mst_list = []
+    with connections['sql_server'].cursor() as cursor:
+        cursor.execute("""
+            SELECT DISTINCT T.MSTNMBR, T2.Descri, MAX(T.Vto) as Vto
+            FROM Tman050 T
+            INNER JOIN tman050 T2 ON (T.MSTNMBR = T2.IdOrden)
+            WHERE T.Idestado IN ('1', '2') 
+              AND SUBSTRING(T.Articulo, 1, 1) = 'P'
+              AND T2.Descri NOT LIKE '%PROCESOS NO PRODUCTIVOS%'
+              -- FILTRO: Solo piezas que tienen actividad hoy (mecanizándose en este turno)
+              AND T.MSTNMBR IN (
+                  SELECT DISTINCT TA.MSTNMBR 
+                  FROM Tman050 TA 
+                  INNER JOIN V_TMAN V ON (TA.IdOrden = V.IdOrden)
+                  WHERE V.Fecha >= CAST(GETDATE() AS DATE)
+              )
+            GROUP BY T.MSTNMBR, T2.Descri
+            ORDER BY Vto DESC
+        """)
+        columns = [col[0] for col in cursor.description]
+        mst_list = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
     # 2. Obtener máquinas configuradas
     machines_config = MaquinaConfig.objects.all()
     
@@ -2498,26 +2521,30 @@ def plant_map(request):
             if m.id in maquinas_en_reparacion or any(k in reason_text for k in repair_keywords):
                 status = 'REPAIR'
             
-            # 2. ESPERA / SETUP (Si hay operario o está online pero con motivo de espera)
+            # 2. PRODUCCIÓN ACTIVA (Si el sensor dice literalmente que está produciendo ahora)
+            elif data.get('is_producing_now'):
+                status = 'RUNNING'
+
+            # 3. ESPERA / SETUP (Si no está produciendo, pero hay operario o está online con motivo de espera)
             elif (is_effectively_online or has_active_ops) and any(k in reason_text for k in wait_keywords):
                 status = 'WAIT'
             
-            # 3. DESCANSOS
+            # 4. DESCANSOS
             elif (is_effectively_online or has_active_ops) and any(k in reason_text for k in break_keywords):
                 status = 'BREAK'
             
-            # 4. PRODUCCIÓN ACTIVA (Si el sensor dice produciendo O hay operarios trabajando)
-            elif data.get('is_producing_now') or has_active_ops:
+            # 5. CON OPERARIO TRABAJANDO (Aunque no esté el bit de producción, ej: tareas de banco)
+            elif has_active_ops:
                 status = 'RUNNING'
             
-            # 5. ONLINE SIN PRODUCCIÓN (Idle)
+            # 6. ONLINE SIN PRODUCCIÓN (Idle)
             elif is_effectively_online:
                 if 'ONLINE' in reason_text:
                     status = 'RUNNING'
                 else:
                     status = 'STOPPED'
             
-            # 6. DEFAULT: APAGADA
+            # 7. DEFAULT: APAGADA
             else:
                 status = 'STOPPED'
 
@@ -2599,6 +2626,7 @@ def plant_map(request):
         'active_count': sum(1 for m in machine_data if m['status'] != 'OFFLINE'),
         'unassigned_operators': unassigned_operators,
         'unassigned_count': len(unassigned_operators),
+        'mst_list': mst_list,
     }
 
     if request.GET.get('format') == 'json':
@@ -2674,12 +2702,19 @@ def trazabilidad_piezas(request):
         if not mstnmbr:
             # Obtenemos las últimas 50 órdenes madre para elegir
             cursor.execute("""
-                SELECT DISTINCT TOP 50 T.MSTNMBR, T2.Descri, MAX(T.Vto) as Vto
+                SELECT DISTINCT T.MSTNMBR, T2.Descri, MAX(T.Vto) as Vto
                 FROM Tman050 T
                 INNER JOIN tman050 T2 ON (T.MSTNMBR = T2.IdOrden)
                 WHERE T.Idestado IN ('1', '2') 
                   AND SUBSTRING(T.Articulo, 1, 1) = 'P'
                   AND T2.Descri NOT LIKE '%PROCESOS NO PRODUCTIVOS%'
+                  -- FILTRO: Solo piezas que tienen actividad hoy (mecanizándose en este turno)
+                  AND T.MSTNMBR IN (
+                      SELECT DISTINCT TA.MSTNMBR 
+                      FROM Tman050 TA 
+                      INNER JOIN V_TMAN V ON (TA.IdOrden = V.IdOrden)
+                      WHERE V.Fecha >= CAST(GETDATE() AS DATE)
+                  )
                 GROUP BY T.MSTNMBR, T2.Descri
                 ORDER BY Vto DESC
             """)
@@ -2744,3 +2779,121 @@ def trazabilidad_piezas(request):
         'selected_mst': mstnmbr,
     }
     return render(request, 'dashboard/trazabilidad.html', context)
+
+
+def get_trace_flow(request):
+    """
+    API endpoint para obtener el flujo de trazabilidad en el mapa de planta.
+    Retorna las máquinas involucradas y su secuencia según los niveles.
+    """
+    mstnmbr = request.GET.get('mstnmbr')
+    
+    if not mstnmbr:
+        return JsonResponse({'status': 'error', 'message': 'MST no proporcionado'}, status=400)
+    
+    # Validar que sea numérico
+    if not str(mstnmbr).strip().isdigit():
+        return JsonResponse({'status': 'error', 'message': 'MST inválido'}, status=400)
+    
+    try:
+        with connections['sql_server'].cursor() as cursor:
+            # Consulta optimizada para obtener el flujo con posiciones de máquinas
+            query = """
+                SELECT 
+                    T3.Nivel,
+                    ISNULL(T.Idmaquina, '') AS Idmaquina,
+                    MAC.MAQUINAD,
+                    T.Articulo,
+                    T.Descri,
+                    T.Cantidad,
+                    ISNULL((SELECT SUM(T54.CANTIDAD) FROM TMAN054 T54 WHERE T54.IDORDEN = T.Idorden), 0) AS Cantidadpp,
+                    T.Idorden,
+                    SEC.SECTORD
+                FROM Tman050 T
+                INNER JOIN tman050 T2 ON (T.MSTNMBR = T2.IdOrden)
+                LEFT OUTER JOIN TMAN002 T3 ON (T.Articulo = T3.ArticuloH AND T.Formula = T3.Formula AND T2.Articulo = T3.ArticuloP)
+                LEFT OUTER JOIN Tman006 SEC ON (T.Idsector = SEC.Idsector)
+                LEFT OUTER JOIN Tman010 MAC ON (T.Idmaquina = MAC.Idmaquina)
+                WHERE T.MSTNMBR = %s
+                  AND T.Idestado IN ('1', '2')
+                  AND (T.Cantidad - ISNULL((SELECT SUM(T54.CANTIDAD) FROM TMAN054 T54 WHERE T54.IDORDEN = T.Idorden), 0)) > 0
+                  -- FILTRO: Solo si la pieza madre tiene actividad hoy
+                  AND T.MSTNMBR IN (
+                      SELECT DISTINCT TA.MSTNMBR 
+                      FROM Tman050 TA 
+                      INNER JOIN V_TMAN V ON (TA.IdOrden = V.IdOrden)
+                      WHERE V.Fecha >= CAST(GETDATE() AS DATE)
+                  )
+                  AND T.Descri NOT LIKE ('%%DTO. TEC%%')
+                  AND T.Descri NOT LIKE ('%%CONTROL%%')
+                  AND T.Idmaquina IS NOT NULL
+                  AND T.Idmaquina != ''
+                ORDER BY T3.Nivel DESC, T.Idorden DESC
+            """
+            
+            cursor.execute(query, [mstnmbr])
+            columns = [col[0] for col in cursor.description]
+            rows = cursor.fetchall()
+            
+            if not rows:
+                return JsonResponse({
+                    'status': 'success',
+                    'flow': [],
+                    'message': 'No se encontraron datos de trazabilidad para este MST'
+                })
+            
+            # Procesar datos y obtener posiciones de máquinas
+            flow_data = []
+            machine_ids = set()
+            
+            for row in rows:
+                item = dict(zip(columns, row))
+                machine_id = item.get('Idmaquina', '').strip()
+                
+                if machine_id:
+                    machine_ids.add(machine_id)
+                    
+                    # Calcular progreso
+                    cant = float(item.get('Cantidad') or 0)
+                    cant_pp = float(item.get('Cantidadpp') or 0)
+                    progreso = 0
+                    if cant > 0:
+                        progreso = min((cant_pp / cant) * 100, 100)
+                    
+                    flow_data.append({
+                        'nivel': item.get('Nivel'),
+                        'machine_id': machine_id,
+                        'machine_name': item.get('MAQUINAD', 'S/D'),
+                        'articulo': item.get('Articulo'),
+                        'descripcion': item.get('Descri'),
+                        'cantidad': cant,
+                        'cantidad_producida': cant_pp,
+                        'progreso': round(progreso, 1),
+                        'orden': item.get('Idorden'),
+                        'sector': item.get('SECTORD')
+                    })
+            
+            # Obtener posiciones de las máquinas involucradas
+            machine_positions = {}
+            if machine_ids:
+                machines = MaquinaConfig.objects.filter(id_maquina__in=machine_ids)
+                for m in machines:
+                    machine_positions[m.id_maquina] = {
+                        'x': float(m.pos_x),
+                        'y': float(m.pos_y),
+                        'name': m.nombre
+                    }
+            
+            return JsonResponse({
+                'status': 'success',
+                'mstnmbr': mstnmbr,
+                'flow': flow_data,
+                'machine_positions': machine_positions,
+                'total_steps': len(flow_data)
+            })
+            
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error al obtener trazabilidad: {str(e)}'
+        }, status=500)

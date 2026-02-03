@@ -45,4 +45,5 @@ urlpatterns = [
     
     # Trazabilidad
     path('trazabilidad/', views.trazabilidad_piezas, name='trazabilidad_piezas'),
+    path('api/trace-flow/', views.get_trace_flow, name='get_trace_flow'),
 ]

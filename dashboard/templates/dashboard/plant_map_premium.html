@@ -762,8 +762,10 @@
         }
 
         .operator-indicator {
-            width: 24px;
-            height: 24px;
+            width: 24px !important;
+            height: 24px !important;
+            min-width: 24px !important;
+            min-height: 24px !important;
             background: var(--premium-gold);
             color: #000;
             border-radius: 50%;
@@ -774,10 +776,14 @@
             box-shadow: 0 0 15px var(--premium-gold-glow);
             border: 2px solid #fff;
             transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            /* Removed negative margin for separation */
-            margin-right: 2px; 
+            margin-right: 2px;
             pointer-events: auto;
             position: relative;
+            flex-shrink: 0;
+            aspect-ratio: 1 / 1;
+            /* Force circular shape and avoid distortion from parent flex/transform */
+            transform-style: preserve-3d;
+            backface-visibility: hidden;
         }
         .operator-indicator:last-child { margin-right: 0; }
         
@@ -835,6 +841,397 @@
             50% { transform: scale(1.5); opacity: 1; }
             100% { transform: scale(1); opacity: 0.5; }
         }
+
+        /* PANEL DE OPERADORES SIN ASIGNAR */
+        .unassigned-operators-panel {
+            position: fixed;
+            left: 20px;
+            bottom: 30px;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 12px;
+            z-index: 4000;
+            color: white;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+            min-width: 300px;
+            max-width: 350px;
+            max-height: 50vh;
+            overflow-y: auto;
+            border-left: 3px solid var(--premium-gold);
+        }
+
+        /* Estilo para el Scrollbar interno */
+        .unassigned-operators-panel::-webkit-scrollbar {
+            width: 6px;
+        }
+        .unassigned-operators-panel::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+        }
+        .unassigned-operators-panel::-webkit-scrollbar-thumb {
+            background: var(--premium-gold);
+            border-radius: 10px;
+        }
+
+        
+        .unassigned-operators-panel.show { display: flex; }
+        
+        .unassigned-header {
+            font-size: 10px;
+            color: #fbbf24;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+            font-weight: 800;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: move;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .unassigned-count {
+            background: var(--premium-gold);
+            color: #000;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 900;
+        }
+        
+        .unassigned-operator-item {
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 12px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .unassigned-operator-item:hover {
+            border-color: var(--premium-gold);
+            box-shadow: 0 4px 12px rgba(251, 191, 36, 0.1);
+            transform: translateX(-4px);
+        }
+        
+        .unassigned-op-name {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--premium-gold);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .unassigned-op-detail {
+            font-size: 11px;
+            color: #cbd5e1;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .unassigned-op-detail i {
+            font-size: 9px;
+            opacity: 0.5;
+        }
+        
+        .unassigned-close-btn {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 0;
+            transition: color 0.2s;
+        }
+        
+        .unassigned-close-btn:hover {
+            color: var(--premium-gold);
+        }
+
+        /* TRACE FLOW STYLES */
+        .trace-flow-line {
+            position: absolute;
+            pointer-events: none;
+            z-index: 15;
+        }
+
+        .trace-flow-line svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+        }
+
+        .trace-path {
+            fill: none;
+            stroke: var(--premium-gold);
+            stroke-width: 0.2;
+            stroke-dasharray: 2 1;
+            animation: trace-dash 2s linear infinite;
+            filter: drop-shadow(0 0 2px var(--premium-gold-glow));
+        }
+
+        @keyframes trace-dash {
+            to { stroke-dashoffset: -15; }
+        }
+
+        .trace-arrow {
+            fill: var(--premium-gold);
+            filter: drop-shadow(0 0 4px var(--premium-gold-glow));
+        }
+
+        .trace-level-badge {
+            position: absolute;
+            background: var(--premium-gold);
+            color: #000;
+            font-size: 10px;
+            font-weight: 900;
+            padding: 4px 8px;
+            border-radius: 12px;
+            z-index: 25;
+            pointer-events: none;
+            box-shadow: 0 0 15px var(--premium-gold-glow);
+            border: 2px solid #fff;
+        }
+
+        .machine-marker.trace-active {
+            border-color: var(--premium-gold) !important;
+            box-shadow: 0 0 25px var(--premium-gold-glow) !important;
+            z-index: 50 !important;
+            animation: trace-pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes trace-pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1) rotate(var(--rot, 0deg)); }
+            50% { transform: translate(-50%, -50%) scale(1.08) rotate(var(--rot, 0deg)); }
+        }
+
+        /* TRACE PANEL */
+        .trace-panel {
+            position: fixed;
+            right: 370px;
+            top: 80px;
+            width: 380px;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            z-index: 5000;
+            color: white;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+            display: none;
+            flex-direction: column;
+            max-height: calc(100vh - 100px);
+            border-left: 3px solid var(--premium-gold);
+        }
+
+        .trace-panel.show { display: flex; }
+
+        .trace-panel-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0,0,0,0.2);
+        }
+
+        .trace-panel-title {
+            font-size: 11px;
+            color: var(--premium-gold);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            font-weight: 900;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .trace-search-box {
+            padding: 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .trace-search-input {
+            width: 100%;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .trace-search-input:focus {
+            border-color: var(--premium-gold);
+            box-shadow: 0 0 10px var(--premium-gold-glow);
+            outline: none;
+        }
+
+        .trace-select {
+            width: 100%;
+            background: rgba(15, 23, 42, 0.9);
+            border: 2px solid var(--premium-gold);
+            color: #fff;
+            padding: 10px 12px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-bottom: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+        }
+
+        .trace-select:hover {
+            background: rgba(251, 191, 36, 0.1);
+            box-shadow: 0 0 15px rgba(251, 191, 36, 0.2);
+        }
+
+        .trace-select option {
+            background: #0f172a;
+            color: #fff;
+            padding: 10px;
+        }
+
+        .trace-search-group {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        
+        .trace-search-btn-icon {
+            background: var(--premium-gold);
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            padding: 0 12px;
+            cursor: pointer;
+            font-weight: 700;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .trace-search-btn-icon:hover {
+            transform: scale(1.05);
+            background: #fff;
+        }
+
+        .trace-search-input::placeholder {
+            color: #64748b;
+        }
+
+        .trace-flow-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .trace-step-item {
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 12px;
+            border-radius: 10px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .trace-step-item:hover {
+            border-color: var(--premium-gold);
+            box-shadow: 0 4px 12px rgba(251, 191, 36, 0.1);
+            transform: translateX(-4px);
+        }
+
+        .trace-step-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .trace-step-nivel {
+            background: var(--premium-gold);
+            color: #000;
+            font-size: 9px;
+            font-weight: 900;
+            padding: 3px 8px;
+            border-radius: 8px;
+            text-transform: uppercase;
+        }
+
+        .trace-step-machine {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--premium-gold);
+        }
+
+        .trace-step-detail {
+            font-size: 11px;
+            color: #cbd5e1;
+            margin-bottom: 4px;
+        }
+
+        .trace-step-progress {
+            margin-top: 8px;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .trace-step-progress-bar {
+            height: 100%;
+            background: var(--premium-gold);
+            border-radius: 4px;
+            transition: width 0.5s;
+            box-shadow: 0 0 8px var(--premium-gold-glow);
+        }
+
+        .trace-close-btn {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 0;
+            transition: color 0.2s;
+        }
+
+        .trace-close-btn:hover {
+            color: var(--premium-gold);
+        }
+
+        .trace-empty-state {
+            padding: 40px 20px;
+            text-align: center;
+            color: #64748b;
+        }
+
+        .trace-empty-state i {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.3;
+        }
+    
     </style>
 </head>
 <body>
@@ -863,6 +1260,15 @@
         
         <div style="display:flex; gap:10px;">
             <button class="btn" onclick="toggleLegend()"><i class="fa-solid fa-circle-info"></i> LEYENDA</button>
+            <button class="btn" id="btnUnassigned" onclick="toggleUnassignedPanel()" {% if unassigned_count > 0 %}style="background: var(--premium-gold); color: #000; border-color: var(--premium-gold);"{% endif %}>
+                <i class="fa-solid fa-users"></i> SIN ASIGNAR
+                {% if unassigned_count > 0 %}
+                <span style="background: #000; color: var(--premium-gold); padding: 2px 6px; border-radius: 8px; font-size: 10px; font-weight: 900; margin-left: 4px;">{{ unassigned_count }}</span>
+                {% endif %}
+            </button>
+            <button class="btn" id="btnTraceFlow" onclick="toggleTracePanel()">
+                <i class="fa-solid fa-route"></i> TRAZABILIDAD
+            </button>
             <button class="btn" id="btnFullscreen" onclick="toggleFullscreen()"><i class="fa-solid fa-expand"></i> FULLSCREEN</button>
             <button class="btn" id="btnDesign" onclick="toggleDesignMode()">DISEÑO</button>
             <button class="btn" id="btnToggleSidebar" onclick="toggleSidebar()">PANEL</button>
@@ -876,16 +1282,19 @@
         <div class="plant-floor" id="plantFloor" 
              ondragover="event.preventDefault()" 
              ondrop="onMapDrop(event)">
+            <!-- SVG Overlay for Trace Lines (Inside floor for coordinate sync) -->
+            <div id="traceOverlayContainer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 15;">
+                <svg id="traceSvg" style="width: 100%; height: 100%; overflow: visible;"></svg>
+            </div>
             <!-- Blueprint background inside plant-floor for proper relative positioning -->
             <div class="blueprint-bg"></div>
-            <!-- FLOW OVERLAY SVG -->
-            <svg id="flowOverlay" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10; display:none;"></svg>
             <!-- Marcadores de máquinas -->
             {% for m in machines %}
                 <div class="machine-marker status-{{ m.status|lower }} {% if m.type == 'TORNO' or m.type == 'PRENSA' or m.type == 'AGUJEREADORA' %}shape-rect{% elif m.type == 'GENERICO' or m.type == 'ROBOT' %}shape-circle{% else %}shape-square{% endif %}" 
                      id="machine-{{ m.id }}" 
                      style="{% if not m.visible %}display: none;{% endif %} left: {{ m.x|default:0.5|unlocalize }}%; top: {{ m.y|default:0.5|unlocalize }}%; {% if m.w %}width: {{ m.w|unlocalize }}%;{% endif %} {% if m.h %}height: {{ m.h|unlocalize }}%;{% endif %} border-width: {{ m.border_weight|default:2 }}px; --rot: {{ m.r|default:0|unlocalize }}deg; transform: translate(-50%, -50%) rotate({{ m.r|default:0|unlocalize }}deg);"
                      data-id="{{ m.id }}"
+                     data-machine-code="{{ m.id_maquina }}"
                      data-name="{{ m.name }}"
                      data-status="{{ m.status }}"
                      data-reason="{{ m.proceso }}"
@@ -897,6 +1306,8 @@
                      data-availability="{{ m.availability|default:0 }}"
                      data-qty="{{ m.qty|floatformat:0 }}"
                      data-downtime="{{ m.downtime_mins|default:0 }}"
+                     data-x="{{ m.x|unlocalize }}"
+                     data-y="{{ m.y|unlocalize }}"
                      data-active-ops='{{ m.active_operators_js|safe }}'
                      onmousedown="onMarkerMouseDown(event, this)">
                     
@@ -998,11 +1409,6 @@
                 <button class="btn-mini-toggle active" onclick="toggleSection('sec-legend')" style="background: #3b82f6; color: white; border: none; padding: 8px; border-radius: 8px; cursor: pointer;" title="Referencias">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
                 </button>
-                <button class="btn-mini-toggle" id="btnHeatmap" onclick="toggleHeatmap()" style="background: rgba(30, 41, 59, 0.5); color: #ef4444; border: 1px solid rgba(255,255,255,0.1); padding: 8px; border-radius: 8px; cursor: pointer;" title="Mapa de Calor (Interrupciones)">
-                    <i class="fa-solid fa-fire"></i>
-                </button>
-                <button class="btn-mini-toggle" id="btnFlow" onclick="toggleFlow()" style="background: rgba(30, 41, 59, 0.5); color: #00f3ff; border: 1px solid rgba(255,255,255,0.1); padding: 8px; border-radius: 8px; cursor: pointer;" title="Flujo de Material">
-                    <i class="fa-solid fa-share-nodes"></i>
                 </button>
             </div>
         </div>
@@ -1165,7 +1571,7 @@
 
     <!-- FLOATING LEGEND OVERLAY -->
     <div id="floatingLegend" class="floating-legend">
-        <div style="font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; font-weight: 800; display: flex; justify-content: space-between; align-items: center;">
+        <div id="legendHeader" style="font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; font-weight: 800; display: flex; justify-content: space-between; align-items: center; cursor: move;">
             Monitor de Estados
             <i class="fa-solid fa-xmark" style="cursor:pointer" onclick="toggleLegend()"></i>
         </div>
@@ -1189,7 +1595,109 @@
             <div class="legend-dot" style="background:#ef4444; box-shadow: 0 0 10px #ef4444;"></div>
             <span>APAGADA / SIN ACTIVIDAD</span>
         </div>
+        
+        </div>
     </div>
+    </div>
+
+    <!-- PANEL DE OPERADORES SIN ASIGNAR -->
+    <div id="unassignedOperatorsPanel" class="unassigned-operators-panel {% if unassigned_count > 0 %}show{% endif %}">
+        <div class="unassigned-header" id="unassignedHeader">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid fa-users"></i>
+                <span>Tareas Sin Asignar</span>
+                <span class="unassigned-count">{{ unassigned_count }}</span>
+            </div>
+            <button class="unassigned-close-btn" onclick="toggleUnassignedPanel()" title="Cerrar">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        
+        {% if unassigned_operators %}
+            {% for op in unassigned_operators %}
+            <div class="unassigned-operator-item">
+                <div class="unassigned-op-name">
+                    <i class="fa-solid fa-user-gear"></i>
+                    {{ op.name }}
+                </div>
+                <div class="unassigned-op-detail">
+                    <i class="fa-solid fa-cog"></i>
+                    <span>{{ op.process|truncatechars:40 }}</span>
+                </div>
+                <div class="unassigned-op-detail">
+                    <i class="fa-solid fa-microchip"></i>
+                    <span>{{ op.article|truncatechars:40 }}</span>
+                </div>
+                {% if op.perf > 0 or op.avail > 0 %}
+                <div style="display: flex; gap: 10px; margin-top: 6px; font-size: 10px;">
+                    {% if op.perf > 0 %}
+                    <div style="flex: 1;">
+                        <span style="color: #94a3b8;">Rend:</span>
+                        <span style="color: #10b981; font-weight: 700;">{{ op.perf|floatformat:1 }}%</span>
+                    </div>
+                    {% endif %}
+                    {% if op.avail > 0 %}
+                    <div style="flex: 1;">
+                        <span style="color: #94a3b8;">Disp:</span>
+                        <span style="color: #3b82f6; font-weight: 700;">{{ op.avail|floatformat:1 }}%</span>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        {% else %}
+            <div style="text-align: center; padding: 20px; color: #64748b; font-size: 12px;">
+                <i class="fa-solid fa-check-circle" style="font-size: 24px; margin-bottom: 8px; display: block;"></i>
+                Todos los operadores están asignados
+            </div>
+        {% endif %}
+    </div>
+    <!-- PANEL DE TRAZABILIDAD -->
+    <div id="tracePanel" class="trace-panel">
+        <div class="trace-panel-header" id="traceHeader">
+            <div class="trace-panel-title">
+                <i class="fa-solid fa-route"></i>
+                <span>Trazabilidad de Pieza</span>
+            </div>
+            <button class="trace-close-btn" onclick="toggleTracePanel()" title="Cerrar">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        
+        <div class="trace-search-box">
+            <select id="traceMstSelect" class="trace-select" onchange="onTraceSelectChange(this)">
+                <option value="">SELECCIONAR ORDEN MADRE...</option>
+                {% for mst in mst_list %}
+                <option value="{{ mst.MSTNMBR }}">#{{ mst.MSTNMBR }} | {{ mst.Descri|truncatechars:45 }}</option>
+                {% endfor %}
+            </select>
+            
+            <div style="display: flex; align-items: center; gap: 10px; padding: 5px 0;">
+                <div style="height: 1px; flex: 1; background: rgba(255,255,255,0.1);"></div>
+                <span style="font-size: 9px; color: #64748b; font-weight: 800; text-transform: uppercase;">O Búsqueda Manual</span>
+                <div style="height: 1px; flex: 1; background: rgba(255,255,255,0.1);"></div>
+            </div>
+
+            <div class="trace-search-group" style="display: flex;">
+                <input type="text" id="traceSearchInput" class="trace-search-input" placeholder="Ingresar MSTNMBR..." onkeydown="if(event.key==='Enter') fetchTraceFlow('input')">
+                <button class="trace-search-btn-icon" onclick="fetchTraceFlow('input')" title="Buscar">
+                    <i class="fa-solid fa-search"></i>
+                </button>
+                <button class="trace-search-btn-icon" onclick="resetTraceInfo()" title="Limpiar Mapa" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border-left: 1px solid rgba(255,255,255,0.1); width: 40px;">
+                    <i class="fa-solid fa-eraser"></i>
+                </button>
+            </div>
+        </div>
+        
+        <div id="traceFlowList" class="trace-flow-list">
+            <div class="trace-empty-state">
+                <i class="fa-solid fa-search"></i>
+                <p>Ingrese un número de orden madre para visualizar el flujo en el mapa.</p>
+            </div>
+        </div>
+    </div>
+
 
     <script>
         let isDesignMode = false;
@@ -1775,6 +2283,7 @@
             console.log('Premium Gold Map Loaded.');
             adjustFloorSize();
             makeDraggable(document.getElementById("propertiesPanel"), document.getElementById("propHeader"));
+            makeDraggable(document.getElementById("floatingLegend"), document.getElementById("legendHeader"));
             
             // Iniciar Reloj Premium
             setInterval(updateClock, 1000);
@@ -1810,6 +2319,7 @@
                 element.style.top = (element.offsetTop - pos2) + "px";
                 element.style.left = (element.offsetLeft - pos1) + "px";
                 element.style.right = "auto";
+                element.style.bottom = "auto";
             }
 
             function closeDragElement() {
@@ -1878,99 +2388,10 @@
             legend.classList.toggle('show');
         }
 
-        // --- HEATMAP LOGIC ---
-        let isHeatmapMode = false;
-
-        function toggleHeatmap() {
-            isHeatmapMode = !isHeatmapMode;
-            const btn = document.getElementById('btnHeatmap');
-            
-            if (isHeatmapMode) {
-                btn.classList.add('active');
-                btn.style.background = '#ef4444';
-                btn.style.color = 'white';
-                renderHeatmap();
-                showToast("Heatmap Activado: Rojo = Alta Interrupción");
-            } else {
-                btn.classList.remove('active');
-                btn.style.background = 'rgba(30, 41, 59, 0.5)';
-                btn.style.color = '#ef4444';
-                resetVisualsToStatus();
-                showToast("Heatmap Desactivado");
-            }
-        }
-
-        function renderHeatmap() {
-            if (!isHeatmapMode) return;
-
-            const markers = document.querySelectorAll('.machine-marker');
-            
-            // 1. Calcular Máximo para Normalizar
-            let maxDowntime = 1;
-            markers.forEach(m => {
-                const val = parseFloat(m.getAttribute('data-downtime') || 0);
-                if (val > maxDowntime) maxDowntime = val;
-            });
-            // Ensure a reasonable baseline (e.g. at least 60 mins to be fully red)
-            if (maxDowntime < 60) maxDowntime = 60;
-
-            markers.forEach(m => {
-                const val = parseFloat(m.getAttribute('data-downtime') || 0);
-                const ratio = Math.min(val / maxDowntime, 1.0); // 0 to 1
-                
-                // Colors:
-                // Green: 16, 185, 129 (Tailwind emerald-500)
-                // Yellow: 250, 204, 21 (Tailwind amber-400)
-                // Red: 239, 68, 68 (Tailwind red-500)
-                
-                let r, g, b;
-                
-                if (ratio < 0.5) {
-                    // Green to Yellow (0.0 to 1.0 relative)
-                    const rel = ratio * 2;
-                    r = Math.round(16 + (250 - 16) * rel);
-                    g = Math.round(185 + (204 - 185) * rel);
-                    b = Math.round(129 + (21 - 129) * rel);
-                } else {
-                    // Yellow to Red (0.0 to 1.0 relative)
-                    const rel = (ratio - 0.5) * 2;
-                    r = Math.round(250 + (239 - 250) * rel);
-                    g = Math.round(204 + (68 - 204) * rel);
-                    b = Math.round(21 + (68 - 21) * rel);
-                }
-                
-                // Override Styles
-                // Background: Low opacity
-                m.style.setProperty('background', `rgba(${r}, ${g}, ${b}, 0.3)`, 'important');
-                // Border: Full opaque
-                m.style.setProperty('border-color', `rgb(${r}, ${g}, ${b})`, 'important');
-                // Shadow: Dynamic glow size
-                const glowSize = 10 + (ratio * 25);
-                m.style.setProperty('box-shadow', `0 0 ${glowSize}px rgba(${r}, ${g}, ${b}, 0.6)`, 'important');
-                
-                // Animation: Only pulse if heat is significant (>0.3)
-                if (ratio > 0.3) {
-                     m.style.setProperty('animation', `pulse-green ${1.5 - ratio}s infinite`, 'important'); 
-                     // Note: pulse-green uses border-color which we overrode, so it pulses our color!
-                } else {
-                    m.style.removeProperty('animation');
-                }
-            });
-        }
-
-        function resetVisualsToStatus() {
-            const markers = document.querySelectorAll('.machine-marker');
-            markers.forEach(m => {
-                // Remove inline overrides
-                m.style.removeProperty('background');
-                m.style.removeProperty('border-color');
-                m.style.removeProperty('box-shadow');
-                m.style.removeProperty('animation');
-                
-                // Re-apply status class logic (which is CSS based)
-                // Just removing inline styles should let CSS take over BUT
-                // The auto-refresh logic adds/removes properties too.
-            });
+        // Función para mostrar/ocultar el panel de operadores sin asignar
+        function toggleUnassignedPanel() {
+            const panel = document.getElementById('unassignedOperatorsPanel');
+            panel.classList.toggle('show');
         }
 
         // --- FLOW / TRAFFIC LOGIC ---
@@ -2105,14 +2526,6 @@
             }
         }
         
-        // Re-render flow on resize
-        window.addEventListener('resize', () => {
-            if(isFlowMode) {
-                setTimeout(renderFlow, 500);
-            }
-        });
-
-
         // AUTO-REFRESH LOGIC (30 Seconds)
         setInterval(() => {
             if (isDesignMode) return; // Don't refresh while editing
@@ -2142,25 +2555,40 @@
                                 
                                 // Update Label if needed (optional)
                                                                 // Update Operator Indicator
-                                 let indicator = marker.querySelector('.operator-indicator');
+                                 let group = marker.querySelector('.operator-group');
                                  const isInactive = ['STOPPED', 'OFFLINE'].includes(m.status);
 
-                                 if (m.operario && m.operario !== 'S/A' && !isInactive) {
-                                     if (!indicator) {
-                                         indicator = document.createElement('div');
-                                         indicator.className = 'operator-indicator';
-                                         indicator.innerHTML = '<i class="fa-solid fa-user-check"></i>';
-                                         marker.appendChild(indicator);
+                                 if (m.active_operators && m.active_operators.length > 0 && !isInactive) {
+                                     if (!group) {
+                                         group = document.createElement('div');
+                                         group.className = 'operator-group';
+                                         const iconContainer = marker.querySelector('.machine-icon-container') || marker;
+                                         iconContainer.appendChild(group);
                                      }
-                                     indicator.title = "Operario: " + m.operario;
-                                 } else if (indicator) {
-                                     indicator.remove();
+                                     
+                                     // Quick comparison or just Redraw
+                                     group.innerHTML = '';
+                                     m.active_operators.forEach(([opName, opInfo], idx) => {
+                                         const indicator = document.createElement('div');
+                                         indicator.className = 'operator-indicator';
+                                         indicator.style.zIndex = 100 + idx;
+                                         indicator.innerHTML = '<i class="fa-solid fa-user-check"></i>';
+                                         indicator.onmousemove = (e) => showOperatorTooltip(e, opName, opInfo.process, opInfo.article, opInfo.perf, opInfo.avail);
+                                         indicator.onmouseleave = (e) => hideTooltip(e);
+                                         group.appendChild(indicator);
+                                     });
+                                 } else if (m.operario && m.operario !== 'S/A' && !isInactive) {
+                                     // Fallback para operario único (retrocompatibilidad)
+                                     if (!group) {
+                                         group = document.createElement('div');
+                                         group.className = 'operator-group';
+                                         const iconContainer = marker.querySelector('.machine-icon-container') || marker;
+                                         iconContainer.appendChild(group);
+                                     }
+                                     group.innerHTML = `<div class="operator-indicator" title="Operario: ${m.operario}"><i class="fa-solid fa-user-check"></i></div>`;
+                                 } else if (group) {
+                                     group.remove();
                                  }
-                            }
-                            
-                            // Re-apply Heatmap if active
-                            if (isHeatmapMode) {
-                                renderHeatmap();
                             }
                             
                             // Update Sidebar Item
@@ -2184,18 +2612,15 @@
                                 // Update Operator Text
                                 const opDiv = sidebarItem.querySelector('.fa-user-gear').parentNode;
                                 if (opDiv) {
-                                     // Replace text node only
-                                     opDiv.childNodes.forEach(n => {
-                                         if (n.nodeType === 3) n.textContent = ' ' + (m.operario || 'Sin Operario').substring(0, 25);
-                                     });
+                                     const span = opDiv.querySelector('span');
+                                     if (span) span.textContent = (m.operario || 'Sin Operario').substring(0, 25);
                                 }
                                 
                                 // Update Detail Text
                                 const detDiv = sidebarItem.querySelector('.fa-microchip').parentNode;
                                 if (detDiv) {
-                                     detDiv.childNodes.forEach(n => {
-                                         if (n.nodeType === 3) n.textContent = ' ' + (m.detalle || 'Sin Actividad').substring(0, 45);
-                                     });
+                                     const span = detDiv.querySelector('span');
+                                     if (span) span.textContent = (m.detalle || 'Sin Actividad').substring(0, 45);
                                 }
                             }
                         });
@@ -2204,6 +2629,367 @@
                 })
                 .catch(e => console.error('Refresh error:', e));
         }, 30000);
+
+        // --- HACER PANELES FLOTANTES ARRASTRABLES ---
+        function makeDraggable(panel, handle) {
+            let isDragging = false;
+            let currentX;
+            let currentY;
+            let initialX;
+            let initialY;
+            let xOffset = 0;
+            let yOffset = 0;
+
+            handle.addEventListener('mousedown', dragStart);
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', dragEnd);
+
+            function dragStart(e) {
+                if (e.target.tagName === 'BUTTON' || e.target.tagName === 'I') return;
+                
+                initialX = e.clientX - xOffset;
+                initialY = e.clientY - yOffset;
+
+                if (e.target === handle || handle.contains(e.target)) {
+                    isDragging = true;
+                }
+            }
+
+            function drag(e) {
+                if (isDragging) {
+                    e.preventDefault();
+                    
+                    currentX = e.clientX - initialX;
+                    currentY = e.clientY - initialY;
+
+                    xOffset = currentX;
+                    yOffset = currentY;
+
+                    setTranslate(currentX, currentY, panel);
+                }
+            }
+
+            function setTranslate(xPos, yPos, el) {
+                el.style.transform = `translate(${xPos}px, ${yPos}px)`;
+            }
+
+            function dragEnd(e) {
+                initialX = currentX;
+                initialY = currentY;
+                isDragging = false;
+            }
+        }
+
+        // Hacer arrastrables los paneles flotantes
+        const legendPanel = document.getElementById('floatingLegend');
+        const legendHeader = document.getElementById('legendHeader');
+        if (legendPanel && legendHeader) {
+            makeDraggable(legendPanel, legendHeader);
+        }
+
+        const unassignedPanel = document.getElementById('unassignedOperatorsPanel');
+        const unassignedHeader = document.getElementById('unassignedHeader');
+        if (unassignedPanel && unassignedHeader) {
+            makeDraggable(unassignedPanel, unassignedHeader);
+        }
+
+        // --- TRAZABILIDAD FLOW LOGIC ---
+        function toggleTracePanel() {
+            const panel = document.getElementById('tracePanel');
+            const isCurrentlyOpen = panel.classList.contains('show');
+            panel.classList.toggle('show');
+            
+            if (panel.classList.contains('show')) {
+                document.getElementById('traceSearchInput').focus();
+            } else if (isCurrentlyOpen) {
+                // Solo limpiar si se estaba cerrando un panel abierto
+                // clearTraceFlow(); // Comentado para mantener el flujo visible si se desea
+            }
+        }
+
+        // Initialize Trace Panel Draggable
+        const tracePanel = document.getElementById('tracePanel');
+        const traceHeader = document.getElementById('traceHeader');
+        if (tracePanel && traceHeader) {
+            makeDraggable(tracePanel, traceHeader);
+        }
+
+        let currentTraceData = null;
+
+        function onTraceSelectChange(select) {
+            const val = select.value;
+            if (val) {
+                document.getElementById('traceSearchInput').value = val;
+                fetchTraceFlow('select');
+            }
+        }
+
+        function fetchTraceFlow(source = 'input') {
+            let rawMst = "";
+            if (source === 'input') {
+                rawMst = document.getElementById('traceSearchInput').value.trim();
+            } else {
+                rawMst = document.getElementById('traceMstSelect').value;
+            }
+
+            // Sanitize: keep only digits
+            const mstnmbr = rawMst.replace(/\D/g, '');
+            if (!mstnmbr) {
+                showToast("Por favor ingrese un número de MST válido", "error");
+                return;
+            }
+
+            const listContainer = document.getElementById('traceFlowList');
+            listContainer.innerHTML = '<div class="trace-empty-state"><i class="fa-solid fa-spinner fa-spin"></i><p>Buscando flujo de producción...</p></div>';
+            
+            clearTraceFlow();
+
+            console.log(`Fetching trace for MST: ${mstnmbr}`);
+
+            fetch(`/dashboard/api/trace-flow/?mstnmbr=${mstnmbr}`)
+                .then(r => r.json())
+                .then(data => {
+                    console.log("Trace Data Received:", data);
+                    if (data.status === 'success' && data.flow && data.flow.length > 0) {
+                        currentTraceData = data;
+                        renderTraceList(data.flow);
+                        drawTraceFlow(data);
+                        showToast(`Flujo de MST #${mstnmbr} cargado: ${data.flow.length} etapas`);
+                    } else {
+                        listContainer.innerHTML = `<div class="trace-empty-state"><i class="fa-solid fa-circle-exclamation"></i><p>${data.message || 'No se encontraron datos para este MST.'}</p></div>`;
+                        showToast(data.message || "No hay datos", "error");
+                    }
+                })
+                .catch(err => {
+                    console.error("Fetch Error:", err);
+                    listContainer.innerHTML = '<div class="trace-empty-state"><i class="fa-solid fa-triangle-exclamation"></i><p>Error de conexión al servidor.</p></div>';
+                    showToast("Error al conectar con la API", "error");
+                });
+        }
+
+        function renderTraceList(flow) {
+            const listContainer = document.getElementById('traceFlowList');
+            listContainer.innerHTML = '';
+
+            flow.forEach((step, index) => {
+                const item = document.createElement('div');
+                item.className = 'trace-step-item';
+                item.onclick = () => focusOnMachine(step.machine_id);
+                
+                item.innerHTML = `
+                    <div class="trace-step-header">
+                        <span class="trace-step-machine">${step.machine_name}</span>
+                        <span class="trace-step-nivel">Nivel ${Math.floor(step.nivel || 0)}</span>
+                    </div>
+                    <div class="trace-step-detail">
+                        <strong>${step.articulo}</strong><br>
+                        ${step.descripcion}
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 10px; color: #94a3b8; margin-top: 8px;">
+                        <span>Progreso: ${step.progreso}%</span>
+                        <span>${Math.floor(step.cantidad_producida)} / ${Math.floor(step.cantidad)}</span>
+                    </div>
+                    <div class="trace-step-progress">
+                        <div class="trace-step-progress-bar" style="width: ${step.progreso}%"></div>
+                    </div>
+                `;
+                listContainer.appendChild(item);
+            });
+        }
+
+        function clearTraceFlow() {
+            const svg = document.getElementById('traceSvg');
+            if (svg) svg.innerHTML = '';
+            
+            // Remove highlighting and badges
+            document.querySelectorAll('.machine-marker.trace-active').forEach(m => {
+                m.classList.remove('trace-active');
+            });
+            document.querySelectorAll('.trace-level-badge').forEach(b => b.remove());
+        }
+
+        function resetTraceInfo() {
+            clearTraceFlow();
+            document.getElementById('traceSearchInput').value = '';
+            document.getElementById('traceMstSelect').value = '';
+            document.getElementById('traceFlowList').innerHTML = `
+                <div class="trace-empty-state">
+                    <i class="fa-solid fa-search"></i>
+                    <p>Ingrese un número de orden madre para visualizar el flujo en el mapa.</p>
+                </div>`;
+            showToast("Mapa de trazabilidad limpiado");
+        }
+
+        function drawTraceFlow(data) {
+            const svg = document.getElementById('traceSvg');
+            // Reset SVG with viewBox for percentage coordinates
+            svg.setAttribute("viewBox", "0 0 100 100");
+            svg.setAttribute("preserveAspectRatio", "none");
+            svg.innerHTML = `
+                <defs>
+                    <marker id="trace-arrowhead" markerWidth="3" markerHeight="3" refX="2.5" refY="1.5" orient="auto">
+                        <polygon points="0 0, 3 1.5, 0 3" fill="#fbbf24" />
+                    </marker>
+                </defs>
+            `;
+
+            const positions = [];
+            let matchedCount = 0;
+
+            console.log("Analyzing flow steps for mapping (percentage mode)...");
+            data.flow.forEach(step => {
+                const machineCode = (step.machine_id || "").trim().toUpperCase();
+                const machineName = (step.machine_name || "").trim().toUpperCase();
+                
+                // 1. Try Direct Selector by Code
+                let marker = null;
+                if (machineCode) {
+                    marker = document.querySelector(`.machine-marker[data-machine-code="${machineCode}"]`);
+                }
+                
+                // 2. Fallback: Compare as integers (e.g. "092" vs "92")
+                if (!marker && machineCode) {
+                    const targetInt = parseInt(machineCode, 10);
+                    if (!isNaN(targetInt)) {
+                         const allMarkers = document.querySelectorAll('.machine-marker');
+                         for (let m of allMarkers) {
+                             const mCode = m.getAttribute('data-machine-code');
+                             if (mCode && parseInt(mCode, 10) === targetInt) {
+                                 marker = m;
+                                 break;
+                             }
+                         }
+                    }
+                }
+                
+                // 3. Fallback: Search by Name (Most robust for mismatched IDs)
+                if (!marker && machineName && machineName !== 'S/D') {
+                    const allMarkers = document.querySelectorAll('.machine-marker');
+                    for (let m of allMarkers) {
+                        const mName = (m.getAttribute('data-name') || '').trim().toUpperCase();
+                        // Exact match or contains for robustness
+                        if (mName === machineName) {
+                            marker = m;
+                            break;
+                        }
+                    }
+                }
+                
+                if (marker) {
+                    matchedCount++;
+                    
+                    // Use STYLE for current position (handling drag & drop updates without refresh)
+                    // fallback to data attributes if style is missing (should stick to %)
+                    let x = parseFloat(marker.style.left);
+                    let y = parseFloat(marker.style.top);
+                    
+                    if (isNaN(x)) x = parseFloat(marker.getAttribute('data-x') || 0);
+                    if (isNaN(y)) y = parseFloat(marker.getAttribute('data-y') || 0);
+                    
+                    positions.push({ x, y, id: step.machine_id, element: marker });
+                    
+                    // Highlight machine
+                    marker.classList.add('trace-active');
+                    marker.style.setProperty('display', 'flex', 'important');
+                    
+                    // Level Badge
+                    let badge = marker.querySelector('.trace-level-badge-inner');
+                    if (!badge) {
+                        badge = document.createElement('div');
+                        badge.className = 'trace-level-badge trace-level-badge-inner';
+                        badge.innerText = `N${Math.floor(step.nivel || 0)}`;
+                        badge.style.position = 'absolute';
+                        badge.style.top = '-40px';
+                        badge.style.left = '50%';
+                        badge.style.transform = 'translateX(-50%)';
+                        marker.appendChild(badge);
+                    }
+                } else {
+                    console.warn(`No marker found for: ${machineCode}`);
+                }
+            });
+
+            console.log(`Matched ${matchedCount} / ${data.flow.length} machines on the map.`);
+
+            if (positions.length === 0) {
+                showToast("No se encontraron posiciones para las máquinas del flujo", "error");
+                return;
+            }
+
+            // Draw connecting lines
+            for (let i = 0; i < positions.length - 1; i++) {
+                const p1 = positions[i];
+                const p2 = positions[i+1];
+                
+                // Coordinates are now in 0-100 scale
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                
+                if (dist < 0.5) continue; 
+
+                const midX = (p1.x + p2.x) / 2;
+                const midY = (p1.y + p1.y) / 2; // Mistake fixed in p1.y + p2.y below
+                
+                const midY_real = (p1.y + p2.y) / 2;
+                
+                // Add a slight bulge
+                const bulge = Math.min(dist * 0.1, 5);
+                const cpX = midX + (dy / dist) * bulge;
+                const cpY = midY_real - (dx / dist) * bulge;
+                
+                const d = `M ${p1.x} ${p1.y} Q ${cpX} ${cpY}, ${p2.x} ${p2.y}`;
+                
+                const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                path.setAttribute("class", "trace-path");
+                path.setAttribute("d", d);
+                // stroke-width is handled by CSS (0.2), but we set it here as fallback or for export consistency
+                path.setAttribute("stroke-width", "0.2"); 
+                path.setAttribute("marker-end", "url(#trace-arrowhead)");
+                svg.appendChild(path);
+
+                // --- ADD DYNAMIC PARTICLES (Small radius for 0-100 scale) ---
+                const pWhite = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                pWhite.setAttribute("r", "0.2"); // Reduced from 0.4
+                pWhite.setAttribute("fill", "#fff");
+                
+                const animW = document.createElementNS("http://www.w3.org/2000/svg", "animateMotion");
+                animW.setAttribute("dur", "3s");
+                animW.setAttribute("repeatCount", "indefinite");
+                animW.setAttribute("path", d);
+                
+                pWhite.appendChild(animW);
+                svg.appendChild(pWhite);
+
+                const pGold = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                pGold.setAttribute("r", "0.15"); // Reduced from 0.3
+                pGold.setAttribute("fill", "var(--premium-gold)");
+                
+                const animG = document.createElementNS("http://www.w3.org/2000/svg", "animateMotion");
+                animG.setAttribute("dur", "3s");
+                animG.setAttribute("begin", "1s");
+                animG.setAttribute("repeatCount", "indefinite");
+                animG.setAttribute("path", d);
+                
+                pGold.appendChild(animG);
+                svg.appendChild(pGold);
+            }
+        }
+
+        function focusOnMachine(id) {
+            const marker = document.getElementById(`machine-${id}`);
+            if (marker) {
+                marker.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+                // Flash effect
+                marker.style.transition = 'none';
+                marker.style.boxShadow = '0 0 50px #fbbf24';
+                setTimeout(() => {
+                    marker.style.transition = 'all 0.3s';
+                    marker.style.boxShadow = '';
+                }, 500);
+            }
+        }
+
     </script>
 </body>
 </html>
