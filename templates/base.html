@@ -118,8 +118,14 @@
             </a>
             <a href="{% url 'gestion_maquinas' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all group {% if 'maquina' in request.resolver_match.url_name %}bg-white/10 border border-white/10 text-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.15)]{% else %}text-slate-400 hover:bg-white/5 hover:text-white{% endif %}">
                 <i class="fas fa-cog w-5 text-center group-hover:scale-110 transition-transform"></i>
-                <span class="text-sm font-bold tracking-wide">Configuración</span>
+                <span class="text-sm font-bold tracking-wide">Máquinas</span>
             </a>
+            {% comment %}
+            <a href="{% url 'gestionar_alertas' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all group {% if 'alerta' in request.resolver_match.url_name %}bg-white/10 border border-white/10 text-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.15)]{% else %}text-slate-400 hover:bg-white/5 hover:text-white{% endif %}">
+                <i class="fas fa-bell w-5 text-center group-hover:scale-110 transition-transform"></i>
+                <span class="text-sm font-bold tracking-wide">Alertas</span>
+            </a>
+            {% endcomment %}
         </nav>
 
         <div class="p-4 border-t border-white/5">

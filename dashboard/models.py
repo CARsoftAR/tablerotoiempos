@@ -247,3 +247,39 @@ class BackupHistorial(models.Model):
     @property
     def tamano_total_mb(self):
         return self.tamano_db_mb + self.tamano_codigo_mb
+
+class NotificacionConfig(models.Model):
+    """
+    Configuración global de alertas y notificaciones externas.
+    """
+    # Telegram
+    telegram_token = models.CharField(max_length=255, null=True, blank=True, verbose_name="Token del Bot de Telegram")
+    telegram_chat_id = models.CharField(max_length=100, null=True, blank=True, verbose_name="ID de Chat de Telegram")
+    activar_telegram = models.BooleanField(default=False, verbose_name="Activar Notificaciones Telegram")
+    
+    # WhatsApp (CallMeBot)
+    whatsapp_phone = models.CharField(max_length=50, null=True, blank=True, verbose_name="Teléfono WhatsApp (Formato Int.)")
+    whatsapp_apikey = models.CharField(max_length=100, null=True, blank=True, verbose_name="API Key WhatsApp")
+    activar_whatsapp = models.BooleanField(default=False, verbose_name="Activar Notificaciones WhatsApp")
+    
+    # Thresholds
+    minutos_detencion_critica = models.IntegerField(default=20, verbose_name="Minutos para Alerta de Detención")
+    alertar_mantenimiento = models.BooleanField(default=True, verbose_name="Alertar Apertura de Mantenimiento")
+    
+    # Metadata
+    ultima_modificacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = True
+        db_table = 'notificacion_config'
+        verbose_name = 'Configuración de Notificaciones'
+        verbose_name_plural = 'Configuraciones de Notificaciones'
+
+    def __str__(self):
+        return f"Configuración de Alertas (Modificado: {self.ultima_modificacion.strftime('%Y-%m-%d %H:%M')})"
+
+    @classmethod
+    def get_solo(cls):
+        """Devuelve la única instancia de configuración, creándola si no existe."""
+        obj, created = cls.objects.get_or_create(pk=1)
+        return obj

@@ -41,7 +41,7 @@
                                         <i class="fas fa-fingerprint"></i>
                                     </span>
                                     <input type="text" name="id_maquina" value="{{ maquina.id_maquina|default:'' }}" 
-                                           class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-mono text-sm" 
+                                           class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-mono text-sm text-slate-800" 
                                            placeholder="Ej: MAC05" required>
                                 </div>
                                 <p class="text-xs text-slate-400 mt-1.5 ml-1">Debe coincidir con el ID del sistema ERP.</p>
@@ -55,7 +55,7 @@
                                         <i class="fas fa-tag"></i>
                                     </span>
                                     <input type="text" name="nombre" value="{{ maquina.nombre|default:'' }}" 
-                                           class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" 
+                                           class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-slate-800" 
                                            placeholder="Ej: TORNO CNC 1" required>
                                 </div>
                             </div>
@@ -94,7 +94,7 @@
                             <div>
                                 <label class="block text-sm font-semibold text-slate-700 mb-1.5">Frecuencia (Horas de Uso)</label>
                                 <div class="relative">
-                                    <input type="number" name="frecuencia_preventivo_horas" value="{{ maquina.frecuencia_preventivo_horas|default:'0' }}" class="w-full border-slate-300 rounded-lg shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-sm pl-3 pr-10 py-2.5 bg-slate-50">
+                                    <input type="number" name="frecuencia_preventivo_horas" value="{{ maquina.frecuencia_preventivo_horas|default:'0' }}" class="w-full border-slate-300 rounded-lg shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-sm pl-3 pr-10 py-2.5 bg-slate-50 text-slate-800">
                                     <span class="absolute right-3 top-3 text-xs text-slate-400 font-bold">HS</span>
                                 </div>
                                 <p class="text-[10px] text-slate-400 mt-1.5 ml-1">0 = Desactivado. Ej: 200 para alertar cada 200hs.</p>
@@ -105,7 +105,7 @@
                                     <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Último Service Real</label>
                                     <input type="datetime-local" name="fecha_ultimo_preventivo" 
                                            value="{{ maquina.fecha_ultimo_preventivo|date:'Y-m-d\TH:i' }}" 
-                                           class="w-full border-slate-300 rounded-lg shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-xs py-2 bg-slate-50">
+                                           class="w-full border-slate-300 rounded-lg shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-xs py-2 bg-slate-50 text-slate-800">
                                 </div>
                                 <div>
                                     <label class="block text-xs font-bold text-emerald-600 uppercase tracking-wide mb-1.5">Próximo Service (Agenda)</label>
@@ -152,12 +152,12 @@
                             <div class="flex items-center gap-4">
                                 <div class="w-1/2">
                                     <label class="text-xs font-semibold text-slate-500 uppercase mb-1 block">Entrada</label>
-                                    <input type="time" name="horario_inicio_sem" value="{{ maquina.horario_inicio_sem|time:'H:i'|default:'07:00' }}" class="w-full border-slate-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm">
+                                    <input type="time" name="horario_inicio_sem" value="{{ maquina.horario_inicio_sem|time:'H:i'|default:'07:00' }}" class="w-full border-slate-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-slate-800">
                                 </div>
                                 <span class="text-slate-300 mt-5"><i class="fas fa-arrow-right"></i></span>
                                 <div class="w-1/2">
                                     <label class="text-xs font-semibold text-slate-500 uppercase mb-1 block">Salida</label>
-                                    <input type="time" name="horario_fin_sem" value="{{ maquina.horario_fin_sem|time:'H:i'|default:'16:00' }}" class="w-full border-slate-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm">
+                                    <input type="time" name="horario_fin_sem" value="{{ maquina.horario_fin_sem|time:'H:i'|default:'16:00' }}" class="w-full border-slate-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-slate-800">
                                 </div>
                             </div>
                         </div>
@@ -179,12 +179,12 @@
                             <div id="sabado_inputs" class="flex items-center gap-4 transition-all duration-300 origin-top">
                                 <div class="w-1/2">
                                     <label class="text-xs font-semibold text-slate-500 uppercase mb-1 block">Entrada</label>
-                                    <input type="time" name="horario_inicio_sab" value="{{ maquina.horario_inicio_sab|time:'H:i'|default:'07:00' }}" class="w-full border-slate-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm">
+                                    <input type="time" name="horario_inicio_sab" value="{{ maquina.horario_inicio_sab|time:'H:i'|default:'07:00' }}" class="w-full border-slate-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm text-slate-800">
                                 </div>
                                 <span class="text-slate-300 mt-5"><i class="fas fa-arrow-right"></i></span>
                                 <div class="w-1/2">
                                     <label class="text-xs font-semibold text-slate-500 uppercase mb-1 block">Salida</label>
-                                    <input type="time" name="horario_fin_sab" value="{{ maquina.horario_fin_sab|time:'H:i'|default:'12:00' }}" class="w-full border-slate-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm">
+                                    <input type="time" name="horario_fin_sab" value="{{ maquina.horario_fin_sab|time:'H:i'|default:'12:00' }}" class="w-full border-slate-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm text-slate-800">
                                 </div>
                             </div>
                         </div>
@@ -206,12 +206,12 @@
                             <div id="domingo_inputs" class="flex items-center gap-4 transition-all duration-300 origin-top">
                                 <div class="w-1/2">
                                     <label class="text-xs font-semibold text-slate-500 uppercase mb-1 block">Entrada</label>
-                                    <input type="time" name="horario_inicio_dom" value="{{ maquina.horario_inicio_dom|time:'H:i'|default:'07:00' }}" class="w-full border-slate-300 rounded-lg shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500 text-sm">
+                                    <input type="time" name="horario_inicio_dom" value="{{ maquina.horario_inicio_dom|time:'H:i'|default:'07:00' }}" class="w-full border-slate-300 rounded-lg shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500 text-sm text-slate-800">
                                 </div>
                                 <span class="text-slate-300 mt-5"><i class="fas fa-arrow-right"></i></span>
                                 <div class="w-1/2">
                                     <label class="text-xs font-semibold text-slate-500 uppercase mb-1 block">Salida</label>
-                                    <input type="time" name="horario_fin_dom" value="{{ maquina.horario_fin_dom|time:'H:i'|default:'12:00' }}" class="w-full border-slate-300 rounded-lg shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500 text-sm">
+                                    <input type="time" name="horario_fin_dom" value="{{ maquina.horario_fin_dom|time:'H:i'|default:'12:00' }}" class="w-full border-slate-300 rounded-lg shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500 text-sm text-slate-800">
                                 </div>
                             </div>
                         </div>

@@ -1373,6 +1373,7 @@ def editar_maquina(request, pk):
             maquina.trabaja_sabado = request.POST.get('trabaja_sabado') == 'on'
             maquina.horario_inicio_sab = request.POST.get('horario_inicio_sab') or None
             maquina.horario_fin_sab = request.POST.get('horario_fin_sab') or None
+            maquina.trabaja_domingo = request.POST.get('trabaja_domingo') == 'on'  # FIX: Added missing domingo
             maquina.horario_inicio_dom = request.POST.get('horario_inicio_dom') or None
             maquina.horario_fin_dom = request.POST.get('horario_fin_dom') or None
             
@@ -1416,6 +1417,10 @@ def editar_maquina(request, pk):
         ).aggregate(total_mins=models.Sum('tiempo_minutos'))['total_mins'] or 0
         maquina.maint_hours = round(uso_sql / 60.0, 1)
         maquina.maint_progress = min(round((maquina.maint_hours / maquina.frecuencia_preventivo_horas) * 100, 1), 100)
+    
+    # Ensure trabaja_domingo has a default value if None (for proper checkbox rendering)
+    if not hasattr(maquina, 'trabaja_domingo') or maquina.trabaja_domingo is None:
+        maquina.trabaja_domingo = False
              
     return render(request, 'dashboard/form_maquina.html', {'maquina': maquina, 'page': page})
 
@@ -2332,79 +2337,111 @@ def estadisticas_avanzadas(request):
 def check_alerts(request):
     """
     API Endpoint JSON para verificar alertas en tiempo real.
-    1. Máquinas detenidas > 20 minutos sin incidencia abierta.
-    2. Registra en AlertaHistorial para evitar duplicados y enviar a WA/TG.
+    NUEVA IMPLEMENTACIÓN: Usa directamente los datos del dashboard principal para evitar errores de timezone.
     """
     alerts_to_return = []
     
-    # 1. Configuración de Máquinas Activas
-    machines = MaquinaConfig.objects.filter(activa=True)
-    if not machines.exists():
-        return JsonResponse({'alerts': []})
-        
-    machine_map = {m.id_maquina: m.nombre for m in machines}
+    # PASO 1: Obtener datos del dashboard principal (que ya calcula correctamente todos los tiempos)
+    try:
+        dashboard_data = dashboard_produccion(request, return_context=True, force_date='today')
+    except Exception as e:
+        return JsonResponse({'alerts': [], 'error': f'Error al obtener datos del dashboard: {str(e)}'})
     
-    # 2. Obtener última actividad (hoy)
-    # Buscamos la fecha máxima de fin en el día actual
-    now = timezone.now()
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    # PASO 2: Cargar configuración
+    from .models import NotificacionConfig
+    config = NotificacionConfig.get_solo()
+    umbral_mins = config.minutos_detencion_critica
     
-    last_activities = VTMan.objects.filter(
-        fecha__gte=today_start, 
-        id_maquina__in=machine_map.keys()
-    ).values('id_maquina').annotate(last_seen=Max('hora_fin'))
+    now = timezone.localtime(timezone.now())
     
-    activity_dict = {x['id_maquina']: x['last_seen'] for x in last_activities}
-    
-    # 3. Tickets de Mantenimiento Activos
-    open_tickets = Mantenimiento.objects.filter(
+    # PASO 3: Obtener tickets de mantenimiento activos
+    open_tickets = set(Mantenimiento.objects.filter(
         estado__in=['ABIERTO', 'PROCESO']
-    ).values_list('maquina__id_maquina', flat=True)
+    ).values_list('maquina__id_maquina', flat=True))
     
-    for m in machines.iterator():
-        if m.id_maquina in open_tickets:
-            continue
-            
-        last_seen = activity_dict.get(m.id_maquina)
+    # PASO 4: Pre-cargar alertas abiertas
+    open_alerts = {
+        a.maquina_id: a for a in AlertaHistorial.objects.filter(resuelta=False)
+    }
+    
+    # PASO 5: Procesar cada máquina usando los datos ya calculados del dashboard
+    machines_data = dashboard_data.get('cards_data', [])
+    
+    for machine in machines_data:
+        machine_id = machine.get('id')
+        machine_name = machine.get('name', machine_id)
         
-        if last_seen:
-            if timezone.is_naive(last_seen):
-                last_seen = timezone.make_aware(last_seen)
+        # Buscar la config de esta máquina
+        try:
+            m_config = MaquinaConfig.objects.get(id_maquina=machine_id)
+        except MaquinaConfig.DoesNotExist:
+            continue
+        
+        # Si está en mantenimiento, cerrar alertas existentes
+        if machine_id in open_tickets:
+            if m_config.id in open_alerts:
+                a = open_alerts[m_config.id]
+                a.resuelta = True
+                a.fecha_resolucion = now
+                a.detalle_resolucion = "Auto-cierre: Máquina en Mantenimiento"
+                a.save()
+            continue
+        
+        # USAR LOS DATOS YA CALCULADOS DEL DASHBOARD
+        is_online = machine.get('is_online', False)
+        idle_mins = machine.get('idle_mins', 0)
+        
+        # Determinar si debe alertar
+        # El dashboard ya calculó correctamente el tiempo de inactividad
+        should_alert = False
+        
+        # Si la máquina NO está online Y tiene más del umbral de minutos inactiva
+        if not is_online and idle_mins > umbral_mins:
+            should_alert = True
+        
+        # Gestión de alertas
+        if should_alert:
+            msg = f"⚠️ {machine_name} lleva {int(idle_mins)} min. detenida sin motivo reportado."
             
-            diff_mins = (now - last_seen).total_seconds() / 60.0
-            
-            # UMBRAL: 20 Minutos
-            if diff_mins > 20:
-                # Verificar si ya existe una alerta activa para evitar spam externo
-                # Buscamos alertas creadas en la última hora para esta máquina
-                one_hour_ago = now - datetime.timedelta(hours=1)
-                existing_alert = AlertaHistorial.objects.filter(
-                    maquina=m,
-                    fecha_creacion__gte=one_hour_ago,
-                    resuelta=False
-                ).first()
-                
-                msg = f"⚠️ {m.nombre} lleva {int(diff_mins)} min. detenida sin motivo reportado."
-                
-                if not existing_alert:
-                    # Crear nueva alerta historial
-                    new_alert = AlertaHistorial.objects.create(
-                        maquina=m,
-                        tipo='DETENCION_CRITICA',
-                        mensaje=msg
-                    )
-                    # Enviar notificación externa
-                    if send_external_notification(msg):
-                        new_alert.fecha_notificacion_ext = now
-                        new_alert.save()
+            if m_config.id in open_alerts:
+                # Actualizar alerta existente
+                existing = open_alerts[m_config.id]
+                existing.mensaje = msg
+                existing.save(update_fields=['mensaje'])
                 
                 alerts_to_return.append({
                     'type': 'error',
-                    'id': existing_alert.id if existing_alert else None,
+                    'id': existing.id,
                     'title': 'Detención Crítica',
                     'message': msg,
                     'time': now.strftime("%H:%M")
                 })
+            else:
+                # Crear nueva alerta
+                new_alert = AlertaHistorial.objects.create(
+                    maquina=m_config,
+                    tipo='DETENCION_CRITICA',
+                    mensaje=msg
+                )
+                if send_external_notification(msg):
+                    new_alert.fecha_notificacion_ext = now
+                    new_alert.save()
+                    
+                alerts_to_return.append({
+                    'type': 'error',
+                    'id': new_alert.id,
+                    'title': 'Detención Crítica',
+                    'message': msg,
+                    'time': now.strftime("%H:%M")
+                })
+        else:
+            # AUTO-RESOLVER si existe alerta pero la máquina ya está activa
+            if m_config.id in open_alerts:
+                a = open_alerts[m_config.id]
+                a.resuelta = True
+                a.fecha_resolucion = now
+                a.detalle_resolucion = "Auto-cierre: Actividad detectada"
+                a.save()
         
     return JsonResponse({'alerts': alerts_to_return})
 
@@ -2619,6 +2656,20 @@ def plant_map(request):
     # Ordenar por nombre
     unassigned_operators.sort(key=lambda x: x['name'])
 
+    # 5. Datos para Modo TV / Carrusel
+    all_kpis = prod_ctx.get('kpis', [])
+    top_oee = sorted(
+        [k for k in all_kpis if k.get('oee', 0) > 0], 
+        key=lambda x: x.get('oee', 0), 
+        reverse=True
+    )[:5]
+    
+    maint_upcoming = sorted(
+        [k for k in all_kpis if k.get('maint_progress', 0) > 0],
+        key=lambda x: x.get('maint_progress', 0),
+        reverse=True
+    )[:5]
+
     context = {
         'machines': machine_data,
         'global_stats': global_stats,
@@ -2627,6 +2678,9 @@ def plant_map(request):
         'unassigned_operators': unassigned_operators,
         'unassigned_count': len(unassigned_operators),
         'mst_list': mst_list,
+        'top_oee': top_oee,
+        'maint_upcoming': maint_upcoming,
+        'show_tv_mode': request.GET.get('mode') == 'tv',
     }
 
     if request.GET.get('format') == 'json':
@@ -2897,3 +2951,50 @@ def get_trace_flow(request):
             'status': 'error',
             'message': f'Error al obtener trazabilidad: {str(e)}'
         }, status=500)
+
+def gestionar_alertas(request):
+    """
+    Vista para configurar las notificaciones externas (Telegram/WhatsApp)
+    y los umbrales de tiempo para alertas críticas.
+    """
+    from .models import NotificacionConfig, AlertaHistorial
+    config = NotificacionConfig.get_solo()
+    historial = AlertaHistorial.objects.all()[:50] # Ver las últimas 50 alertas
+    
+    if request.method == 'POST':
+        # Telegram
+        config.telegram_token = request.POST.get('telegram_token')
+        config.telegram_chat_id = request.POST.get('telegram_chat_id')
+        config.activar_telegram = 'activar_telegram' in request.POST
+        
+        # WhatsApp
+        config.whatsapp_phone = request.POST.get('whatsapp_phone')
+        config.whatsapp_apikey = request.POST.get('whatsapp_apikey')
+        config.activar_whatsapp = 'activar_whatsapp' in request.POST
+        
+        # Umbrales
+        try:
+            config.minutos_detencion_critica = int(request.POST.get('minutos', 20))
+        except ValueError:
+            config.minutos_detencion_critica = 20
+            
+        config.alertar_mantenimiento = 'alertar_mantenimiento' in request.POST
+        
+        config.save()
+        messages.success(request, "Configuración de notificaciones actualizada correctamente.")
+        
+        # Auditoría manual del cambio
+        AuditLog.objects.create(
+            usuario=str(request.user),
+            modelo="NotificacionConfig",
+            referencia_id="1",
+            accion="UPDATE",
+            detalle=f"Actualización de parámetros de alertas. Umbral: {config.minutos_detencion_critica} min."
+        )
+        
+        return redirect('gestionar_alertas')
+
+    return render(request, 'dashboard/configuracion_alertas.html', {
+        'config': config,
+        'historial': historial
+    })

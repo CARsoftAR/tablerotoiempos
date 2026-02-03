@@ -30,6 +30,7 @@ urlpatterns = [
     
     # API Alertas
     path('api/check-alerts/', views.check_alerts, name='check_alerts'),
+    path('gestion-alertas/', views.gestionar_alertas, name='gestionar_alertas'),
     
     # Sistema de Backup
     path('gestion-backups/', views.gestion_backups, name='gestion_backups'),

@@ -1222,21 +1222,149 @@
             color: var(--premium-gold);
         }
 
-        .trace-empty-state {
-            padding: 40px 20px;
-            text-align: center;
-            color: #64748b;
-        }
-
         .trace-empty-state i {
             font-size: 48px;
             margin-bottom: 16px;
             opacity: 0.3;
         }
+
+        /* --- MODE TV / HUD INDUSTRIAL --- */
+        body.tv-mode-active {
+            cursor: none; /* Ocultar cursor en modo TV */
+        }
+
+        body.tv-mode-active .top-bar, 
+        body.tv-mode-active .sidebar, 
+        body.tv-mode-active .floating-toggle,
+        body.tv-mode-active .trace-panel,
+        body.tv-mode-active .properties-panel,
+        body.tv-mode-active .floating-legend {
+            display: none !important;
+        }
+
+        body.tv-mode-active .map-container {
+            right: 0 !important;
+            width: 100vw !important;
+        }
+
+        .tv-carousel-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(2, 6, 23, 0.95);
+            z-index: 9000;
+            display: none;
+            flex-direction: column;
+            padding: 40px;
+            animation: fadeIn 0.5s ease;
+        }
+
+        body.tv-overlay-active .tv-carousel-overlay {
+            display: flex;
+        }
+
+        .tv-slide-title {
+            font-size: 42px;
+            font-weight: 900;
+            color: var(--premium-gold);
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            margin-bottom: 40px;
+            text-align: center;
+            text-shadow: 0 0 20px var(--premium-gold-glow);
+            border-bottom: 2px solid var(--premium-gold);
+            padding-bottom: 20px;
+        }
+
+        .tv-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            flex: 1;
+        }
+
+        .tv-card {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            transition: transform 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .tv-card::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 4px;
+            background: var(--premium-gold);
+        }
+
+        .tv-card-rank {
+            position: absolute;
+            top: 20px; left: 20px;
+            font-size: 48px;
+            font-weight: 900;
+            color: rgba(255, 255, 255, 0.05);
+        }
+
+        .tv-card-name {
+            font-size: 28px;
+            font-weight: 800;
+            color: #fff;
+        }
+
+        .tv-card-value {
+            font-size: 72px;
+            font-weight: 900;
+            color: var(--status-green);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .tv-progress-container {
+            width: 100%;
+            height: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .tv-progress-bar {
+            height: 100%;
+            background: var(--premium-gold);
+            box-shadow: 0 0 15px var(--premium-gold-glow);
+        }
+
+        .tv-timer-bar {
+            position: fixed;
+            bottom: 0; left: 0; height: 6px;
+            background: var(--premium-gold);
+            z-index: 10000;
+            transition: width 0.1s linear;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(1.05); }
+            to { opacity: 1; transform: scale(1); }
+        }
     
     </style>
 </head>
-<body>
+<body class="{% if show_tv_mode %}tv-mode-active{% endif %}">
+
+    <div class="tv-timer-bar" id="tvTimerBar" style="display: none;"></div>
+
+    <!-- TV OVERLAY FOR SLIDES -->
+    <div class="tv-carousel-overlay" id="tvOverlay">
+        <div id="tvSlideContent">
+            <!-- Content dynamic via JS -->
+        </div>
+    </div>
 
     <div class="system-time-widget" id="systemClock">
         <span class="system-time-label">SISTEMA EN VIVO</span>
@@ -2296,6 +2424,103 @@
             const timeStr = now.toLocaleTimeString('es-AR', { hour12: false });
             const clockEl = document.getElementById('realTimeClock');
             if (clockEl) clockEl.innerText = timeStr;
+        }
+
+        /* --- LÓGICA DE CARRUSEL TV --- */
+        let currentSlide = 0; // 0: Mapa, 1: Top OEE, 2: Mantenimiento
+        let slideTimer = null;
+        let slideStart = 0;
+        let slideDuration = 30000; // Default 30s
+        const isTvMode = {% if show_tv_mode %}true{% else %}false{% endif %};
+
+        if (isTvMode) {
+            document.addEventListener('DOMContentLoaded', () => {
+                startTvCarousel();
+                document.getElementById('tvTimerBar').style.display = 'block';
+            });
+        }
+
+        function startTvCarousel() {
+            rotateSlides();
+        }
+
+        function rotateSlides() {
+            // Limpiar
+            const overlay = document.getElementById('tvOverlay');
+            const content = document.getElementById('tvSlideContent');
+            const body = document.body;
+
+            if (currentSlide === 0) {
+                // MAPA (Slide 0)
+                body.classList.remove('tv-overlay-active');
+                slideDuration = 30000;
+            } else if (currentSlide === 1) {
+                // TOP OEE (Slide 1)
+                body.classList.add('tv-overlay-active');
+                slideDuration = 15000;
+                renderTopOEESlide(content);
+            } else if (currentSlide === 2) {
+                // MANTENIMIENTO (Slide 2)
+                body.classList.add('tv-overlay-active');
+                slideDuration = 15000;
+                renderMaintSlide(content);
+            }
+
+            slideStart = Date.now();
+            updateTimerBar();
+
+            setTimeout(() => {
+                currentSlide = (currentSlide + 1) % 3;
+                rotateSlides();
+            }, slideDuration);
+        }
+
+        function updateTimerBar() {
+            const bar = document.getElementById('tvTimerBar');
+            const elapsed = Date.now() - slideStart;
+            const percent = Math.min(100, (elapsed / slideDuration) * 100);
+            bar.style.width = percent + '%';
+            if (percent < 100) {
+                requestAnimationFrame(updateTimerBar);
+            }
+        }
+
+        function renderTopOEESlide(container) {
+            container.innerHTML = `
+                <h2 class="tv-slide-title">🏆 TOP 5 RENDIMIENTO (OEE)</h2>
+                <div class="tv-grid">
+                    {% for k in top_oee %}
+                    <div class="tv-card">
+                        <div class="tv-card-rank">#{{ forloop.counter }}</div>
+                        <div class="tv-card-name">{{ k.name }}</div>
+                        <div class="tv-card-value">${parseFloat("{{ k.oee }}").toFixed(1)}%</div>
+                        <div class="tv-progress-container">
+                            <div class="tv-progress-bar" style="width:{{ k.oee }}%; background: ${getKPIColor("{{ k.oee }}")}"></div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            `;
+        }
+
+        function renderMaintSlide(container) {
+            container.innerHTML = `
+                <h2 class="tv-slide-title">🛠️ PRÓXIMOS MANTENIMIENTOS</h2>
+                <div class="tv-grid">
+                    {% for k in maint_upcoming %}
+                    <div class="tv-card">
+                        <div class="tv-card-name">${"{{ k.name }}".substring(0, 15)}</div>
+                        <div class="tv-card-value" style="font-size: 42px; color: ${parseFloat("{{ k.maint_progress }}") > 85 ? '#ef4444' : 'var(--premium-gold)'}">
+                            ${parseFloat("{{ k.maint_progress }}").toFixed(1)}%
+                        </div>
+                        <div style="color: #94a3b8; font-size: 14px;">PROGRESO HACIA SERVICE</div>
+                        <div class="tv-progress-container">
+                            <div class="tv-progress-bar" style="width:{{ k.maint_progress }}%; background: ${parseFloat("{{ k.maint_progress }}") > 85 ? '#ef4444' : 'var(--premium-gold)'}"></div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            `;
         }
 
         function makeDraggable(element, handle) {
