@@ -20,6 +20,8 @@
             --text-main: #1e293b;
             --premium-gold: #fbbf24;
             --premium-gold-glow: rgba(251, 191, 36, 0.4);
+            --trace-violet: #a78bfa; /* Soft Violet / Purple 400 */
+            --trace-violet-glow: rgba(167, 139, 250, 0.6);
             --hologram-blue: #00f3ff;
             --deep-bg: #020617;
         }
@@ -976,11 +978,11 @@
 
         .trace-path {
             fill: none;
-            stroke: var(--premium-gold);
+            stroke: var(--trace-violet);
             stroke-width: 0.2;
             stroke-dasharray: 2 1;
             animation: trace-dash 2s linear infinite;
-            filter: drop-shadow(0 0 2px var(--premium-gold-glow));
+            filter: drop-shadow(0 0 2px var(--trace-violet-glow));
         }
 
         @keyframes trace-dash {
@@ -988,13 +990,13 @@
         }
 
         .trace-arrow {
-            fill: var(--premium-gold);
-            filter: drop-shadow(0 0 4px var(--premium-gold-glow));
+            fill: var(--trace-violet);
+            filter: drop-shadow(0 0 4px var(--trace-violet-glow));
         }
 
         .trace-level-badge {
             position: absolute;
-            background: var(--premium-gold);
+            background: var(--trace-violet);
             color: #000;
             font-size: 10px;
             font-weight: 900;
@@ -1002,13 +1004,13 @@
             border-radius: 12px;
             z-index: 25;
             pointer-events: none;
-            box-shadow: 0 0 15px var(--premium-gold-glow);
+            box-shadow: 0 0 15px var(--trace-violet-glow);
             border: 2px solid #fff;
         }
 
         .machine-marker.trace-active {
-            border-color: var(--premium-gold) !important;
-            box-shadow: 0 0 25px var(--premium-gold-glow) !important;
+            border-color: var(--trace-violet) !important;
+            box-shadow: 0 0 25px var(--trace-violet-glow) !important;
             z-index: 50 !important;
             animation: trace-pulse 1.5s ease-in-out infinite;
         }
@@ -2828,8 +2830,12 @@
             svg.innerHTML = `
                 <defs>
                     <marker id="trace-arrowhead" markerWidth="3" markerHeight="3" refX="2.5" refY="1.5" orient="auto">
-                        <polygon points="0 0, 3 1.5, 0 3" fill="#fbbf24" />
+                        <polygon points="0 0, 3 1.5, 0 3" fill="var(--trace-violet)" />
                     </marker>
+                    <filter id="trace-glow-pulse" x="-50%" y="-50%" width="200%" height="200%">
+                        <feGaussianBlur stdDeviation="0.3" result="blur" />
+                        <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                    </filter>
                 </defs>
             `;
 
@@ -2929,8 +2935,6 @@
                 if (dist < 0.5) continue; 
 
                 const midX = (p1.x + p2.x) / 2;
-                const midY = (p1.y + p1.y) / 2; // Mistake fixed in p1.y + p2.y below
-                
                 const midY_real = (p1.y + p2.y) / 2;
                 
                 // Add a slight bulge
@@ -2940,39 +2944,39 @@
                 
                 const d = `M ${p1.x} ${p1.y} Q ${cpX} ${cpY}, ${p2.x} ${p2.y}`;
                 
+                // Main Static Path (Dashed)
                 const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
                 path.setAttribute("class", "trace-path");
                 path.setAttribute("d", d);
-                // stroke-width is handled by CSS (0.2), but we set it here as fallback or for export consistency
                 path.setAttribute("stroke-width", "0.2"); 
                 path.setAttribute("marker-end", "url(#trace-arrowhead)");
                 svg.appendChild(path);
 
-                // --- ADD DYNAMIC PARTICLES (Small radius for 0-100 scale) ---
-                const pWhite = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-                pWhite.setAttribute("r", "0.2"); // Reduced from 0.4
-                pWhite.setAttribute("fill", "#fff");
-                
-                const animW = document.createElementNS("http://www.w3.org/2000/svg", "animateMotion");
-                animW.setAttribute("dur", "3s");
-                animW.setAttribute("repeatCount", "indefinite");
-                animW.setAttribute("path", d);
-                
-                pWhite.appendChild(animW);
-                svg.appendChild(pWhite);
+                // --- ENERGY GUIDE EFFECT (Comet Pulse) ---
+                // Create multiple particles with slight delay to create a tail/guide effect
+                const particleCount = 3;
+                for (let j = 0; j < particleCount; j++) {
+                    const particle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                    const size = 0.35 - (j * 0.1); 
+                    const opacity = 1 - (j * 0.3);
+                    const delay = j * 0.15;
 
-                const pGold = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-                pGold.setAttribute("r", "0.15"); // Reduced from 0.3
-                pGold.setAttribute("fill", "var(--premium-gold)");
-                
-                const animG = document.createElementNS("http://www.w3.org/2000/svg", "animateMotion");
-                animG.setAttribute("dur", "3s");
-                animG.setAttribute("begin", "1s");
-                animG.setAttribute("repeatCount", "indefinite");
-                animG.setAttribute("path", d);
-                
-                pGold.appendChild(animG);
-                svg.appendChild(pGold);
+                    particle.setAttribute("r", size); 
+                    particle.setAttribute("fill", j === 0 ? "#fff" : "var(--trace-violet)");
+                    particle.setAttribute("opacity", opacity);
+                    particle.setAttribute("filter", "url(#trace-glow-pulse)");
+                    
+                    const anim = document.createElementNS("http://www.w3.org/2000/svg", "animateMotion");
+                    anim.setAttribute("dur", "2.5s");
+                    anim.setAttribute("begin", `${delay}s`);
+                    anim.setAttribute("repeatCount", "indefinite");
+                    anim.setAttribute("path", d);
+                    anim.setAttribute("calcMode", "spline");
+                    anim.setAttribute("keySplines", "0.4 0 0.2 1"); // Smooth acceleration
+                    
+                    particle.appendChild(anim);
+                    svg.appendChild(particle);
+                }
             }
         }
 
