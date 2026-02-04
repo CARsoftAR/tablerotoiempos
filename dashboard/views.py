@@ -288,7 +288,9 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         # La DB tiene un desfase de 3hs respecto a la hora local.
         # Una sesión está activa si no tiene fin, si el fin es futuro (según reloj DB), o dice ONLINE.
         now_local = timezone.localtime(timezone.now())
-        now_db_ref = now_local - datetime.timedelta(hours=3)
+        # FIX: Eliminado el desfase de -3hs porque causaba que tareas terminadas (ej: 12:45)
+        # siguieran activas a las 13:30. Se compara contra hora actual real.
+        now_db_ref = now_local 
         
         h_fin = reg.get('hora_fin')
         if h_fin and timezone.is_aware(h_fin):
@@ -310,6 +312,10 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
 
         # 1. Caso: Sin Asignar (Máquina vacía o inactiva)
         is_unassigned = (not mid or mid in maquinas_inactivas_ids)
+        
+        # FIX: Forzar NLX (MAC40) como asignada si tiene ID válido, para evitar falsos positivos
+        if mid == 'MAC40': 
+            is_unassigned = False
         
         if is_unassigned:
             unassigned_time += duracion
@@ -333,7 +339,17 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 if u_uid and u_uid != 'None':
                      u_name = nombres_operarios.get(u_uid, f"Op {u_uid}")
                      u_task = raw_art_d or raw_op_d or raw_obs or "S/D"
-                     active_unassigned_ops[u_uid] = {'name': u_name, 'task': u_task}
+                     
+                     # Improve Task Description prioritization
+                     if "TAREAS GENERALES" in u_task and raw_obs:
+                         u_task = raw_obs
+                     
+                     active_unassigned_ops[u_uid] = {
+                         'name': u_name, 
+                         'task': u_task,
+                         'obs': raw_obs,
+                         'art': raw_art_d
+                     }
         
         # 2. Caso: Máquina Asignada (Solo si no es unassigned)
         data = None
@@ -700,9 +716,21 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 # Actualizar SOLO el diccionario del operario (para su tooltip de ícono)
                 op_info['avail'] = p_avail
                 op_info['perf'] = p_perf
+            
+            # OVERRIDE FIX: Si el operario tiene una tarea Manual activa y la máquina dice "ONLINE",
+            # mostramos la tarea manual (ej: "Cortando...") en lugar de "ONLINE", ya que es más específico.
+            if op_uid and op_uid in active_unassigned_ops:
+                is_machine_generic = (op_info['process'] == 'ONLINE' or op_info['process'] == 'Produciendo')
                 
-                # DEBUG
-                print(f"DEBUG POST-PROCESS: {op_name} - Perf: {p_perf:.2f}%, Avail: {p_avail:.2f}%")
+                if is_machine_generic:
+                    u_data = active_unassigned_ops[op_uid]
+                    # Si tiene observación explícita (ej: cortando), la usamos.
+                    # Si no, usamos la tarea (ej: TAREAS GENERALES).
+                    specific_task = u_data['obs'] if u_data.get('obs') else u_data['task']
+                    specific_art = u_data['art'] if u_data.get('art') else "---"
+                    
+                    op_info['process'] = specific_task
+                    op_info['article'] = specific_art
 
         # Serializar para el Frontend (corrige que el JS no reciba datos actualizados)
         import json

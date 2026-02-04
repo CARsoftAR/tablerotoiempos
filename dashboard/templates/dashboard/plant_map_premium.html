@@ -3203,6 +3203,90 @@
                     svg.appendChild(particle);
                 }
             }
+
+            // --- LOGISTICS SIMULATION (Final Stage) ---
+            if (positions.length > 0) {
+                const lastPos = positions[positions.length - 1];
+                
+                // Coordinates for the Dispatch Center
+                const dispatchX = 68; 
+                const dispatchY = 22; 
+
+                // Draw path to dispatch (Shortened slightly as per user request)
+                const dX = dispatchX - lastPos.x;
+                const dY = dispatchY - lastPos.y;
+                const dist = Math.sqrt(dX*dX + dY*dY);
+                
+                // Only draw if there is some distance (sanity check)
+                if (dist > 1) {
+                    // We stop the line 3 units before the absolute center for a cleaner look
+                    const stopDist = Math.max(0, dist - 3);
+                    const ratio = stopDist / dist;
+                    const endX = lastPos.x + dX * ratio;
+                    const endY = lastPos.y + dY * ratio;
+
+                    const midX = (lastPos.x + endX) / 2;
+                    const midY = (lastPos.y + endY) / 2;
+                    const arcX = midX + (dY/dist) * -2; // Reduced curve for shorter path
+                    const arcY = midY - (dX/dist) * -2;
+                    
+                    const dispatchPathD = `M ${lastPos.x} ${lastPos.y} Q ${arcX} ${arcY}, ${endX} ${endY}`;
+
+                    // Logistics Path Style
+                    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                    path.setAttribute("d", dispatchPathD);
+                    path.setAttribute("stroke", "#f59e0b"); // Amber/Orange for Logistics
+                    path.setAttribute("stroke-width", "0.15");
+                    path.setAttribute("stroke-dasharray", "0.5, 0.5"); // Dashed line
+                    path.setAttribute("fill", "none");
+                    path.setAttribute("opacity", "0.8");
+                    svg.appendChild(path);
+
+                    // FORKLIFT (AUTOELEVADOR) GROUP
+                    // REALISTIC DISPATCH SCENE (Fixed Proportions & Centering)
+                    const dispatchScene = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                    dispatchScene.style.pointerEvents = "none";
+                    dispatchScene.setAttribute("pointer-events", "none"); 
+                    // Centered precisely: width 32 (16 each side), height 24 (12 each side)
+                    dispatchScene.setAttribute("transform", `translate(${dispatchX - 16}, ${dispatchY - 12})`); 
+                    dispatchScene.style.mixBlendMode = "screen";
+                    dispatchScene.innerHTML = `
+                        <foreignObject width="32" height="24" overflow="visible" style="pointer-events: none;">
+                            <div xmlns="http://www.w3.org/1999/xhtml" style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; pointer-events: none;">
+                                <img src="/static/dashboard/images/despacho_realista.png?v=${new Date().getTime()}" 
+                                     style="width: 100%; height: auto; mix-blend-mode: screen; pointer-events: none;" 
+                                     alt="Despacho Realista" />
+                            </div>
+                        </foreignObject>
+                    `;
+                    svg.appendChild(dispatchScene);
+
+                    // ANIMATED PARTICLE EFFECT (Replacing the goods image)
+                    const sampiGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                    
+                    const particle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                    particle.setAttribute("r", "0.5");
+                    particle.setAttribute("fill", "white");
+                    particle.setAttribute("filter", "url(#trace-glow-pulse)");
+                    sampiGroup.appendChild(particle);
+
+                    // Animate the Group along the path
+                    const anim = document.createElementNS("http://www.w3.org/2000/svg", "animateMotion");
+                    anim.setAttribute("dur", "6s");
+                    anim.setAttribute("begin", "1s"); // Wait a bit after drawing
+                    anim.setAttribute("repeatCount", "indefinite");
+                    anim.setAttribute("path", dispatchPathD);
+                    anim.setAttribute("rotate", "auto"); // Rotate to follow path direction
+                    anim.setAttribute("keyTimes", "0; 0.8; 1"); // Arrive and wait
+                    anim.setAttribute("keyPoints", "0; 1; 1");
+                    anim.setAttribute("calcMode", "linear");
+                    
+                    sampiGroup.appendChild(anim);
+                    svg.appendChild(sampiGroup);
+
+
+                }
+            }
         }
 
         function focusOnMachine(id) {

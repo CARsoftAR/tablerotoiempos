@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils import timezone
+import datetime
 
 class VTMan(models.Model):
     use_db = 'sql_server'
@@ -94,6 +95,8 @@ class MaquinaConfig(models.Model):
     horario_inicio_sab = models.TimeField(verbose_name="Inicio Sábado", null=True, blank=True)
     horario_fin_sab = models.TimeField(verbose_name="Fin Sábado", null=True, blank=True)
     
+    # Horarios Domingo (Opcional)
+    trabaja_domingo = models.BooleanField(default=False)
     horario_inicio_dom = models.TimeField(verbose_name="Inicio Domingo", null=True, blank=True)
     horario_fin_dom = models.TimeField(verbose_name="Fin Domingo", null=True, blank=True)
 
@@ -181,10 +184,79 @@ class Mantenimiento(models.Model):
 
     @property
     def duracion_minutos(self):
-        if not self.fecha_fin:
-            return 0
-        diff = self.fecha_fin - self.fecha_reporte
-        return int(diff.total_seconds() / 60)
+        end_time = self.fecha_fin
+        if not end_time:
+            # Si no ha finalizado, calculamos contra AHORA para mostrar tiempo acumulado en tiempo real
+            end_time = timezone.now()
+
+        total_minutes = 0.0
+        
+        # Convertir a zona horaria local para comparar correctamente con horarios de config (que son "reloj de pared")
+        # Asumimos que la DB está en UTC y el horario de config es Local
+        current_tz = timezone.get_current_timezone()
+        
+        start_local = self.fecha_reporte.astimezone(current_tz)
+        end_local = end_time.astimezone(current_tz)
+        
+        # Recorrer día por día
+        current_date = start_local.date()
+        final_date = end_local.date()
+        d = current_date
+        
+        config = self.maquina
+        
+        while d <= final_date:
+            weekday = d.weekday() # 0=Lunes
+            
+            # Determinar horario laboral del día
+            day_start = datetime.time(7,0)
+            day_end = datetime.time(16,0)
+            is_working_day = True
+            
+            if weekday < 5: # Lun-Vie
+                day_start = config.horario_inicio_sem
+                day_end = config.horario_fin_sem
+            elif weekday == 5: # Sab
+                is_working_day = config.trabaja_sabado
+                if is_working_day:
+                    day_start = config.horario_inicio_sab or datetime.time(7,0)
+                    day_end = config.horario_fin_sab or datetime.time(13,0)
+            else: # Dom
+                is_working_day = config.trabaja_domingo
+                if is_working_day:
+                    day_start = config.horario_inicio_dom or datetime.time(7,0)
+                    day_end = config.horario_fin_dom or datetime.time(13,0)
+            
+            if is_working_day:
+                # Construir datetimes del turno (time aware)
+                shift_start_dt = datetime.datetime.combine(d, day_start)
+                shift_start_dt = timezone.make_aware(shift_start_dt, current_tz)
+                
+                shift_end_dt = datetime.datetime.combine(d, day_end)
+                shift_end_dt = timezone.make_aware(shift_end_dt, current_tz)
+                
+                # Manejo de turno nocturno cruzando medianoche
+                if shift_end_dt < shift_start_dt:
+                    shift_end_dt += datetime.timedelta(days=1)
+                
+                # Intersección: max(inicio_real, inicio_turno) y min(fin_real, fin_turno)
+                effective_start = max(start_local, shift_start_dt)
+                effective_end = min(end_local, shift_end_dt)
+                
+                if effective_end > effective_start:
+                    diff = effective_end - effective_start
+                    total_minutes += diff.total_seconds() / 60.0
+            
+            d += datetime.timedelta(days=1)
+            
+        return int(total_minutes)
+
+    @property
+    def duracion_hhmm(self):
+        mins = self.duracion_minutos
+        hours = int(mins // 60)
+        minutes = int(mins % 60)
+        return f"{hours:02d}h {minutes:02d}m"
 
 class AuditLog(models.Model):
     ACTION_CHOICES = [

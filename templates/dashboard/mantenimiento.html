@@ -313,7 +313,7 @@
                             <p class="text-slate-400 text-xs font-medium max-w-md line-clamp-2">{{ inc.descripcion_falla }}</p>
                             {% if inc.duracion_minutos %}
                             <span class="inline-flex items-center gap-1.5 mt-2 px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 text-[9px] font-black uppercase tracking-widest">
-                                <i class="fas fa-hourglass-end"></i> {{ inc.duracion_minutos }} min
+                                <i class="fas fa-hourglass-end"></i> {{ inc.duracion_minutos }} MIN <span class="text-white/40 mx-1">|</span> {{ inc.duracion_hhmm }}
                             </span>
                             {% endif %}
                         </td>
