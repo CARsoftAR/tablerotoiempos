@@ -1,0 +1,730 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Manual de Usuario - ABBAMAT{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-20 pb-20">
+    <!-- Header -->
+    <div class="relative p-12 rounded-[3rem] bg-gradient-to-br from-amber-400/20 to-transparent border border-white/10 overflow-hidden shadow-2xl">
+        <div class="absolute -right-20 -top-20 w-80 h-80 bg-amber-400/10 rounded-full blur-[100px]"></div>
+        <div class="relative z-10">
+            <h1 class="text-6xl font-black text-white font-brand tracking-tighter mb-4 uppercase">
+                Manual de <span class="text-amber-400">Usuario</span>
+            </h1>
+            <p class="text-xl text-slate-400 max-w-2xl leading-relaxed font-medium">
+                Guía completa de operación, interpretación de datos y fórmulas del sistema de Inteligencia Operativa <span class="text-amber-400">ABBA</span><span class="text-orange-500">MAT</span>.
+            </p>
+        </div>
+    </div>
+
+    <!-- Navegación Rápida -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <a href="#intro" class="p-6 rounded-3xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-all group">
+            <div class="flex items-center gap-4 mb-3">
+                <div class="w-10 h-10 rounded-xl bg-amber-400 text-black flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <i class="fas fa-info"></i>
+                </div>
+                <h3 class="text-lg font-bold text-white uppercase tracking-tighter">1. Introducción</h3>
+            </div>
+            <p class="text-xs text-slate-500 leading-relaxed font-bold">Conceptos base y sincronización con el ERP.</p>
+        </a>
+        <a href="#interfaz" class="p-6 rounded-3xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-all group">
+            <div class="flex items-center gap-4 mb-3">
+                <div class="w-10 h-10 rounded-xl bg-blue-500 text-white flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <i class="fas fa-tablet-alt"></i>
+                </div>
+                <h3 class="text-lg font-bold text-white uppercase tracking-tighter">2. Interfaz</h3>
+            </div>
+            <p class="text-xs text-slate-500 leading-relaxed font-bold">Navegación, barra lateral y centro de notificaciones.</p>
+        </a>
+        <a href="#calculos" class="p-6 rounded-3xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-all group">
+            <div class="flex items-center gap-4 mb-3">
+                <div class="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <i class="fas fa-calculator"></i>
+                </div>
+                <h3 class="text-lg font-bold text-white uppercase tracking-tighter">3. Cálculos</h3>
+            </div>
+            <p class="text-xs text-slate-500 leading-relaxed font-bold">Diccionario de fórmulas OEE, Real y Standard.</p>
+        </a>
+    </div>
+
+    <!-- SECCIÓN 1: INTRODUCCIÓN Y FILOSOFÍA -->
+    <section id="intro" class="scroll-mt-24 space-y-12">
+        <div class="flex items-center gap-4">
+            <span class="text-xs font-black text-amber-400 bg-amber-400/10 px-3 py-1 rounded-full uppercase tracking-widest">Capítulo 01</span>
+            <div class="h-px bg-white/10 flex-1"></div>
+        </div>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-16">
+            <div class="space-y-8">
+                <h2 class="text-4xl font-black text-white uppercase font-brand tracking-tighter">Introducción y Filosofía</h2>
+                <div class="prose prose-invert max-w-none space-y-6">
+                    <p class="text-slate-300 leading-relaxed text-sm">
+                        El sistema <span class="text-amber-400 font-black">ABBA</span><span class="text-orange-500 font-black">MAT</span> no es simplemente un tablero de visualización; es una capa de <span class="text-amber-400 font-bold">Inteligencia Operativa</span> que se sitúa sobre el taller para eliminar la opacidad de los procesos manuales. Su objetivo principal es convertir la actividad física en indicadores de gestión indiscutibles.
+                    </p>
+                    
+                    <div class="space-y-6">
+                        <div class="p-6 rounded-2xl bg-white/[0.03] border border-white/10 shadow-xl group hover:border-amber-400/30 transition-all">
+                            <h4 class="text-amber-400 font-black uppercase text-xs tracking-widest mb-3 flex items-center gap-2">
+                                <i class="fas fa-sync-alt"></i> Sincronización Vital con el ERP
+                            </h4>
+                            <p class="text-[12px] text-slate-400 leading-relaxed">
+                                El corazón del sistema late al ritmo de la base de datos central del ERP. ABBAMAT no requiere carga de datos manual: extrae las <span class="text-white">Ordenes de Fabricación (OP)</span>, los tiempos de logueo de los operarios y las especificaciones técnicas de cada pieza directamente de las tablas de ingeniería. Esto garantiza que lo que ves en pantalla sea la <span class="text-emerald-400">Verdad Única</span> de la planta.
+                            </p>
+                        </div>
+
+                        <div class="p-6 rounded-2xl bg-white/[0.03] border border-white/10 shadow-xl group hover:border-blue-400/30 transition-all">
+                            <h4 class="text-blue-400 font-black uppercase text-xs tracking-widest mb-3 flex items-center gap-2">
+                                <i class="fas fa-history"></i> La "Diferencia de Tiempos": El secreto de la eficiencia
+                            </h4>
+                            <p class="text-[12px] text-slate-400 leading-relaxed mb-4">
+                                Para entender ABBAMAT, hay que entender estos dos conceptos que chocan constantemente:
+                            </p>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div class="bg-blue-500/10 p-4 rounded-xl border border-blue-500/20">
+                                    <span class="block text-blue-400 font-black text-[10px] uppercase mb-1">Tiempo Real (Presencia)</span>
+                                    <p class="text-[10px] text-slate-400 italic">Es el cronómetro "de pared". Si un operario se loguea a las 08:00 y se desloguea a las 09:00, el Real es de 60 minutos, sin importar qué hizo.</p>
+                                </div>
+                                <div class="bg-emerald-500/10 p-4 rounded-xl border border-emerald-500/20">
+                                    <span class="block text-emerald-400 font-black text-[10px] uppercase mb-1">Tiempo Standard (Teórico)</span>
+                                    <p class="text-[10px] text-slate-400 italic">Es lo que el departamento de ingeniería dice que la pieza "vale". Si una pieza vale 10 min y el operario hizo 6, su Standard es de 60 min.</p>
+                                </div>
+                            </div>
+                            <p class="text-[11px] text-slate-500 mt-4 leading-relaxed">
+                                <i class="fas fa-lightbulb text-amber-500 mr-2"></i> La meta de planta es que el <span class="text-white font-bold">Standard sumado sea IGUAL o MAYOR al Real invertido</span>. Si es menor, estamos perdiendo dinero.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="relative group">
+                <div class="absolute -inset-1 bg-gradient-to-r from-amber-400/20 to-blue-400/20 rounded-[2rem] blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
+                <div class="relative bg-slate-900 rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl aspect-video flex items-center justify-center group-hover:border-white/20 transition-all">
+                    {% if has_dashboard_img %}
+                        <img src="{% static 'img/manual/dashboard_main.png' %}" class="w-full h-full object-cover">
+                    {% else %}
+                        <div class="text-center p-8">
+                            <i class="fas fa-image text-4xl text-slate-700 mb-4"></i>
+                            <p class="text-xs text-slate-500 font-bold uppercase tracking-widest text-[9px]">[CAPTURA: dashboard_main.png]</p>
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="mt-6 p-6 rounded-2xl bg-white/[0.02] border border-white/5">
+                    <p class="text-[10px] text-slate-500 leading-relaxed italic">
+                        La vista principal (Dashboard) agrupa a todos los operarios activos, mostrando su eficiencia individual, la pieza que están procesando y su estado actual mediante colores semafóricos.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECCIÓN 2: INTERFAZ Y NAVEGACIÓN -->
+    <section id="interfaz" class="scroll-mt-24 space-y-12">
+        <div class="flex items-center gap-4">
+            <span class="text-xs font-black text-blue-400 bg-blue-400/10 px-3 py-1 rounded-full uppercase tracking-widest">Capítulo 02</span>
+            <div class="h-px bg-white/10 flex-1"></div>
+        </div>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:grid-flow-col-dense">
+            <div class="lg:col-start-2 space-y-8">
+                <h2 class="text-4xl font-black text-white uppercase font-brand tracking-tighter">Navegación e Interfaz</h2>
+                <div class="prose prose-invert max-w-none space-y-10">
+                    <div class="space-y-4">
+                        <h4 class="text-white font-black text-xs uppercase tracking-widest flex items-center gap-2 border-b border-white/10 pb-2">
+                            <i class="fas fa-window-maximize text-blue-400"></i>
+                            Estructura de la Barra Superior (Topbar)
+                        </h4>
+                        <p class="text-[12px] text-slate-400 leading-relaxed">
+                            Diseñada como un centro de control global. Sus elementos no son solo estéticos:
+                        </p>
+                        <ul class="space-y-3">
+                            <li class="text-[11px] text-slate-300">
+                                <span class="text-white font-bold">Reloj de Sincronización:</span> Indica la hora actual del servidor. Si este reloj se detiene, es señal de pérdida de conexión WiFi en la planta.
+                            </li>
+                            <li class="text-[11px] text-slate-300">
+                                <span class="text-white font-bold">Campana de Notificaciones:</span> Muestra alertas críticas. Incluye un contador en rojo para temas pendientes de revisión inmediata.
+                            </li>
+                            <li class="text-[11px] text-slate-300">
+                                <span class="text-white font-bold">Buscador Universal:</span> Permite encontrar rápidamente a un operario o una máquina por su nombre o ID.
+                            </li>
+                        </ul>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <h4 class="text-white font-black text-xs uppercase tracking-widest flex items-center gap-2 border-b border-white/10 pb-2">
+                            <i class="fas fa-bars text-blue-400"></i>
+                            El Menú Lateral (Sidebar)
+                        </h4>
+                        <p class="text-[12px] text-slate-400 leading-relaxed">
+                            Organizado por flujo de importancia estratégica:
+                        </p>
+                        <div class="grid grid-cols-1 gap-3">
+                            <div class="p-4 rounded-xl bg-white/[0.02] border border-white/5 flex gap-4 items-center">
+                                <i class="fas fa-th-large text-amber-500"></i>
+                                <p class="text-[10px] text-slate-400"><span class="text-white font-bold">Dashboard:</span> Vista táctica minuto a minuto de las personas.</p>
+                            </div>
+                            <div class="p-4 rounded-xl bg-white/[0.02] border border-white/5 flex gap-4 items-center">
+                                <i class="fas fa-map-marked-alt text-purple-400"></i>
+                                <p class="text-[10px] text-slate-400"><span class="text-white font-bold">Mapa de Planta:</span> Vista geográfica de las máquinas.</p>
+                            </div>
+                            <div class="p-4 rounded-xl bg-white/[0.02] border border-white/5 flex gap-4 items-center">
+                                <i class="fas fa-chart-pie text-blue-400"></i>
+                                <p class="text-[10px] text-slate-400"><span class="text-white font-bold">Estadísticas:</span> Análisis histórico y tendencias (Pareto/OEE).</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-6 rounded-2xl bg-rose-500/5 border border-rose-500/10 flex gap-4 shadow-lg">
+                        <div class="flex-shrink-0 w-10 h-10 rounded-full bg-rose-500/20 flex items-center justify-center">
+                            <i class="fas fa-bell text-rose-500 animate-pulse"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-rose-500 font-black uppercase text-xs tracking-widest">Protocolo de Alertas</h4>
+                            <p class="text-[11px] text-slate-400 leading-relaxed mt-1">
+                                Cuando una detención supera el tiempo configurado, el sistema cambia el fondo de la pantalla a un tono rojizo tenue y dispara una notificación que indica <span class="text-white font-bold italic">Máquina + Tiempo Parada + Última Tarea</span>.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="lg:col-start-1 space-y-8">
+                <div class="relative bg-slate-900 rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl aspect-[16/5] flex items-center justify-center group hover:border-blue-500/30 transition-all">
+                    {% if has_topbar_img %}
+                        <img src="{% static 'img/manual/topbar_utils.png' %}" class="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform">
+                    {% else %}
+                        <div class="text-center p-8">
+                            <i class="fas fa-image text-4xl text-slate-700 mb-4"></i>
+                            <p class="text-xs text-slate-500 font-bold uppercase tracking-widest text-[9px]">[CAPTURA: topbar_utils.png]</p>
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="relative bg-slate-900 rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl aspect-[1/1] max-h-[500px] flex items-center justify-center group hover:border-blue-500/30 transition-all">
+                    {% if has_sidebar_img %}
+                        <img src="{% static 'img/manual/sidebar_menu.png' %}" class="h-full w-auto object-contain p-8 group-hover:scale-105 transition-transform">
+                    {% else %}
+                        <div class="text-center p-8">
+                            <i class="fas fa-image text-4xl text-slate-700 mb-4"></i>
+                            <p class="text-xs text-slate-500 font-bold uppercase tracking-widest text-[9px]">[CAPTURA: sidebar_menu.png]</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECCIÓN 3: DICCIONARIO DE CÁLCULOS Y MÉTRICAS -->
+    <section id="calculos" class="scroll-mt-24 space-y-12">
+        <div class="flex items-center gap-4">
+            <span class="text-xs font-black text-emerald-400 bg-emerald-400/10 px-3 py-1 rounded-full uppercase tracking-widest">Capítulo 03</span>
+            <div class="h-px bg-white/10 flex-1"></div>
+        </div>
+
+        <div class="space-y-12">
+            <div class="text-center space-y-4">
+                <h2 class="text-4xl font-black text-white uppercase font-brand tracking-tighter">Diccionario de Métricas</h2>
+                <p class="text-slate-400 max-w-3xl mx-auto font-medium text-sm">
+                    ABBAMAT utiliza el estándar internacional <span class="text-white">OEE (Overall Equipment Effectiveness)</span> pero adaptado a la dinámica de logueo de operarios del ERP de planta.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 text-center pt-10">
+                <!-- Disponibilidad -->
+                <div class="relative p-8 rounded-3xl bg-white/[0.02] border border-white/5 space-y-6 group hover:bg-white/[0.04] transition-all">
+                    <div class="w-16 h-16 rounded-2xl bg-amber-400/10 text-amber-400 flex items-center justify-center mx-auto text-2xl shadow-[0_0_30px_rgba(251,191,36,0.1)] group-hover:scale-110 transition-transform">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-amber-400 font-black uppercase text-xs tracking-widest mb-4">A. Disponibilidad</h4>
+                        <div class="bg-black/40 p-4 rounded-xl font-tech text-[11px] text-white border border-white/5 mb-4 px-2">
+                            (Min. Produciendo / Min. Turno) × 100
+                        </div>
+                        <p class="text-[11px] text-slate-400 leading-relaxed text-left">
+                            Refleja el tiempo que la máquina estuvo realmente operando. Si el turno es de 9hs (540 min) y la máquina estuvo abierta 400 min, la disponibilidad es del <span class="text-white">74%</span>. El resto son <span class="text-rose-400">Pérdidas de Tiempo</span> (almuerzos, paradas no programadas, etc).
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Rendimiento -->
+                <div class="relative p-8 rounded-3xl bg-white/[0.02] border border-white/5 space-y-6 group hover:bg-white/[0.04] transition-all">
+                    <div class="w-16 h-16 rounded-2xl bg-blue-400/10 text-blue-400 flex items-center justify-center mx-auto text-2xl shadow-[0_0_30px_rgba(59,130,246,0.1)] group-hover:scale-110 transition-transform">
+                        <i class="fas fa-tachometer-alt"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-blue-400 font-black uppercase text-xs tracking-widest mb-4">B. Rendimiento (Eficiencia)</h4>
+                        <div class="bg-black/40 p-4 rounded-xl font-tech text-[11px] text-white border border-white/5 mb-4 px-2">
+                            (Tiempo Standard / Tiempo Real) × 100
+                        </div>
+                        <p class="text-[11px] text-slate-400 leading-relaxed text-left">
+                            Es la métrica de <span class="text-white font-bold">Velocidad</span>. Compara cuánto debería haber tardado el operario según la hoja de ruta versus cuánto tardó realmente. Si el Standard dice 100 min y el operario lo hizo en 80, tiene un <span class="text-emerald-400 font-bold">125% de eficiencia</span>.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- OEE -->
+                <div class="relative p-8 rounded-3xl bg-white/[0.02] border border-white/5 space-y-6 group hover:bg-white/[0.04] transition-all border-l-emerald-500/20">
+                    <div class="w-16 h-16 rounded-2xl bg-emerald-400/10 text-emerald-400 flex items-center justify-center mx-auto text-2xl shadow-[0_0_30px_rgba(16,185,129,0.1)] group-hover:scale-110 transition-transform">
+                        <i class="fas fa-star"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-emerald-400 font-black uppercase text-xs tracking-widest mb-4">C. OEE (Global)</h4>
+                        <div class="bg-black/40 p-4 rounded-xl font-tech text-[11px] text-white border border-white/5 mb-4 px-2">
+                            A × B × C (Calidad*)
+                        </div>
+                        <p class="text-[11px] text-slate-400 leading-relaxed text-left">
+                            Es el indicador de <span class="text-white font-bold">Excelencia Operacional</span>. Un OEE alto significa que la máquina está mucho tiempo produciendo y lo hace a una velocidad óptima. <span class="italic">*Nota: Por defecto Calidad es 100% hasta que se reporten descartes en el ERP.</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Caso Práctico Expandido -->
+            <div class="bg-white/[0.03] border border-white/10 rounded-[2.5rem] p-12 mt-10 shadow-2xl">
+                <div class="flex flex-col lg:flex-row gap-12 items-center">
+                    <div class="flex-1 space-y-8">
+                        <div>
+                            <span class="text-[10px] font-black text-amber-400 bg-amber-400/10 px-3 py-1 rounded-full uppercase tracking-[0.2em] mb-4 inline-block">Caso de Estudio Real</span>
+                            <h4 class="text-3xl font-black text-white uppercase tracking-tighter">Interpretación del Log de Auditoría</h4>
+                        </div>
+                        <div class="space-y-6">
+                            <p class="text-sm text-slate-400 leading-relaxed">
+                                Tomemos como ejemplo una fila real del sistema de auditoría. Este proceso ocurre miles de veces al día para cada operario:
+                            </p>
+                            <div class="space-y-4">
+                                <div class="flex gap-5 items-start">
+                                    <div class="w-8 h-8 rounded-full bg-amber-400/20 text-amber-400 flex items-center justify-center font-black text-xs shrink-0">01</div>
+                                    <p class="text-[12px] text-slate-300"><span class="text-white font-bold">Captura de Presencia (Real):</span> El sistema detecta que el operario inició sesión en la máquina "NLX-01" a las 07:00 y cerró a las 11:00. <span class="text-amber-400 font-bold">Total: 240 minutos.</span></p>
+                                </div>
+                                <div class="flex gap-5 items-start">
+                                    <div class="w-8 h-8 rounded-full bg-blue-400/20 text-blue-400 flex items-center justify-center font-black text-xs shrink-0">02</div>
+                                    <p class="text-[12px] text-slate-300"><span class="text-white font-bold">Consulta de Ingeniería (Standard):</span> Durante esas 4 horas, el operario completó 20 piezas. Si cada pieza tiene un valor standard de 15 minutos en el ERP, el sistema calcula: 20 piezas x 15 min = <span class="text-blue-400 font-bold">300 minutos de valor generado.</span></p>
+                                </div>
+                                <div class="flex gap-5 items-start">
+                                    <div class="w-8 h-8 rounded-full bg-emerald-400/20 text-emerald-400 flex items-center justify-center font-black text-xs shrink-0">03</div>
+                                    <p class="text-[12px] text-slate-300"><span class="text-white font-bold">Resultado de Eficiencia:</span> El operario generó 300 minutos de trabajo en solo 240 minutos de presencia. Su eficiencia es del <span class="text-emerald-400 font-black">125%</span>. Estás ganando una hora de productividad extra.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="w-full lg:w-1/3 aspect-square rounded-[2rem] bg-black border border-white/10 overflow-hidden shadow-2xl flex items-center justify-center group hover:border-amber-400/30 transition-all">
+                        {% if has_audit_img %}
+                            <img src="{% static 'img/manual/audit_logs.png' %}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700">
+                        {% else %}
+                             <div class="text-center p-8">
+                                <i class="fas fa-search text-5xl text-slate-800 mb-4"></i>
+                                <p class="text-[10px] text-slate-600 font-bold uppercase tracking-widest">[CAPTURA: audit_logs.png]</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECCIÓN 4: MAPA DE PLANTA E INDICADORES GEOGRÁFICOS -->
+    <section id="mapa" class="scroll-mt-24 space-y-12">
+        <div class="flex items-center gap-4">
+            <span class="text-xs font-black text-purple-400 bg-purple-400/10 px-3 py-1 rounded-full uppercase tracking-widest">Capítulo 04</span>
+            <div class="h-px bg-white/10 flex-1"></div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-16">
+            <div class="space-y-8">
+                <h2 class="text-4xl font-black text-white uppercase font-brand tracking-tighter">Mapa de Planta e Indicadores</h2>
+                <div class="prose prose-invert max-w-none space-y-8">
+                    <p class="text-slate-300 leading-relaxed text-sm">
+                        El Mapa de Planta es la representación <span class="text-purple-400 font-bold">digital twin</span> del taller. Permite a los supervisores visualizar el estado de toda la fábrica sin moverse de su escritorio.
+                    </p>
+                    
+                    <div class="space-y-6">
+                        <h4 class="text-white font-black text-xs uppercase tracking-widest flex items-center gap-2">
+                            <i class="fas fa-traffic-light text-purple-400"></i>
+                            Estados de las Tarjetas de Máquina
+                        </h4>
+                        <ul class="grid grid-cols-1 gap-4">
+                            <li class="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex items-start gap-4">
+                                <div class="w-4 h-4 rounded-full bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)] shrink-0 mt-1 animate-pulse"></div>
+                                <div>
+                                    <span class="text-white font-bold text-xs block mb-1 uppercase">Produciendo (Verde Neón)</span>
+                                    <p class="text-[10px] text-slate-400 leading-relaxed">Indica que la máquina tiene una tarea activa en el ERP y el operario está logueado. El sistema muestra la <span class="text-emerald-400">OP</span> y el <span class="text-emerald-400">% de avance</span> en tiempo real.</p>
+                                </div>
+                            </li>
+                            <li class="p-4 rounded-xl bg-rose-500/5 border border-rose-500/20 flex items-start gap-4">
+                                <div class="w-4 h-4 rounded-full bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.5)] shrink-0 mt-1"></div>
+                                <div>
+                                    <span class="text-white font-bold text-xs block mb-1 uppercase">Parada Crítica (Rojo)</span>
+                                    <p class="text-[10px] text-slate-400 leading-relaxed">La máquina no registra actividad. Si el tiempo de parada supera los 20 minutos, la tarjeta comienza a parpadear para atraer la atención del supervisor.</p>
+                                </div>
+                            </li>
+                            <li class="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20 flex items-start gap-4">
+                                <div class="w-4 h-4 rounded-full bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)] shrink-0 mt-1"></div>
+                                <div>
+                                    <span class="text-white font-bold text-xs block mb-1 uppercase">Mantenimiento (Azul)</span>
+                                    <p class="text-[10px] text-slate-400 leading-relaxed">Este estado congela los contadores de ocio. Se utiliza cuando el equipo está bajo revisión técnica programada o rotura informada.</p>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="p-6 rounded-2xl bg-amber-400/5 border border-amber-400/20 shadow-xl">
+                        <h4 class="text-amber-400 font-black uppercase text-xs tracking-widest flex items-center gap-2 mb-3">
+                             <i class="fas fa-user-secret"></i> Tareas Sin Asignar: El Agujero Negro
+                        </h4>
+                        <p class="text-[11px] text-slate-400 leading-relaxed">
+                            Este panel es el más importante para la gerencia. Muestra operarios que están <span class="text-white font-bold text-xs italic">dentro de una máquina pero sin haber elegido una tarea</span>. Esto es tiempo de presencia perdido que no genera valor y es la causa principal de la baja eficiencia global.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="space-y-6">
+                <!-- Imagen Mapa de Planta -->
+                <div class="relative bg-slate-900 rounded-[3rem] border border-white/10 overflow-hidden shadow-2xl aspect-video flex items-center justify-center group hover:border-purple-500/30 transition-all">
+                    {% if has_plant_map_img %}
+                        <img src="{% static 'img/manual/plant_map_main.png' %}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000">
+                    {% else %}
+                        <div class="text-center p-8">
+                            <i class="fas fa-project-diagram text-5xl text-slate-800 mb-4"></i>
+                            <p class="text-xs text-slate-600 font-bold uppercase tracking-widest text-[9px]">[CAPTURA: plant_map_main.png]</p>
+                        </div>
+                    {% endif %}
+                </div>
+                <!-- Miniatura de Trazabilidad -->
+                <div class="p-6 rounded-3xl bg-white/[0.02] border border-white/5 space-y-4">
+                    <h5 class="text-white font-black text-[10px] uppercase tracking-widest flex items-center gap-2">
+                        <i class="fas fa-project-diagram text-purple-400"></i>
+                        Lógica de Trazabilidad Directa
+                    </h5>
+                    <p class="text-[10px] text-slate-500 leading-relaxed">
+                        Las líneas y flechas que conectan las máquinas muestran el <span class="text-white font-bold">flujo de materiales</span>. El grosor de la línea representa el volumen de piezas que están "viajando" de un proceso al siguiente, permitiendo identificar acumulaciones de stock intermedio.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECCIÓN 5: ESTADÍSTICAS Y ANALÍTICAS -->
+    <section id="stats" class="scroll-mt-24 space-y-10">
+        <div class="flex items-center gap-4">
+            <span class="text-xs font-black text-blue-400 bg-blue-400/10 px-3 py-1 rounded-full uppercase tracking-widest">Capítulo 05</span>
+            <div class="h-px bg-white/10 flex-1"></div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:grid-flow-col-dense">
+            <div class="lg:col-start-2 space-y-8">
+                <h2 class="text-4xl font-black text-white uppercase font-brand tracking-tighter">Estadísticas y Analíticas</h2>
+                <div class="prose prose-invert max-w-none space-y-6">
+                    <p class="text-slate-300 leading-relaxed text-sm">
+                        Esta sección transforma el historial de datos en <span class="text-blue-400 font-bold">Inteligencia Estratégica</span>, permitiendo detectar cuellos de botella y mejorar el OEE estructural.
+                    </p>
+                    
+                    <div class="space-y-4">
+                        <div class="bg-white/5 p-5 rounded-2xl border border-white/10 hover:border-blue-500/30 transition-all">
+                            <h4 class="text-amber-400 font-black uppercase text-[10px] mb-2 flex items-center gap-2">
+                                <i class="fas fa-chart-line"></i> 1. Evolución de OEE General
+                            </h4>
+                            <p class="text-[11px] text-slate-400 leading-relaxed">
+                                Gráfico cronológico que muestra la salud productiva de la planta. Permite ver si las mejoras aplicadas están surtiendo efecto o si hay caídas sistemáticas en ciertos días.
+                            </p>
+                        </div>
+
+                        <div class="bg-white/5 p-5 rounded-2xl border border-white/10 hover:border-blue-500/30 transition-all">
+                            <h4 class="text-blue-400 font-black uppercase text-[10px] mb-2 flex items-center gap-2">
+                                <i class="fas fa-trophy"></i> 2. Ranking de Productividad
+                            </h4>
+                            <p class="text-[11px] text-slate-400 leading-relaxed">
+                                Identifica a los operarios más eficientes. No solo mide piezas, sino la relación entre <span class="text-white font-bold">Tiempo Real vs Standard</span>, premiando la calidad y la velocidad.
+                            </p>
+                        </div>
+
+                        <div class="bg-white/5 p-5 rounded-2xl border border-white/10 hover:border-orange-500/30 transition-all border-l-orange-500/30 border-l-4">
+                            <h4 class="text-orange-500 font-black uppercase text-[10px] mb-2 flex items-center gap-2">
+                                <i class="fas fa-chart-bar"></i> 3. Pareto de Detenciones Críticas
+                            </h4>
+                            <p class="text-[11px] text-slate-400 leading-relaxed">
+                                Revela las causas raíz de la mayoría de las paradas. Permite enfocar los recursos de mantenimiento en los problemas que causan el 80% del tiempo improductivo.
+                            </p>
+                        </div>
+
+                        <div class="bg-white/5 p-5 rounded-2xl border border-white/10 hover:border-purple-500/30 transition-all">
+                            <h4 class="text-purple-400 font-black uppercase text-[10px] mb-2 flex items-center gap-2">
+                                <i class="fas fa-draw-polygon"></i> 4. Comparativa por Sectores
+                            </h4>
+                            <p class="text-[11px] text-slate-400 leading-relaxed">
+                                Gráfico de Radar (Radar Chart) que visualiza el equilibrio entre áreas. Permite ver de un vistazo qué sector está rindiendo por debajo del promedio global.
+                            </p>
+                        </div>
+
+                        <div class="bg-white/5 p-5 rounded-2xl border border-white/10 hover:border-rose-500/30 transition-all border-l-rose-500/30 border-l-4">
+                            <h4 class="text-rose-500 font-black uppercase text-[10px] mb-2 flex items-center gap-2">
+                                <i class="fas fa-filter"></i> 5. Análisis de Cuellos de Botella
+                            </h4>
+                            <p class="text-[11px] text-slate-400 leading-relaxed">
+                                Muestra qué máquinas están limitando la capacidad total de la planta por exceso de detenciones o tiempos de carga lentos.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="lg:col-start-1">
+                <div class="space-y-6">
+                    <div class="relative bg-slate-900 rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl aspect-video flex items-center justify-center group hover:border-blue-500/30 transition-all">
+                        {% if has_stats_view_img %}
+                            <img src="{% static 'img/manual/stats_view.png' %}" class="w-full h-full object-contain">
+                        {% else %}
+                            <div class="text-center p-8">
+                                <i class="fas fa-chart-line text-4xl text-slate-700 mb-4"></i>
+                                <p class="text-xs text-slate-500 font-bold uppercase tracking-widest">[Captura: OEE]</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="relative bg-slate-900 rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl aspect-video flex items-center justify-center group hover:border-blue-500/30 transition-all">
+                        {% if has_stats_ranking_img %}
+                            <img src="{% static 'img/manual/stats_ranking.png' %}" class="w-full h-full object-contain">
+                        {% else %}
+                            <div class="text-center p-8">
+                                <i class="fas fa-users text-4xl text-slate-700 mb-4"></i>
+                                <p class="text-xs text-slate-500 font-bold uppercase tracking-widest">[Captura: Ranking]</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="relative bg-slate-900 rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl aspect-video flex items-center justify-center group hover:border-orange-500/30 transition-all">
+                        {% if has_stats_pareto_img %}
+                            <img src="{% static 'img/manual/stats_pareto.png' %}" class="w-full h-full object-contain">
+                        {% else %}
+                            <div class="text-center p-8">
+                                <i class="fas fa-chart-bar text-4xl text-slate-700 mb-4"></i>
+                                <p class="text-xs text-slate-500 font-bold uppercase tracking-widest">[Captura: Pareto]</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="relative bg-slate-900 rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl aspect-video flex items-center justify-center group hover:border-purple-500/30 transition-all">
+                        {% if has_stats_sectors_img %}
+                            <img src="{% static 'img/manual/stats_sectors.png' %}" class="w-full h-full object-contain">
+                        {% else %}
+                            <div class="text-center p-8">
+                                <i class="fas fa-chart-pie text-4xl text-slate-700 mb-4"></i>
+                                <p class="text-xs text-slate-500 font-bold uppercase tracking-widest">[Captura: Radar]</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="relative bg-slate-900 rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl aspect-video flex items-center justify-center group hover:border-rose-500/30 transition-all">
+                        {% if has_stats_bottlenecks_img %}
+                            <img src="{% static 'img/manual/stats_bottlenecks.png' %}" class="w-full h-full object-contain">
+                        {% else %}
+                            <div class="text-center p-8">
+                                <i class="fas fa-filter text-4xl text-slate-700 mb-4"></i>
+                                <p class="text-xs text-slate-500 font-bold uppercase tracking-widest">[Captura: Bottlenecks]</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECCIÓN 6: GESTIÓN DE MANTENIMIENTO 2.0 (PREVENTIVO Y CORRECTIVO) -->
+    <section id="mantenimiento" class="scroll-mt-24 space-y-12">
+        <div class="flex items-center gap-4">
+            <span class="text-xs font-black text-rose-400 bg-rose-400/10 px-3 py-1 rounded-full uppercase tracking-widest">Capítulo 06</span>
+            <div class="h-px bg-white/10 flex-1"></div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-16">
+            <div class="space-y-8">
+                <h2 class="text-4xl font-black text-white uppercase font-brand tracking-tighter">Gestión de Mantenimiento 2.0</h2>
+                <div class="prose prose-invert max-w-none space-y-8">
+                    <p class="text-slate-300 leading-relaxed text-sm">
+                        El nuevo motor de mantenimiento de <span class="text-amber-400">ABBA</span><span class="text-orange-500">MAT</span> trasciende el simple reporte de fallas. Es un sistema <span class="text-rose-500 font-bold">Predictivo-Correctivo</span> diseñado para que la planta nunca se detenga por sorpresa.
+                    </p>
+                    
+                    <div class="space-y-6">
+                        <div class="p-6 rounded-3xl bg-white/[0.03] border border-white/10 shadow-xl">
+                            <h4 class="text-rose-400 font-black uppercase text-xs mb-3 flex items-center gap-2">
+                                <i class="fas fa-heartbeat"></i> El Índice de Salud (Machine Health)
+                            </h4>
+                            <p class="text-[12px] text-slate-400 leading-relaxed">
+                                Ya no medimos solo si la máquina funciona. El sistema calcula un <span class="text-white font-bold">Porcentaje de Salud</span> basado en:
+                            </p>
+                            <ul class="mt-4 space-y-3">
+                                <li class="text-[11px] text-slate-300 flex items-start gap-4 p-3 rounded-xl bg-black/20">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0"></span>
+                                    <span><span class="text-white font-bold">Frecuencia de Uso:</span> El desgaste acumulado por horas de logueo efectivas.</span>
+                                </li>
+                                <li class="text-[11px] text-slate-300 flex items-start gap-4 p-3 rounded-xl bg-black/20">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 shrink-0"></span>
+                                    <span><span class="text-white font-bold">Agenda Preventiva:</span> Cuánto tiempo falta para el próximo service programado.</span>
+                                </li>
+                                <li class="text-[11px] text-slate-300 flex items-start gap-4 p-3 rounded-xl bg-black/20 border-l-2 border-rose-500">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-rose-500 mt-1.5 shrink-0 animate-pulse"></span>
+                                    <span><span class="text-white font-bold">Recurrencia de Fallas:</span> Si una máquina reporta el mismo error 3 veces en un mes, su salud cae drásticamente.</span>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div class="p-6 rounded-3xl bg-white/[0.03] border border-white/10 shadow-xl">
+                            <h4 class="text-slate-200 font-black uppercase text-xs mb-3 flex items-center gap-2">
+                                <i class="fas fa-microchip"></i> Reporte y Diagnóstico Ultrarápido
+                            </h4>
+                            <p class="text-[11px] text-slate-400 leading-relaxed">
+                                El operario puede reportar una falla en <span class="text-white font-bold">menos de 5 segundos</span>. Al hacerlo, el sistema captura automáticamente quién reportó, en qué máquina estaba trabajando y cuál era la OP activa. Esto elimina las "fallas anónimas" y permite auditar si el problema fue mecánico o de mala operación.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="space-y-8">
+                <!-- Visual del Dashboard de Mantenimiento -->
+                <div class="relative bg-slate-900 rounded-[3rem] border border-white/10 overflow-hidden shadow-2xl aspect-video flex items-center justify-center group hover:border-rose-500/30 transition-all">
+                    {% if has_maint_view_img %}
+                        <img src="{% static 'img/manual/maint_view.png' %}" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-1000">
+                    {% else %}
+                        <div class="text-center p-8">
+                            <i class="fas fa-tools text-5xl text-slate-800 mb-4"></i>
+                            <p class="text-xs text-slate-600 font-bold uppercase tracking-widest text-[9px]">[CAPTURA: maint_view.png]</p>
+                        </div>
+                    {% endif %}
+                </div>
+                <!-- Heatmap Concept -->
+                <div class="p-8 rounded-[2rem] bg-gradient-to-br from-rose-500/10 to-transparent border border-rose-500/10">
+                    <h5 class="text-rose-400 font-black text-[10px] uppercase tracking-widest flex items-center gap-2 mb-4">
+                        <i class="fas fa-fire-alt"></i> Mapa Térmico de Fallas (Heatmap)
+                    </h5>
+                    <p class="text-[11px] text-slate-400 leading-relaxed italic">
+                        El sistema genera una vista secundaria donde las máquinas cambian de color según su <span class="text-white">historial de paradas</span>. Una máquina que se ve "al rojo vivo" en el historial anual de mantenimiento es candidata a ser reemplazada por su alto costo de improductividad.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECCIÓN 7: SEGURIDAD Y BLINDAJE DE DATOS -->
+    <section id="backups" class="scroll-mt-24 space-y-12 pt-20">
+        <div class="flex items-center gap-4">
+            <span class="text-xs font-black text-amber-500 bg-amber-500/10 px-3 py-1 rounded-full uppercase tracking-widest">Capítulo 07</span>
+            <div class="h-px bg-white/10 flex-1"></div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:grid-flow-col-dense">
+            <div class="lg:col-start-2 space-y-8">
+                <h2 class="text-4xl font-black text-white uppercase font-brand tracking-tighter">Seguridad y Respaldo</h2>
+                <div class="prose prose-invert max-w-none space-y-8">
+                    <p class="text-slate-300 leading-relaxed text-sm">
+                        La continuidad operativa de <span class="text-amber-400 font-black">ABBA</span><span class="text-orange-500 font-black">MAT</span> se apoya en una <span class="text-white font-bold">Arquitectura de Triple Espejo</span>. No solo guardamos los datos, protegemos la historia de tu fábrica.
+                    </p>
+                    
+                    <div class="space-y-6">
+                        <div class="bg-white/5 p-6 rounded-[2rem] border border-white/10 shadow-2xl">
+                            <h4 class="text-amber-400 font-black uppercase text-xs mb-4 flex items-center gap-2">
+                                <i class="fas fa-shield-virus"></i> Capa 1: Resguardos Locales
+                            </h4>
+                            <p class="text-[12px] text-slate-400 leading-relaxed mb-4">
+                                El sistema puede generar instantáneas rápidas que se guardan en el servidor local. Este es el primer frente ante un error humano o de software.
+                            </p>
+                            <ul class="space-y-4">
+                                <li class="text-[11px] text-slate-300 flex items-start gap-3">
+                                    <i class="fas fa-database text-amber-500 mt-1"></i>
+                                    <span><span class="text-white font-bold">SQL Backup:</span> Contiene la lógica de las tablas. Es un archivo liviano que permite restaurar el sistema en segundos.</span>
+                                </li>
+                                <li class="text-[11px] text-slate-300 flex items-start gap-3">
+                                    <i class="fas fa-file-code text-blue-400 mt-1"></i>
+                                    <span><span class="text-white font-bold">ZIP de Sistema:</span> Empaqueta todo el código fuente y las capturas del manual. Es el "Seguro de Vida" total del portal.</span>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div class="bg-white/5 p-6 rounded-[2rem] border border-white/10 shadow-2xl border-l-blue-500/30">
+                            <h4 class="text-blue-400 font-black uppercase text-xs mb-4 flex items-center gap-2">
+                                <i class="fab fa-github"></i> Capa 2: Cloud Sync (GitHub Integration)
+                            </h4>
+                            <p class="text-[12px] text-slate-400 leading-relaxed">
+                                Para evitar la pérdida de datos ante una rotura física del servidor, ABBAMAT incluye un puente directo con <span class="text-white">GitHub</span>. Al activar la sincronización, los cambios se envían a un repositorio privado e inalterable, permitiendo la <span class="text-blue-400 font-bold">Recuperación Ante Desastres (DRP)</span> en un servidor nuevo en cuestión de minutos.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="lg:col-start-1">
+                <div class="space-y-8">
+                    <div class="relative bg-slate-900 rounded-[3rem] border border-white/10 overflow-hidden shadow-2xl aspect-video flex items-center justify-center group hover:border-amber-400/30 transition-all">
+                        {% if has_backup_img %}
+                            <img src="{% static 'img/manual/backup_main.png' %}" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-1000">
+                        {% else %}
+                            <div class="text-center p-8">
+                                <i class="fas fa-shield-alt text-6xl text-slate-800 mb-4"></i>
+                                <p class="text-xs text-slate-600 font-bold uppercase tracking-widest text-[9px]">[CAPTURA: backup_main.png]</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="p-6 rounded-2xl bg-amber-400/10 border border-amber-400/20 text-center">
+                        <p class="text-[10px] text-amber-400 font-black uppercase tracking-widest">
+                            AVISO: Solo usuarios con rango GESTIÓN pueden acceder a esta sección.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Auditoría de Historial -->
+        <div class="bg-white/[0.03] border border-white/10 rounded-[2.5rem] p-12 mt-12 shadow-inner">
+            <div class="flex flex-col lg:flex-row gap-16">
+                <div class="flex-1 space-y-8">
+                    <h4 class="text-3xl font-black text-white uppercase tracking-tighter">Auditoría y Gestión de Resguardos</h4>
+                    <p class="text-sm text-slate-400 leading-relaxed">
+                        Cada vez que se realiza un resguardo, el sistema deja una <span class="text-white">Huella Digital</span>. Estas son las claves para gestionar el almacenamiento:
+                    </p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div class="p-5 rounded-2xl bg-black/40 border border-emerald-500/20">
+                            <span class="text-[10px] font-black text-emerald-400 uppercase block mb-2"><i class="fas fa-check-circle"></i> Estado Sanitario</span>
+                            <p class="text-[11px] text-slate-500">Un estado "Completado" garantiza que el archivo no tiene errores y es booteable.</p>
+                        </div>
+                        <div class="p-5 rounded-2xl bg-black/40 border border-amber-500/20">
+                            <span class="text-[10px] font-black text-amber-400 uppercase block mb-2"><i class="fas fa-weight-hanging"></i> Control de Carga</span>
+                            <p class="text-[11px] text-slate-500">Monitorear el peso en MB. Si el tamaño del SQL crece abruptamente, reporte al admin.</p>
+                        </div>
+                    </div>
+                    <div class="space-y-6 pt-6 border-t border-white/10">
+                        <h5 class="text-white font-black text-xs uppercase tracking-widest flex items-center gap-2">
+                             Acciones de Emergencia
+                        </h5>
+                        <div class="grid grid-cols-1 gap-2">
+                            <div class="flex items-center gap-4 p-4 rounded-xl hover:bg-white/[0.04] transition-colors border border-transparent hover:border-white/10">
+                                <div class="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-500"><i class="fas fa-download"></i></div>
+                                <div>
+                                    <p class="text-[11px] text-white font-bold">Extraer al PC Local</p>
+                                    <p class="text-[10px] text-slate-500">Mueve el archivo fuera del servidor para seguridad física.</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-4 p-4 rounded-xl hover:bg-white/[0.04] transition-colors border border-transparent hover:border-emerald-500/10">
+                                <div class="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-500"><i class="fas fa-undo"></i></div>
+                                <div>
+                                    <p class="text-[11px] text-white font-bold text-emerald-400">Restauración en Caliente</p>
+                                    <p class="text-[10px] text-slate-500">Vuelve el sistema atrás en segundos. PRECAUCIÓN: Sobrescribe datos actuales.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="w-full lg:w-1/2">
+                    <div class="relative bg-slate-900 rounded-[3rem] border border-white/10 overflow-hidden shadow-2xl aspect-[16/7] flex items-center justify-center group hover:border-amber-400/30 transition-all">
+                        {% if has_backup_history_img %}
+                            <img src="{% static 'img/manual/backup_history.png' %}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000">
+                        {% else %}
+                            <div class="text-center p-8">
+                                <i class="fas fa-history text-5xl text-slate-800 mb-4"></i>
+                                <p class="text-xs text-slate-600 font-bold uppercase tracking-widest text-[9px]">[CAPTURA: backup_history.png]</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Continuará... -->
+
+    <!-- Continuará... -->
+    <div class="text-center py-10">
+        <p class="text-slate-600 font-black uppercase tracking-[0.4em] text-xs">Desarrollado para ABBAMAT &copy; 2026</p>
+    </div>
+</div>
+{% endblock %}

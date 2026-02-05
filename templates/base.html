@@ -79,7 +79,7 @@
             <div class="w-10 h-10 rounded-lg bg-white flex items-center justify-center shadow-lg overflow-hidden gold-border-glow">
                 <img src="/static/img/logoAbbamat.png" alt="Logo" class="w-full h-full object-contain p-1">
             </div>
-            <span class="text-2xl font-black font-brand tracking-tighter text-white">ABBA<span class="text-amber-400">MAT</span></span>
+            <span class="text-2xl font-black font-brand tracking-tighter text-white"><span class="text-amber-400">ABBA</span><span class="text-orange-500">MAT</span></span>
         </div>
 
         <nav class="flex-1 overflow-y-auto py-6 px-3 space-y-1.5">
@@ -108,6 +108,10 @@
             <a href="{% url 'gestion_backups' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all group {% if 'backup' in request.resolver_match.url_name %}bg-white/10 border border-white/10 text-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.15)]{% else %}text-slate-400 hover:bg-white/5 hover:text-white{% endif %}">
                 <i class="fas fa-database w-5 text-center group-hover:scale-110 transition-transform"></i>
                 <span class="text-sm font-bold tracking-wide">Backups</span>
+            </a>
+            <a href="{% url 'manual_usuario' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all group {% if request.resolver_match.url_name == 'manual_usuario' %}bg-white/10 border border-white/10 text-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.15)]{% else %}text-slate-400 hover:bg-white/5 hover:text-white{% endif %}">
+                <i class="fas fa-book w-5 text-center group-hover:scale-110 transition-transform"></i>
+                <span class="text-sm font-bold tracking-wide">Manual de Usuario</span>
             </a>
 
             <div class="text-[10px] font-extrabold text-slate-500 uppercase tracking-[0.2em] px-3 mt-8 mb-2">Personal & Hub</div>

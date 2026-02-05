@@ -1,5 +1,7 @@
 from django.db import connections
 import json
+import os
+from django.conf import settings
 import datetime
 from django.shortcuts import render, redirect, get_object_or_404
 from django.db import models
@@ -1964,21 +1966,33 @@ def lista_mantenimiento(request):
                     details.append(msg)
                     agenda_msg = msg
                 
-            if status != 'OK':
-                preventivos.append({
-                    'maquina': m,
-                    'used_hours': round(used_hours, 1),
-                    'limit_hours': m.frecuencia_preventivo_horas,
-                    'progress': min(round(completion_pct, 1), 100),
-                    'status': status,
-                    'last_service': m.fecha_ultimo_preventivo,
-                    'next_service_date': m.fecha_proximo_preventivo,
-                    'agenda_msg': agenda_msg,
-                    'days_diff': days_diff
-                })
+            # Lógica de Salud (Inversa al progreso de horas)
+            salud = 100 - min(round(completion_pct, 1), 100)
             
-    # Ordenar: Críticos primero
-    preventivos.sort(key=lambda x: (x['status'] == 'CRITICAL', x['progress']), reverse=True)
+            # SI está vencido por FECHA o crítico por HORAS, la salud es 0
+            if status == 'CRITICAL':
+                salud = 0
+            elif status == 'WARNING' and days_diff is not None and days_diff <= 7:
+                # Si falta poco para el vencimiento por fecha, bajamos la salud proporcionalmente
+                date_health = (max(0, days_diff) / 7.0) * 100.0
+                salud = min(salud, date_health)
+
+            # SIEMPRE agregar a la lista si tiene datos configurados, para visibilidad total
+            preventivos.append({
+                'maquina': m,
+                'used_hours': round(used_hours, 1),
+                'limit_hours': m.frecuencia_preventivo_horas,
+                'progress': min(round(completion_pct, 1), 100),
+                'salud': round(salud, 0),
+                'status': status,
+                'last_service': m.fecha_ultimo_preventivo,
+                'next_service_date': m.fecha_proximo_preventivo,
+                'agenda_msg': agenda_msg,
+                'days_diff': days_diff
+            })
+            
+    # Ordenar: Críticos primero, luego por menor salud
+    preventivos.sort(key=lambda x: (x['status'] == 'CRITICAL', -x['salud']), reverse=True)
 
     # Conteos para los cuadros de arriba
     today_local = timezone.localtime(timezone.now()).date()
@@ -2182,7 +2196,7 @@ def estadisticas_avanzadas(request):
         perf = ((aggregation['sum_std'] or 0) / (prod_mins_only / 60.0)) if prod_mins_only > 0 else 0
         
         oee_day = min(100.0, (avail * perf * 1.0) * 100) if d_loop.weekday() != 6 else 0
-        trend_data.append({'date': d_loop.strftime('%d/%m'), 'oee': round(oee_day, 1)})
+        trend_data.append({'full_date': d_loop.strftime('%Y-%m-%d'), 'date': d_loop.strftime('%d/%m'), 'oee': round(oee_day, 1)})
 
         # --- Machine & Bottleneck Accumulation ---
         # Calculamos tiempo perdido por máquina
@@ -2361,6 +2375,157 @@ def estadisticas_avanzadas(request):
         'chart_json': json.dumps(chart_json),
         'ranking_data': ranking_list[:20] 
     })
+
+def detalle_oee_dia(request):
+    """
+    Retorna un desglose extremadamente detallado del OEE para un día específico.
+    """
+    fecha_str = request.GET.get('date')
+    if not fecha_str:
+        return JsonResponse({'error': 'No date provided'}, status=400)
+    
+    try:
+        from dateutil import parser
+        fecha_target = parser.parse(fecha_str).date()
+    except:
+        return JsonResponse({'error': 'Invalid date format'}, status=400)
+
+    # 1. Base Query for the day
+    qs_day = VTMan.objects.extra(where=["CONVERT(date, FECHA) = %s"], params=[fecha_str])
+    
+    if not qs_day.exists():
+        return JsonResponse({'error': 'No data for this date', 'date': fecha_str}, status=404)
+
+    # 2. Global Totals
+    agg = qs_day.aggregate(
+        total_real=Sum('tiempo_minutos'),
+        total_std=Sum('tiempo_cotizado'),
+        total_qty=Sum('cantidad_producida'),
+        prod_mins=Sum(models.Case(models.When(es_interrupcion=False, then='tiempo_minutos'), default=0, output_field=models.FloatField())),
+        stop_mins=Sum(models.Case(models.When(es_interrupcion=True, then='tiempo_minutos'), default=0, output_field=models.FloatField()))
+    )
+
+    # 3. Machine Breakdown
+    machine_data = []
+    machine_logs = {}
+    operator_logs = {}
+    m_configs = {m.id_maquina: {'nombre': m.nombre, 'tipo': m.tipo_maquina} for m in MaquinaConfig.objects.all()}
+    all_ops_db = {o.legajo: o.nombre for o in OperarioConfig.objects.all()}
+    
+    # Pre-fetch and group logs
+    for reg in qs_day.order_by('hora_inicio'):
+        mid = str(reg.id_maquina).strip()
+        uid = str(reg.id_concepto).strip()
+        
+        h_ini = reg.hora_inicio.strftime('%H:%M') if reg.hora_inicio else '??'
+        h_fin = reg.hora_fin.strftime('%H:%M') if reg.hora_fin else '??'
+        
+        entry = {
+            'time': f"{h_ini} - {h_fin}",
+            'order': reg.id_orden or '---',
+            'article': reg.articulod[:40] if reg.articulod else '---',
+            'qty': round(reg.cantidad_producida or 0, 1),
+            'mins': round(reg.tiempo_minutos or 0, 1),
+            'std': round((reg.tiempo_cotizado or 0) * 60, 1),
+            'obs': reg.observaciones or '',
+            'is_stop': reg.es_interrupcion or 'DESCANSO' in (reg.articulod or '').upper()
+        }
+        
+        if mid not in machine_logs: machine_logs[mid] = []
+        machine_logs[mid].append(entry)
+        
+        if uid and uid != 'None':
+            if uid not in operator_logs: operator_logs[uid] = []
+            operator_logs[uid].append(entry)
+
+    m_breakdown = qs_day.values('id_maquina').annotate(
+        ts=Sum('tiempo_cotizado'),
+        tr=Sum('tiempo_minutos'),
+        tq=Sum('cantidad_producida'),
+        tp=Sum(models.Case(models.When(es_interrupcion=False, then='tiempo_minutos'), default=0, output_field=models.FloatField())),
+        ti=Sum(models.Case(models.When(es_interrupcion=True, then='tiempo_minutos'), default=0, output_field=models.FloatField()))
+    )
+
+    for mb in m_breakdown:
+        mid = mb['id_maquina']
+        m_real = mb['tr'] or 0
+        m_std = mb['ts'] or 0
+        m_stop = mb['ti'] or 0
+        m_prod = mb['tp'] or 0
+        
+        m_avail = (m_prod / m_real * 100) if m_real > 0 else 0
+        m_perf = (m_std / (m_prod / 60.0) * 100) if m_prod > 0 else 0
+        m_oee = (m_avail * m_perf / 100.0)
+        
+        machine_data.append({
+            'id': mid,
+            'name': m_configs.get(mid, {}).get('nombre', mid),
+            'oee': round(min(100.0, m_oee), 1),
+            'qty': mb['tq'] or 0,
+            'lost_mins': round(m_stop, 0),
+            'std_mins': round((mb['ts'] or 0) * 60, 1),
+            'avail': round(m_avail, 1),
+            'perf': round(m_perf, 1),
+            'logs': machine_logs.get(mid, [])
+        })
+    
+    machine_data.sort(key=lambda x: x['oee'], reverse=True)
+
+    # 4. Paradas Detalladas (Pareto)
+    paradas_qs = qs_day.filter(Q(es_interrupcion=True) | Q(articulod__icontains='DESCANSO'))
+    paradas_dict = {}
+    for p in paradas_qs:
+        reason = (p.observaciones or p.articulod or "OTRO").strip().upper()[:40]
+        paradas_dict[reason] = paradas_dict.get(reason, 0) + (p.tiempo_minutos or 0)
+    
+    paradas_list = sorted([{'reason': k, 'mins': round(v, 1)} for k, v in paradas_dict.items()], key=lambda x: x['mins'], reverse=True)
+    
+    # 5. Operarios Top
+    ops_breakdown = qs_day.values('id_concepto').annotate(
+        ts=Sum('tiempo_cotizado'),
+        tr=Sum('tiempo_minutos'),
+        tq=Sum('cantidad_producida')
+    )
+    ops_list = []
+    for ob in ops_breakdown:
+        uid = str(ob['id_concepto']).strip()
+        if not uid or uid == 'None': continue
+        o_real = ob['tr'] or 0
+        o_std = ob['ts'] or 0
+        o_perf = (o_std / (o_real/60.0) * 100) if o_real > 0 else 0
+        
+        ops_list.append({
+            'uid': uid,
+            'name': all_ops_db.get(uid, uid),
+            'perf': round(o_perf, 1),
+            'qty': ob['tq'] or 0,
+            'logs': operator_logs.get(uid, [])
+        })
+    ops_list.sort(key=lambda x: x['perf'], reverse=True)
+
+    # 6. Global KPIs calculation (Same logic as trend)
+    active_machines_count = len(m_breakdown) or 1
+    total_planned_mins = active_machines_count * 540 # 9hs
+    global_avail = min(1.0, (agg['total_real'] or 0) / total_planned_mins) if total_planned_mins > 0 else 0
+    global_perf = ((agg['total_std'] or 0) / (agg['prod_mins'] / 60.0)) if agg['prod_mins'] and agg['prod_mins'] > 0 else 0
+    global_oee = (global_avail * global_perf * 100) if fecha_target.weekday() != 6 else 0
+
+    response_data = {
+        'date': fecha_target.strftime('%d/%m/%Y'),
+        'global': {
+            'oee': round(min(100, global_oee), 1),
+            'availability': round(global_avail * 100, 1),
+            'performance': round(global_perf * 100, 1),
+            'quality': 100.0, # Placeholder or calculate if possible
+            'units': agg['total_qty'] or 0,
+            'stopped_mins': round(agg['stop_mins'] or 0, 1)
+        },
+        'machines': machine_data,
+        'downtime': paradas_list[:10],
+        'operators': ops_list[:10]
+    }
+
+    return JsonResponse(response_data)
 
 def check_alerts(request):
     """
@@ -3026,3 +3191,30 @@ def gestionar_alertas(request):
         'config': config,
         'historial': historial
     })
+
+def manual_usuario(request):
+    """
+    Renderiza el manual de usuario completo del sistema.
+    Chequea si existen las imágenes de captura para mostrarlas.
+    """
+    manual_dir = os.path.join(settings.BASE_DIR, 'static', 'img', 'manual')
+    
+    context = {
+        'has_dashboard_img': os.path.exists(os.path.join(manual_dir, 'dashboard_main.png')),
+        'has_topbar_img': os.path.exists(os.path.join(manual_dir, 'topbar_utils.png')),
+        'has_sidebar_img': os.path.exists(os.path.join(manual_dir, 'sidebar_menu.png')),
+        'has_audit_img': os.path.exists(os.path.join(manual_dir, 'audit_logs.png')),
+        'has_plant_map_img': os.path.exists(os.path.join(manual_dir, 'plant_map_main.png')),
+        'has_stats_view_img': os.path.exists(os.path.join(manual_dir, 'stats_view.png')),
+        'has_stats_ranking_img': os.path.exists(os.path.join(manual_dir, 'stats_ranking.png')),
+        'has_stats_pareto_img': os.path.exists(os.path.join(manual_dir, 'stats_pareto.png')),
+        'has_stats_sectors_img': os.path.exists(os.path.join(manual_dir, 'stats_sectors.png')),
+        'has_stats_bottlenecks_img': os.path.exists(os.path.join(manual_dir, 'stats_bottlenecks.png')),
+        'has_maint_view_img': os.path.exists(os.path.join(manual_dir, 'maint_view.png')),
+        'has_maint_preventive_img': os.path.exists(os.path.join(manual_dir, 'maint_preventive.png')),
+        'has_maint_heatmap_img': os.path.exists(os.path.join(manual_dir, 'maint_heatmap.png')),
+        'has_backup_img': os.path.exists(os.path.join(manual_dir, 'backup_main.png')),
+        'has_backup_history_img': os.path.exists(os.path.join(manual_dir, 'backup_history.png')),
+    }
+    
+    return render(request, 'dashboard/manual.html', context)

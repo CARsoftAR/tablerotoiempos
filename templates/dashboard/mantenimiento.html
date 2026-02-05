@@ -3,333 +3,238 @@
 {% block title %}Gestión de Mantenimiento - ABBAMAT{% block title_end %}{% endblock %}{% endblock %}
 
 {% block content %}
-<div class="space-y-8 animate-fadeIn">
-    
-    <!-- Top Header Premium -->
-    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900 p-8 rounded-[2.5rem] border border-white/5 shadow-2xl relative overflow-hidden group">
-        <div class="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-amber-500 opacity-5 blur-3xl group-hover:opacity-10 transition-opacity"></div>
-        <div class="relative z-10">
-            <div class="flex items-center gap-3">
-                <h1 class="text-3xl font-black text-white font-brand uppercase tracking-tighter leading-none">Centro de <span class="text-amber-400">Mantenimiento</span></h1>
-                <span class="px-2 py-0.5 rounded bg-amber-400 text-black text-[8px] font-black uppercase tracking-widest mt-1">Gold Edition</span>
-            </div>
-            <div class="flex items-center gap-2 mt-2">
-                <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-                <p class="text-slate-400 text-xs font-bold uppercase tracking-widest">Gestión de Activos & Predictivo</p>
-            </div>
-        </div>
-        <button onclick="document.getElementById('modal-reporte').classList.remove('hidden')" 
-            class="relative z-10 bg-amber-400 hover:bg-white text-black px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-[0_0_20px_rgba(251,191,36,0.2)] transition-all transform hover:-translate-y-1 active:scale-95 flex items-center gap-2 group/btn">
-            <i class="fas fa-plus group-hover/btn:scale-125 transition-transform"></i> Reportar Nueva Falla
-        </button>
-    </div>
-
-    <!-- Stats Grid Premium -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <!-- Pendientes -->
-        <div class="bg-slate-900 p-6 rounded-[2rem] border border-white/5 flex items-center gap-5 shadow-xl relative overflow-hidden group">
-            <div class="absolute inset-0 bg-gradient-to-br from-red-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div class="w-14 h-14 bg-red-500/10 text-red-500 rounded-2xl flex items-center justify-center text-2xl shadow-inner border border-red-500/20 relative z-10">
-                <i class="fas fa-radiation"></i>
-            </div>
-            <div class="relative z-10">
-                <p class="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Averías Críticas</p>
-                <h3 class="text-4xl font-black text-white font-brand">{{ counts.abiertos }}</h3>
-            </div>
-        </div>
-        <!-- En Reparación -->
-        <div class="bg-slate-900 p-6 rounded-[2rem] border border-white/5 flex items-center gap-5 shadow-xl relative overflow-hidden group">
-            <div class="absolute inset-0 bg-gradient-to-br from-amber-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div class="w-14 h-14 bg-amber-500/10 text-amber-500 rounded-2xl flex items-center justify-center text-2xl shadow-inner border border-amber-500/20 relative z-10">
-                <i class="fas fa-vial"></i>
-            </div>
-            <div class="relative z-10">
-                <p class="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mb-1">En Reparación</p>
-                <h3 class="text-4xl font-black text-white font-brand">{{ counts.proceso }}</h3>
-            </div>
-        </div>
-        <!-- Finalizadas -->
-        <div class="bg-slate-900 p-6 rounded-[2rem] border border-white/5 flex items-center gap-5 shadow-xl relative overflow-hidden group">
-            <div class="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div class="w-14 h-14 bg-emerald-500/10 text-emerald-500 rounded-2xl flex items-center justify-center text-2xl shadow-inner border border-emerald-500/20 relative z-10">
-                <i class="fas fa-shield-alt"></i>
-            </div>
-            <div class="relative z-10">
-                <p class="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Recuperadas (24h)</p>
-                <h3 class="text-4xl font-black text-white font-brand">{{ counts.cerrados_hoy }}</h3>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Módulo de Mantenimiento Predictivo "Live" -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-        <!-- Heatmap de Averías (2/3 de ancho) -->
-        <div class="lg:col-span-2 bg-slate-900 rounded-[2.5rem] p-8 border border-white/10 shadow-2xl relative overflow-hidden group">
-            <div class="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
-                <i class="fas fa-fire-alt text-8xl text-amber-500"></i>
-            </div>
-            <div class="flex justify-between items-center mb-8 relative z-10">
-                <div>
-                <div class="flex items-center gap-3">
-                    <h2 class="text-xl font-black text-white font-brand uppercase tracking-tighter">Concentración de Fallas</h2>
-                    <button onclick="openPredictiveHelp()" class="w-8 h-8 rounded-full bg-amber-500/10 text-amber-500 hover:bg-amber-500 hover:text-black flex items-center justify-center transition-all border border-amber-500/20 group/help shadow-lg" title="Ayuda Predictiva">
-                        <i class="fas fa-question text-xs group-hover/help:scale-110 transition-transform"></i>
-                    </button>
-                </div>
-                <p class="text-slate-500 text-xs font-bold">Distribución de incidencias en los últimos 30 días</p>
-                </div>
-                <div class="bg-amber-500/10 text-amber-500 px-4 py-1.5 rounded-full text-[10px] font-black border border-amber-500/20 uppercase tracking-widest">
-                    Live Analytics
-                </div>
-            </div>
-            
-            <div id="maint-heatmap" class="min-h-[300px] w-full"></div>
-        </div>
-
-        <!-- Acceso Rápido / Tips -->
-        <div class="bg-gradient-to-br from-amber-600 to-amber-900 rounded-[2.5rem] p-8 text-white shadow-2xl shadow-amber-900/20 flex flex-col justify-between">
-            <div>
-                <div class="w-14 h-14 bg-white/20 backdrop-blur-xl rounded-2xl flex items-center justify-center text-2xl mb-6 border border-white/10">
-                    <i class="fas fa-magic"></i>
-                </div>
-                <h3 class="text-2xl font-black font-brand leading-tight mb-4">Inteligencia Predictiva</h3>
-                <p class="text-amber-100/80 text-sm leading-relaxed mb-6 font-medium">
-                    El sistema analiza automáticamente las horas reales de uso reportadas por el ERP para calcular el desgaste real de los componentes, independientemente del calendario habitual.
-                </p>
-            </div>
-            
-            <div class="space-y-4">
-                <div class="flex items-center gap-4 bg-black/20 p-4 rounded-2xl border border-white/5">
-                    <div class="w-10 h-10 rounded-xl bg-amber-400 text-amber-900 flex items-center justify-center font-black">
-                        <i class="fas fa-microchip"></i>
-                    </div>
-                    <div>
-                        <p class="text-[10px] font-black uppercase tracking-widest text-amber-300">Algoritmo</p>
-                        <p class="text-xs font-bold text-white">Uso Real vs Teórico</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Mantenimiento Preventivo Premium -->
-    {% if preventivos %}
-    <div class="mb-2">
-        <h2 class="text-lg font-black text-white flex items-center gap-3 mb-6 uppercase tracking-tighter font-brand">
-            <i class="fas fa-hourglass-half text-amber-400"></i> Plan de <span class="text-amber-400">Mantenimiento</span> Preventivo
-        </h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {% for p in preventivos %}
-            <div class="bg-slate-900 rounded-[2rem] border border-white/5 p-6 shadow-2xl hover:border-amber-500/30 transition-all relative overflow-hidden group">
-                <!-- Status Glow -->
-                <div class="absolute -top-24 -right-24 w-48 h-48 rounded-full blur-[80px] opacity-20
-                    {% if p.status == 'CRITICAL' %}bg-red-500
-                    {% elif p.status == 'WARNING' %}bg-amber-500
-                    {% else %}bg-emerald-500{% endif %}"></div>
-                
-                <div class="flex justify-between items-start mb-6 relative z-10">
-                    <div>
-                       <h3 class="font-black text-white text-base font-brand">{{ p.maquina.nombre }}</h3>
-                       <span class="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em]">Service c/ {{ p.limit_hours }} Horas</span>
-                    </div>
-                    <div class="flex flex-col items-end">
-                        <div class="text-2xl font-black font-brand
-                            {% if p.status == 'CRITICAL' %}text-red-500 animate-pulse
-                            {% elif p.status == 'WARNING' %}text-amber-400
-                            {% else %}text-emerald-400{% endif %}">
-                            {{ p.progress|floatformat:0 }}%
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="flex justify-between items-end mb-4 relative z-10">
-                     <div class="flex flex-col">
-                        <span class="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-1">Horas de Uso</span>
-                        <span class="text-sm font-tech font-bold text-white">{{ p.used_hours }} </span>
-                     </div>
-                     <div class="flex flex-col text-right">
-                        <span class="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-1">Próxima Fecha</span>
-                        {% if p.agenda_msg %}
-                            <span class="text-[10px] font-black {% if p.status == 'CRITICAL' %}text-red-500{% else %}text-amber-400{% endif %}">
-                                <i class="fas fa-calendar-times mr-1"></i>{{ p.agenda_msg }}
-                            </span>
-                        {% elif p.next_service_date %}
-                            <span class="text-[10px] text-white font-bold">{{ p.next_service_date|date:"d/m/Y" }}</span>
-                        {% else %}
-                             <span class="text-[10px] text-slate-600 italic font-bold">S/ Programar</span>
-                        {% endif %}
-                     </div>
-                </div>
-                
-                <!-- GOLDEN PROGRESS BAR -->
-                <div class="w-full h-3 bg-black/40 rounded-full overflow-hidden mb-6 relative shadow-[inset_0_2px_4px_rgba(0,0,0,0.5)] border border-white/5">
-                    <div class="h-full rounded-full transition-all duration-1000 
-                        {% if p.status == 'CRITICAL' %}bg-gradient-to-r from-red-600 to-rose-400 shadow-[0_0_15px_rgba(244,63,94,0.4)]
-                        {% elif p.status == 'WARNING' %}bg-gradient-to-r from-amber-600 via-yellow-400 to-amber-200 shadow-[0_0_15px_rgba(251,191,36,0.3)]
-                        {% else %}bg-gradient-to-r from-emerald-600 to-teal-400 shadow-[0_0_15px_rgba(16,185,129,0.3)]{% endif %}"
-                        style="width: {{ p.progress }}%"></div>
-                </div>
-                
-                {% if p.status == 'CRITICAL' or p.status == 'WARNING' %}
-                <button onclick="document.getElementById('modal-reporte').classList.remove('hidden'); setTimeout(() => { document.querySelector('select[name=maquina]').value='{{ p.maquina.id }}'; document.querySelector('select[name=tipo]').value='PREVENTIVO'; document.querySelector('textarea[name=descripcion]').value='Mantenimiento Preventivo:{% if p.agenda_msg %} Calendario - {{ p.agenda_msg }}{% else %} {{ p.limit_hours }} Horas (Uso: {{ p.used_hours }}h){% endif %}'; }, 100);" 
-                    class="w-full py-3 rounded-xl bg-amber-400 text-black text-[10px] font-black uppercase tracking-[0.2em] transition-all border border-amber-500 shadow-[0_0_20px_rgba(251,191,36,0.2)] hover:bg-white flex items-center justify-center gap-2 group/btn">
-                    <i class="fas fa-calendar-check group-hover/btn:scale-110"></i> Agendar Service
-                </button>
-                {% else %}
-                 <div class="w-full py-3 rounded-xl bg-emerald-500/10 text-emerald-500 text-[10px] font-black uppercase tracking-[0.2em] text-center border border-emerald-500/20 flex items-center justify-center gap-2">
-                    <i class="fas fa-check-circle animate-pulse"></i> Sistema Operativo OK
-                </div>
-                {% endif %}
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-    {% endif %}
-
-    <!-- Active Incidents Premium -->
-    <div class="bg-slate-900 rounded-[2.5rem] shadow-2xl border border-white/5 overflow-hidden group/active">
-        <div class="p-8 border-b border-white/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/[0.02]">
-            <h2 class="text-xl font-black text-white flex items-center gap-3 font-brand uppercase tracking-tighter">
-                <i class="fas fa-satellite-dish text-amber-400 animate-pulse"></i> Panel de Incidencias <span class="text-amber-400">Activas</span>
-            </h2>
-            <div class="flex gap-3">
-                <div class="relative">
-                    <select class="bg-black/40 border border-white/10 text-white text-[10px] font-black uppercase tracking-widest rounded-xl px-4 py-2.5 outline-none focus:border-amber-500/50 appearance-none cursor-pointer pr-10" id="filter-status">
-                        <option value="">TODOS LOS ESTADOS</option>
-                        <option value="ABIERTO">PENDIENTES</option>
-                        <option value="PROCESO">EN REPARACIÓN</option>
-                    </select>
-                    <i class="fas fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 pointer-events-none"></i>
-                </div>
-            </div>
-        </div>
+<div class="max-w-[1600px] mx-auto">
+    <!-- Main Dashboard Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
-        <div class="p-8">
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {% for inc in incidencias %}
-                {% if inc.estado != 'CERRADO' %}
-                <div class="bg-white/[0.03] backdrop-blur-md rounded-[2rem] border border-white/5 p-8 hover:border-amber-500/30 transition-all flex flex-col justify-between group/card relative overflow-hidden h-full">
-                    <div class="absolute -top-24 -left-24 w-48 h-48 bg-amber-500/5 rounded-full blur-[80px] group-hover/card:bg-amber-500/10 transition-colors"></div>
-                    
-                    <div class="relative z-10">
-                        <div class="flex justify-between items-start mb-6">
-                            <span class="px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border 
-                                {% if inc.estado == 'ABIERTO' %}bg-red-500/10 text-red-500 border-red-500/20{% else %}bg-amber-500/10 text-amber-400 border-amber-500/20{% endif %}">
-                                <i class="fas fa-circle mr-1.5 text-[6px] animate-pulse"></i> {{ inc.get_estado_display }}
-                            </span>
-                            <div class="flex flex-col items-end gap-2 text-right">
-                                <span class="text-slate-500 text-[10px] font-black uppercase tracking-widest">{{ inc.fecha_reporte|date:"H:i" }} hs</span>
-                                <button type="button" onclick="confirmDelete('{{ inc.pk }}', '{{ inc.maquina.nombre }}')" 
-                                   class="text-white/10 hover:text-red-500 transition-colors p-1" title="Borrar">
-                                    <i class="fas fa-trash-alt text-[10px]"></i>
-                                </button>
-                            </div>
-                        </div>
+        <!-- Left Column: Actions & Machine Status (Col 8) -->
+        <div class="lg:col-span-8 space-y-6">
+            
+            <!-- Super Action Button (20% Smaller) -->
+            <button onclick="document.getElementById('modal-reporte').classList.remove('hidden')" 
+                    class="w-full bg-gradient-to-r from-orange-600 to-orange-400 hover:from-orange-500 hover:to-orange-300 text-white py-4 rounded-2xl shadow-lg transition-all transform hover:-translate-y-1 active:scale-[0.98] group relative overflow-hidden">
+                <div class="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(255,255,255,0.15),transparent_70%)]"></div>
+                <div class="relative flex items-center justify-center gap-3">
+                    <div class="w-10 h-10 bg-white/20 backdrop-blur-md rounded-lg flex items-center justify-center text-xl border border-white/20 group-hover:rotate-12 transition-transform">
+                        <i class="fas fa-plus"></i>
+                    </div>
+                    <span class="text-2xl font-black uppercase tracking-tighter">Reportar Nueva Falla</span>
+                </div>
+            </button>
 
-                        <div class="flex items-center gap-4 mb-6">
-                            <div class="w-12 h-12 rounded-2xl bg-amber-400 text-black flex items-center justify-center text-xl shadow-[0_0_15px_rgba(251,191,36,0.2)]">
-                                <i class="fas fa-cog"></i>
+            <!-- Machine Status List -->
+            <div id="section-incidencias" class="space-y-6">
+                {% for inc in incidencias %}
+                    {% if inc.estado != 'CERRADO' %}
+                        <div class="relative group cursor-pointer" onclick="openCloseModal('{{ inc.pk }}', '{{ inc.maquina.nombre }}')">
+                            <!-- Neon Border & Glow -->
+                            <div class="absolute -inset-0.5 rounded-2xl opacity-75 group-hover:opacity-100 transition duration-500 blur
+                                {% if inc.estado == 'ABIERTO' %}bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]
+                                {% else %}bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.4)]{% endif %}"></div>
+                            
+                            <div class="relative flex items-center justify-between bg-slate-900 rounded-2xl p-4 border border-white/10">
+                                <div class="flex items-center gap-5">
+                                    <div class="w-14 h-14 rounded-xl flex items-center justify-center text-2xl border 
+                                        {% if inc.estado == 'ABIERTO' %}bg-red-500/10 text-red-500 border-red-500/20
+                                        {% else %}bg-amber-500/10 text-amber-500 border-amber-500/20{% endif %}">
+                                {% if 'NLX' in inc.maquina.nombre|upper %}
+                                    <i class="fas fa-microchip"></i>
+                                {% elif 'DMG' in inc.maquina.nombre|upper or 'MORI' in inc.maquina.nombre|upper %}
+                                    <i class="fas fa-industry"></i>
+                                {% elif 'HYUNDAI' in inc.maquina.nombre|upper or 'SAMPI' in inc.maquina.nombre|upper %}
+                                    <i class="fas fa-truck-pickup"></i>
+                                {% else %}
+                                    <i class="fas fa-cog"></i>
+                                {% endif %}
                             </div>
                             <div>
-                                <h4 class="text-white font-black text-lg font-brand leading-none mb-1">{{ inc.maquina.nombre }}</h4>
-                                <p class="text-[9px] text-slate-500 font-bold uppercase tracking-[0.2em]">{{ inc.maquina.id_maquina }}</p>
+                                <h3 class="text-xl font-black text-white uppercase tracking-tight">{{ inc.maquina.nombre }}</h3>
+                                        <p class="text-slate-500 text-[10px] font-bold uppercase tracking-widest">{{ inc.maquina.id_maquina }}</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex items-center gap-5 text-right">
+                                    <div class="hidden md:block">
+                                        <p class="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-0.5">Motivo</p>
+                                        <p class="text-white font-bold text-xs">{{ inc.descripcion_falla|truncatechars:25 }}</p>
+                                    </div>
+                                    <div class="px-5 py-2 rounded-full border border-white/20 font-black text-[9px] uppercase tracking-widest
+                                        {% if inc.estado == 'ABIERTO' %}text-red-500 bg-red-500/5
+                                        {% else %}text-amber-500 bg-amber-500/5{% endif %}">
+                                        {{ inc.get_estado_display }}
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        
-                        <div class="bg-black/20 rounded-2xl p-6 mb-6 border border-white/5 group-hover/card:border-amber-500/20 transition-all min-h-[100px]">
-                            <p class="text-slate-300 text-sm leading-relaxed font-medium italic">"{{ inc.descripcion_falla }}"</p>
-                        </div>
-                        
-                        <div class="flex items-center gap-3 text-slate-400 text-xs font-bold uppercase tracking-widest mb-8">
-                            <div class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center border border-white/10 text-amber-400/50">
-                                <i class="fas fa-user-nut text-[10px]"></i>
+                    {% endif %}
+                {% endfor %}
+
+                {% if counts.abiertos == 0 and counts.proceso == 0 %}
+                <div class="bg-slate-900/50 rounded-[2.5rem] border border-dashed border-white/10 p-16 text-center">
+                    <div class="w-20 h-20 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center text-3xl mx-auto mb-6">
+                        <i class="fas fa-check-double"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-white">Todo el sistema operativo</h3>
+                    <p class="text-slate-500 text-sm mt-1 uppercase tracking-widest font-black">No hay incidencias activas en este momento</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Preventivos List (Horizontal cards) -->
+            <div id="section-preventivos" class="pt-6">
+                <h2 class="text-lg font-black text-white flex items-center gap-3 mb-4 uppercase tracking-tighter font-brand">
+                    <i class="fas fa-hourglass-half text-amber-400 animate-pulse"></i> Mantenimiento <span>Preventivo</span>
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {% for p in preventivos %}
+                    <div class="bg-slate-900/80 backdrop-blur-md rounded-3xl p-4 border border-white/5 flex items-center justify-between group hover:border-blue-500/30 transition-all">
+                        <div class="flex items-center gap-4 flex-1">
+                            <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xl border 
+                                {% if p.status == 'CRITICAL' %}bg-red-500/10 text-red-500 border-red-500/20
+                                {% elif p.status == 'WARNING' %}bg-amber-500/10 text-amber-500 border-amber-500/20
+                                {% else %}bg-emerald-500/10 text-emerald-400 border-emerald-500/20{% endif %}">
+                                <i class="fas fa-heartbeat"></i>
                             </div>
-                            <span>{{ inc.tecnico_asignado|default:"Sin asignar" }}</span>
+                            <div class="flex-1">
+                                <h4 class="text-[12px] font-bold text-white uppercase">{{ p.maquina.nombre }}</h4>
+                                <div class="w-full h-1.5 bg-black/40 rounded-full mt-2 overflow-hidden">
+                                    <div class="h-full {% if p.salud < 15 or p.status == 'CRITICAL' %}bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]{% elif p.salud < 40 %}bg-amber-500{% else %}bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.4)]{% endif %}" 
+                                         style="width: {{ p.salud|floatformat:0 }}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-right ml-4">
+                            <span class="text-[9px] font-black uppercase tracking-widest block {% if p.status == 'CRITICAL' %}text-red-400 animate-pulse{% else %}text-emerald-400 opacity-80{% endif %} mb-1">
+                                {% if p.salud == 0 %}{{ p.agenda_msg }}{% else %}Salud: {{ p.salud|floatformat:0 }}%{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="col-span-full bg-slate-900/40 rounded-3xl p-6 border border-white/5 text-center">
+                        <p class="text-slate-500 text-[10px] font-black uppercase tracking-widest">Sin mantenimientos programados</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Stats Panel & Tabs (Col 4) -->
+        <div class="lg:col-span-4 flex gap-4">
+            
+            <!-- Mini Side Tabs (20% Smaller) -->
+            <div class="flex flex-col gap-3 pt-8">
+                <button id="btn-nav-incidencias" onclick="highlightSection('incidencias', 'orange')" 
+                   class="nav-btn w-12 h-12 bg-orange-500 text-white rounded-xl flex items-center justify-center text-xl shadow-md ring-1 ring-white/10 cursor-pointer hover:scale-105 transition-all">
+                    <i class="fas fa-briefcase"></i>
+                </button>
+                <button id="btn-nav-preventivos" onclick="highlightSection('preventivos', 'violet')" 
+                   class="nav-btn w-12 h-12 bg-slate-900 text-slate-500 rounded-xl flex items-center justify-center text-xl border border-white/5 hover:text-white transition-all hover:scale-105">
+                    <i class="fas fa-clipboard-list"></i>
+                </button>
+                <button id="btn-nav-historial" onclick="highlightSection('historial', 'emerald')" 
+                   class="nav-btn w-12 h-12 bg-slate-900 text-slate-500 rounded-xl flex items-center justify-center text-xl border border-white/5 hover:text-white transition-all hover:scale-105">
+                    <i class="fas fa-chart-line"></i>
+                </button>
+            </div>
+
+            <!-- Stats Panel (20% Smaller) -->
+            <div class="flex-1 bg-slate-900 rounded-[2rem] border border-white/10 p-6 shadow-2xl">
+                <h2 class="text-2xl font-black text-white mb-6 tracking-tight">Estadísticas</h2>
+                
+                <div class="space-y-8">
+                    <!-- Active Incidents -->
+                    <div>
+                        <p class="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2">Incidencias Activas:</p>
+                        <h3 class="text-5xl font-black text-white mb-4">{{ counts.abiertos|add:counts.proceso }}</h3>
+                        <!-- Mini Bar Chart Mockup (Simple dots for now or SVG) -->
+                        <div class="flex items-end gap-2 h-20">
+                            <div class="flex-1 bg-orange-600 rounded-lg h-[40%]"></div>
+                            <div class="flex-1 bg-orange-600 rounded-lg h-[70%]"></div>
+                            <div class="flex-1 bg-orange-600 rounded-lg h-[30%]"></div>
+                            <div class="flex-1 bg-orange-600/50 rounded-lg h-[80%]"></div>
+                            <div class="flex-1 bg-orange-600 rounded-lg h-[50%]"></div>
+                            <div class="flex-1 bg-orange-600 rounded-lg h-[90%]"></div>
+                            <div class="flex-1 bg-orange-600 rounded-lg h-[40%]"></div>
                         </div>
                     </div>
 
-                    <div class="relative z-10 pt-6 border-t border-white/5 flex gap-3">
-                        {% if inc.estado == 'ABIERTO' %}
-                        <form action="{% url 'gestionar_incidencia' inc.pk %}" method="POST" class="w-full">
-                            {% csrf_token %}
-                            <input type="hidden" name="accion" value="iniciar">
-                            <button class="w-full bg-white text-black hover:bg-amber-400 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2 group/btn">
-                                <i class="fas fa-play group-hover/btn:scale-125 transition-transform"></i> Iniciar Reparación
-                            </button>
-                        </form>
-                        {% elif inc.estado == 'PROCESO' %}
-                        <button onclick="openCloseModal('{{ inc.pk }}', '{{ inc.maquina.nombre }}')" 
-                            class="w-full bg-emerald-500 text-black hover:bg-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2 group/btn">
-                            <i class="fas fa-check-double group-hover/btn:scale-125 transition-transform"></i> Finalizar & Cerrar
-                        </button>
-                        {% endif %}
+                    <hr class="border-white/5">
+
+                    <!-- Avg Repair Time -->
+                    <div>
+                        <p class="text-slate-500 text-xs font-bold uppercase tracking-widest mb-4">Tiempo Medio de Reparación:</p>
+                        <h3 class="text-5xl font-black text-white mb-6">4.2h</h3>
+                        <!-- Another Mini Chart -->
+                        <div class="flex items-end gap-2 h-16 opacity-50">
+                            <div class="flex-1 bg-white/20 rounded-md h-[20%]"></div>
+                            <div class="flex-1 bg-orange-500 rounded-md h-[40%]"></div>
+                            <div class="flex-1 bg-white/20 rounded-md h-[60%]"></div>
+                            <div class="flex-1 bg-orange-500 rounded-md h-[30%]"></div>
+                            <div class="flex-1 bg-white/20 rounded-md h-[50%]"></div>
+                            <div class="flex-1 bg-orange-500 rounded-md h-[70%]"></div>
+                        </div>
+                    </div>
+
+                    <!-- Concentration Heatmap Button -->
+                    <button onclick="openPredictiveHelp()" class="w-full bg-white/5 hover:bg-white/10 text-white p-6 rounded-3xl border border-white/5 transition-all text-left group">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-[10px] font-black uppercase tracking-widest text-amber-500 mb-1">Live Analytics</p>
+                                <p class="font-bold">Concentración de Fallas</p>
+                            </div>
+                            <i class="fas fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                        </div>
+                    </button>
+                    
+                    <!-- Developed for branding -->
+                    <div class="pt-8 text-center text-[10px] font-black text-slate-700 uppercase tracking-widest">
+                        ABBAMAT INDUSTRIAL SUITE © 2026
                     </div>
                 </div>
-                {% endif %}
-                {% endfor %}
             </div>
         </div>
     </div>
 
-    <!-- History Table Premium -->
-    <div class="bg-slate-900 rounded-[2.5rem] shadow-2xl border border-white/5 overflow-hidden group">
-        <div class="p-8 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
-            <h2 class="text-xl font-black text-white flex items-center gap-3 font-brand uppercase tracking-tighter">
-                <i class="fas fa-history text-amber-400 group-hover:rotate-[-45deg] transition-transform duration-500"></i> Historial <span class="text-amber-400">Reciente</span>
+    <!-- Historial (Keep it below but styled cleaner) -->
+    <div id="section-historial" class="mt-16 bg-slate-900/30 rounded-[2.5rem] border border-white/5 overflow-hidden">
+        <div class="p-8 border-b border-white/5 bg-white/[0.02]">
+             <h2 class="text-xl font-black text-white flex items-center gap-3 font-brand uppercase tracking-tighter">
+                <i class="fas fa-history text-slate-500"></i> Historial <span>Reciente</span>
             </h2>
         </div>
-        
-        <div class="p-0 overflow-x-auto">
-            <table class="w-full text-left border-collapse">
-                <thead>
-                    <tr class="bg-black/20 text-slate-500 text-[10px] font-black uppercase tracking-[0.2em]">
-                        <th class="px-8 py-5">Máquina</th>
-                        <th class="px-8 py-5">Reporte</th>
-                        <th class="px-8 py-5">Falla Detectada</th>
-                        <th class="px-8 py-5">Técnico</th>
-                        <th class="px-8 py-5 text-center">Estado</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-white/[0.03]">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left">
+                <tbody>
                     {% for inc in incidencias %}
                     {% if inc.estado == 'CERRADO' %}
-                    <tr class="hover:bg-white/[0.02] transition-colors group/row">
+                    <tr class="border-b border-white/[0.02] hover:bg-white/5 transition-colors group/row">
                         <td class="px-8 py-6">
                             <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-amber-400 font-bold text-xs ring-1 ring-white/10 group-hover/row:bg-amber-400 group-hover/row:text-black transition-all">
+                                <div class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-amber-500">
                                     <i class="fas fa-cog"></i>
                                 </div>
                                 <div>
-                                    <p class="font-bold text-white text-sm leading-none">{{ inc.maquina.nombre }}</p>
-                                    <span class="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1 block">{{ inc.maquina.id_maquina }}</span>
+                                    <p class="text-sm font-bold text-white leading-none">{{ inc.maquina.nombre }}</p>
+                                    <p class="text-[11px] text-slate-400 font-black uppercase tracking-widest mt-1.5">{{ inc.maquina.id_maquina }}</p>
                                 </div>
                             </div>
                         </td>
                         <td class="px-8 py-6">
-                            <p class="text-white font-bold text-sm">{{ inc.fecha_reporte|date:"d M" }}</p>
-                            <span class="text-[10px] text-slate-500 font-bold">{{ inc.fecha_reporte|date:"H:i" }}hs</span>
+                            <p class="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1">Motivo</p>
+                            <p class="text-xs text-white font-bold">{{ inc.descripcion_falla|truncatechars:100 }}</p>
+                            <p class="text-[11px] text-slate-400 mt-2 font-black uppercase tracking-tight">{{ inc.fecha_reporte|date:"d M, H:i" }}hs</p>
                         </td>
-                        <td class="px-8 py-6">
-                            <p class="text-slate-400 text-xs font-medium max-w-md line-clamp-2">{{ inc.descripcion_falla }}</p>
-                            {% if inc.duracion_minutos %}
-                            <span class="inline-flex items-center gap-1.5 mt-2 px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 text-[9px] font-black uppercase tracking-widest">
-                                <i class="fas fa-hourglass-end"></i> {{ inc.duracion_minutos }} MIN <span class="text-white/40 mx-1">|</span> {{ inc.duracion_hhmm }}
-                            </span>
-                            {% endif %}
-                        </td>
-                        <td class="px-8 py-6 text-slate-400 text-xs font-bold uppercase tracking-widest">
-                            <i class="fas fa-user-check mr-2 text-amber-400/50"></i>{{ inc.tecnico_asignado|default:"---" }}
-                        </td>
-                        <td class="px-8 py-6 text-center">
-                            <div class="flex flex-col items-center gap-2">
-                                <span class="px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
-                                    {{ inc.get_estado_display }}
-                                </span>
-                                <button type="button" onclick="confirmDelete('{{ inc.pk }}', '{{ inc.maquina.nombre }}')"
-                                   class="text-white/20 hover:text-red-500 transition-all">
-                                    <i class="fas fa-trash-alt text-[10px]"></i>
-                                </button>
+                        <td class="px-8 py-6 text-right">
+                            <div class="flex flex-col items-end gap-1">
+                                <span class="text-[10px] font-tech text-amber-500 font-bold">{{ inc.duracion_hhmm }}</span>
+                                <span class="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-500 text-[9px] font-black uppercase tracking-widest border border-emerald-500/20">CERRADO</span>
                             </div>
+                        </td>
+                        <td class="px-8 py-6 text-right w-20">
+                            <button type="button" onclick="confirmDelete('{{ inc.pk }}', '{{ inc.maquina.nombre }}')"
+                                   class="text-white/10 hover:text-red-500 transition-all p-2">
+                                <i class="fas fa-trash-alt text-xs"></i>
+                            </button>
                         </td>
                     </tr>
                     {% endif %}
@@ -562,12 +467,54 @@
         document.getElementById('modal-predictivo-help').classList.remove('flex');
     }
 
+    function highlightSection(sectionId, color) {
+        // 1. Scroll to section
+        const target = document.getElementById('section-' + sectionId);
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // 2. Remove previous highlights from titles
+        document.querySelectorAll('h2 span').forEach(el => {
+            el.classList.remove('text-violet-400', 'text-emerald-400', 'text-orange-400', 'animate-pulse');
+        });
+
+        // 3. Highlight the target title span
+        const titleSpan = target.querySelector('h2 span');
+        if (titleSpan) {
+            const colorClass = color === 'violet' ? 'text-violet-400' : 
+                               color === 'emerald' ? 'text-emerald-400' : 'text-orange-400';
+            titleSpan.classList.add(colorClass, 'animate-pulse');
+            
+            // Remove pulse after 3 seconds
+            setTimeout(() => {
+                titleSpan.classList.remove('animate-pulse');
+            }, 3000);
+        }
+
+        // 4. Update Sidebar Buttons
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            btn.classList.remove('bg-violet-600', 'bg-emerald-600', 'bg-orange-600', 'ring-4', 'ring-white/20');
+            btn.classList.add('bg-slate-900', 'text-slate-500');
+            btn.classList.remove('text-white');
+        });
+
+        const activeBtn = document.getElementById('btn-nav-' + sectionId);
+        if (activeBtn) {
+            const activeColorBg = color === 'violet' ? 'bg-violet-600' : 
+                                  color === 'emerald' ? 'bg-emerald-600' : 'bg-orange-600';
+            activeBtn.classList.remove('bg-slate-900', 'text-slate-500');
+            activeBtn.classList.add(activeColorBg, 'text-white', 'ring-4', 'ring-white/20');
+        }
+    }
+
     // Pre-cargar fecha actual en el reporte
     window.onload = function() {
         const now = new Date();
         now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
         const inputFecha = document.getElementById('input-fecha-falla');
         if (inputFecha) inputFecha.value = now.toISOString().slice(0, 16);
+        
+        // Inicializar highlight en la primera sección
+        highlightSection('incidencias', 'orange');
     }
 </script>
 
@@ -592,62 +539,62 @@
 
         <!-- Content -->
         <div class="p-8 overflow-y-auto space-y-8 custom-scrollbar">
-            <p class="text-slate-300 leading-relaxed font-medium">
+            <p class="text-slate-200 text-lg leading-relaxed font-semibold">
                 Esta pantalla es el <b>Centro de Control de Mantenimiento Predictivo</b>. Su objetivo es que no hablemos de mantenimiento basándonos en "sensaciones", sino en <b>datos reales</b>.
             </p>
 
             <div class="space-y-6">
                 <!-- Seccion 1 -->
-                <div class="bg-white/5 p-6 rounded-3xl border border-white/5">
-                    <h3 class="text-amber-400 font-black uppercase tracking-[0.2em] text-xs mb-4 flex items-center gap-3">
-                        <span class="w-2 h-2 rounded-full bg-amber-500"></span> 1. Concentración de Fallas
+                <div class="bg-white/5 p-8 rounded-3xl border border-white/5">
+                    <h3 class="text-amber-400 font-black uppercase tracking-[0.2em] text-sm mb-5 flex items-center gap-3">
+                        <span class="w-3 h-3 rounded-full bg-amber-500"></span> 1. Concentración de Fallas
                     </h3>
-                    <div class="pl-5 border-l border-white/10 space-y-3">
-                        <p class="text-white text-sm font-bold">¿Qué informa?</p>
-                        <p class="text-slate-400 text-xs leading-relaxed">Muestra qué máquinas han tenido más incidencias (roturas/correctivos) en los últimos 30 días.</p>
-                        <p class="text-white text-sm font-bold mt-4">¿Cómo se lee?</p>
-                        <ul class="text-slate-400 text-xs space-y-2">
-                            <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span> <b>Verde:</b> Pocas fallas o solo una.</li>
-                            <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 bg-amber-500 rounded-full"></span> <b>Amarillo/Rojo:</b> La máquina falla seguido.</li>
+                    <div class="pl-6 border-l-2 border-white/10 space-y-4">
+                        <p class="text-white text-lg font-bold">¿Qué informa?</p>
+                        <p class="text-slate-300 text-base leading-relaxed">Muestra qué máquinas han tenido más incidencias (roturas/correctivos) en los últimos 30 días.</p>
+                        <p class="text-white text-lg font-bold mt-6">¿Cómo se lee?</p>
+                        <ul class="text-slate-300 text-base space-y-3">
+                            <li class="flex items-center gap-3"><span class="w-2 h-2 bg-emerald-500 rounded-full"></span> <b>Verde:</b> Pocas fallas o solo una.</li>
+                            <li class="flex items-center gap-3"><span class="w-2 h-2 bg-amber-500 rounded-full"></span> <b>Amarillo/Rojo:</b> La máquina falla seguido.</li>
                         </ul>
-                        <p class="text-slate-500 text-[10px] italic mt-4"><b>Propósito:</b> Identificar rápidamente las "ovejas negras" con problemas crónicos que requieren revisión profunda.</p>
+                        <p class="text-slate-400 text-xs italic mt-6"><b>Propósito:</b> Identificar rápidamente las "ovejas negras" con problemas crónicos que requieren revisión profunda.</p>
                     </div>
                 </div>
 
                 <!-- Seccion 2 -->
-                <div class="bg-white/5 p-6 rounded-3xl border border-white/5">
-                    <h3 class="text-amber-400 font-black uppercase tracking-[0.2em] text-xs mb-4 flex items-center gap-3">
-                        <span class="w-2 h-2 rounded-full bg-amber-500"></span> 2. Inteligencia Predictiva
+                <div class="bg-white/5 p-8 rounded-3xl border border-white/5">
+                    <h3 class="text-amber-400 font-black uppercase tracking-[0.2em] text-sm mb-5 flex items-center gap-3">
+                        <span class="w-3 h-3 rounded-full bg-amber-500"></span> 2. Inteligencia Predictiva
                     </h3>
-                    <div class="pl-5 border-l border-white/10 space-y-4">
-                        <p class="text-slate-400 text-xs leading-relaxed">
-                            <b class="text-white">Uso Real vs. Calendario:</b> El sistema ya no te dice "hace el service el 15 de marzo" solo por el tiempo. Ahora lee del ERP cuánto tiempo estuvo <b>realmente procesando</b> la máquina.
+                    <div class="pl-6 border-l-2 border-white/10 space-y-5">
+                        <p class="text-slate-300 text-base leading-relaxed">
+                            <b class="text-white text-lg block mb-1">Uso Real vs. Calendario:</b> El sistema ya no te dice "hace el service el 15 de marzo" solo por el tiempo. Ahora lee del ERP cuánto tiempo estuvo <b>realmente procesando</b> la máquina.
                         </p>
-                        <p class="text-slate-400 text-xs leading-relaxed">
-                            <b class="text-white">Optimización:</b> Si una máquina estuvo parada semanas, el contador no avanza. Ahorrás dinero en repuestos y aceite con vida útil remanente.
+                        <p class="text-slate-300 text-base leading-relaxed">
+                            <b class="text-white text-lg block mb-1">Optimización:</b> Si una máquina estuvo parada semanas, el contador no avanza. Ahorrás dinero en repuestos y aceite con vida útil remanente.
                         </p>
                     </div>
                 </div>
 
                 <!-- Seccion 3 -->
-                <div class="bg-white/5 p-6 rounded-3xl border border-white/5">
-                    <h3 class="text-amber-400 font-black uppercase tracking-[0.2em] text-xs mb-4 flex items-center gap-3">
-                        <span class="w-2 h-2 rounded-full bg-amber-500"></span> 3. Barras de Vida Útil
+                <div class="bg-white/5 p-8 rounded-3xl border border-white/5">
+                    <h3 class="text-amber-400 font-black uppercase tracking-[0.2em] text-sm mb-5 flex items-center gap-3">
+                        <span class="w-3 h-3 rounded-full bg-amber-500"></span> 3. Barras de Vida Útil
                     </h3>
-                    <div class="pl-5 border-l border-white/10 space-y-4">
-                        <p class="text-slate-400 text-xs leading-relaxed">
+                    <div class="pl-6 border-l-2 border-white/10 space-y-5">
+                        <p class="text-slate-300 text-base leading-relaxed">
                             Es el "medidor de combustible" de la vida mecánica que le queda a los componentes.
                         </p>
-                        <p class="text-slate-400 text-xs leading-relaxed">
-                            <b class="text-amber-400">Dorado/Oro:</b> Buen estado pero en consumo. Al llegar al <b>85%</b>, se activa la alerta para preparar los insumos antes de la detención.
+                        <p class="text-slate-300 text-base leading-relaxed">
+                            <b class="text-amber-400 text-lg block mb-1">Dorado/Oro:</b> Buen estado pero en consumo. Al llegar al <b>85%</b>, se activa la alerta para preparar los insumos antes de la detención.
                         </p>
                     </div>
                 </div>
             </div>
 
-            <div class="bg-gradient-to-r from-amber-600 to-amber-900 p-6 rounded-3xl text-white">
-                <p class="text-[10px] font-black uppercase tracking-widest opacity-60 mb-2">Conclusión</p>
-                <p class="text-sm font-bold leading-tight">
+            <div class="bg-gradient-to-r from-amber-600 to-amber-900 p-8 rounded-3xl text-white shadow-lg">
+                <p class="text-xs font-black uppercase tracking-widest opacity-60 mb-3">Conclusión</p>
+                <p class="text-lg font-bold leading-relaxed">
                     Esta pantalla informa qué tan confiable es tu planta hoy y cuánto falta exactamente para que la máquina necesite atención basada en su esfuerzo real.
                 </p>
             </div>

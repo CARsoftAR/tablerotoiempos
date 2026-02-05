@@ -27,6 +27,7 @@ urlpatterns = [
     path('auditoria-cambios/', views.auditoria_cambios, name='auditoria_cambios'),
     path('generar-reporte-pdf/', views.generar_reporte_pdf, name='generar_reporte_pdf'),
     path('estadisticas/', views.estadisticas_avanzadas, name='estadisticas'),
+    path('api/detalle-oee-dia/', views.detalle_oee_dia, name='detalle_oee_dia'),
     
     # API Alertas
     path('api/check-alerts/', views.check_alerts, name='check_alerts'),
@@ -47,4 +48,7 @@ urlpatterns = [
     # Trazabilidad
     path('trazabilidad/', views.trazabilidad_piezas, name='trazabilidad_piezas'),
     path('api/trace-flow/', views.get_trace_flow, name='get_trace_flow'),
+    
+    # Manual de Usuario
+    path('manual/', views.manual_usuario, name='manual_usuario'),
 ]
