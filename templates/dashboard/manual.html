@@ -4,61 +4,184 @@
 {% block title %}Manual de Usuario - ABBAMAT{% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto space-y-20 pb-20">
-    <!-- Header -->
-    <div class="relative p-12 rounded-[3rem] bg-gradient-to-br from-amber-400/20 to-transparent border border-white/10 overflow-hidden shadow-2xl">
-        <div class="absolute -right-20 -top-20 w-80 h-80 bg-amber-400/10 rounded-full blur-[100px]"></div>
-        <div class="relative z-10">
-            <h1 class="text-6xl font-black text-white font-brand tracking-tighter mb-4 uppercase">
-                Manual de <span class="text-amber-400">Usuario</span>
-            </h1>
-            <p class="text-xl text-slate-400 max-w-2xl leading-relaxed font-medium">
-                Guía completa de operación, interpretación de datos y fórmulas del sistema de Inteligencia Operativa <span class="text-amber-400">ABBA</span><span class="text-orange-500">MAT</span>.
-            </p>
-        </div>
-    </div>
+{% block content %}
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100;300;400;700;900&display=swap');
 
-    <!-- Navegación Rápida -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <a href="#intro" class="p-6 rounded-3xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-all group">
-            <div class="flex items-center gap-4 mb-3">
-                <div class="w-10 h-10 rounded-xl bg-amber-400 text-black flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <i class="fas fa-info"></i>
-                </div>
-                <h3 class="text-lg font-bold text-white uppercase tracking-tighter">1. Introducción</h3>
+    :root {
+        --premium-gold: #d4af37;
+        --gold-bright: #ffd700;
+        --dark-bg: #050505;
+        --glass-bg: rgba(255, 255, 255, 0.03);
+        --glass-border: rgba(255, 255, 255, 0.08);
+        --font-brand: 'Outfit', sans-serif;
+    }
+
+    body {
+        background-color: var(--dark-bg);
+        font-family: var(--font-brand);
+        scroll-behavior: smooth;
+    }
+
+    .manual-wrapper {
+        display: grid;
+        grid-template-columns: 1fr 300px;
+        gap: 40px;
+        max-width: 1500px;
+        margin: 0 auto;
+        padding: 40px 20px;
+    }
+
+    @media (max-width: 1200px) {
+        .manual-wrapper { grid-template-columns: 1fr; }
+        .sticky-nav { display: none; }
+    }
+
+    .manual-header {
+        position: relative;
+        padding: 80px;
+        background: linear-gradient(135deg, rgba(20, 20, 20, 0.8) 0%, rgba(10, 10, 10, 0.95) 100%);
+        border: 1px solid var(--glass-border);
+        border-radius: 50px;
+        margin-bottom: 60px;
+        overflow: hidden;
+        backdrop-filter: blur(20px);
+        box-shadow: 0 40px 80px rgba(0, 0, 0, 0.5);
+    }
+
+    .manual-header h1 {
+        font-size: 4.5rem;
+        font-weight: 900;
+        line-height: 0.9;
+        text-transform: uppercase;
+        letter-spacing: -0.05em;
+        background: linear-gradient(to bottom, #fff 0%, #aaa 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 20px;
+    }
+
+    .manual-header h1 span {
+        background: linear-gradient(to bottom, var(--gold-bright), var(--premium-gold));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    .sticky-nav {
+        position: sticky;
+        top: 100px;
+        height: fit-content;
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 35px;
+        padding: 30px;
+        backdrop-filter: blur(10px);
+    }
+
+    .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        padding: 15px;
+        color: rgba(255, 255, 255, 0.4);
+        text-decoration: none;
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        border-radius: 15px;
+        transition: all 0.3s;
+    }
+
+    .nav-item:hover, .nav-item.active {
+        color: var(--premium-gold);
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    .nav-item i { font-size: 16px; }
+
+    .manual-section {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 40px;
+        padding: 60px;
+        margin-bottom: 60px;
+        backdrop-filter: blur(5px);
+    }
+
+    .capitulo-badge {
+        display: inline-block;
+        padding: 6px 15px;
+        background: rgba(212, 175, 55, 0.1);
+        color: var(--premium-gold);
+        border: 1px solid rgba(212, 175, 55, 0.2);
+        border-radius: 10px;
+        font-size: 10px;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+        margin-bottom: 30px;
+    }
+
+    .section-title {
+        font-size: 2.5rem;
+        font-weight: 900;
+        color: #fff;
+        text-transform: uppercase;
+        letter-spacing: -0.02em;
+        margin-bottom: 40px;
+    }
+
+    /* Custom image frame */
+    .premium-img-frame {
+        background: #000;
+        border: 1px solid var(--glass-border);
+        border-radius: 30px;
+        overflow: hidden;
+        position: relative;
+        box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
+    }
+
+    .premium-img-frame:hover {
+        border-color: rgba(212, 175, 55, 0.3);
+    }
+
+    .placeholder-premium {
+        height: 300px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(circle at center, #111, #000);
+        color: #333;
+    }
+
+</style>
+
+<div class="manual-wrapper animate-in fade-in duration-1000">
+    
+    <div class="manual-main">
+        <!-- Header -->
+        <div class="manual-header">
+            <div class="relative z-10">
+                <span class="capitulo-badge">Documentación Oficial</span>
+                <h1>MANUAL DE <span>USUARIO</span></h1>
+                <p class="text-xl text-slate-400 max-w-2xl font-medium">
+                    Centro de conocimiento <span class="text-amber-400">ABBA</span><span class="text-orange-500">MAT</span>: 
+                    Fórmulas, Operaciones y Blindaje de Datos.
+                </p>
             </div>
-            <p class="text-xs text-slate-500 leading-relaxed font-bold">Conceptos base y sincronización con el ERP.</p>
-        </a>
-        <a href="#interfaz" class="p-6 rounded-3xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-all group">
-            <div class="flex items-center gap-4 mb-3">
-                <div class="w-10 h-10 rounded-xl bg-blue-500 text-white flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <i class="fas fa-tablet-alt"></i>
-                </div>
-                <h3 class="text-lg font-bold text-white uppercase tracking-tighter">2. Interfaz</h3>
-            </div>
-            <p class="text-xs text-slate-500 leading-relaxed font-bold">Navegación, barra lateral y centro de notificaciones.</p>
-        </a>
-        <a href="#calculos" class="p-6 rounded-3xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-all group">
-            <div class="flex items-center gap-4 mb-3">
-                <div class="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <i class="fas fa-calculator"></i>
-                </div>
-                <h3 class="text-lg font-bold text-white uppercase tracking-tighter">3. Cálculos</h3>
-            </div>
-            <p class="text-xs text-slate-500 leading-relaxed font-bold">Diccionario de fórmulas OEE, Real y Standard.</p>
-        </a>
-    </div>
+            <div class="absolute -right-20 -bottom-20 w-80 h-80 bg-amber-400/5 rounded-full blur-[120px]"></div>
+        </div>
+
 
     <!-- SECCIÓN 1: INTRODUCCIÓN Y FILOSOFÍA -->
-    <section id="intro" class="scroll-mt-24 space-y-12">
-        <div class="flex items-center gap-4">
-            <span class="text-xs font-black text-amber-400 bg-amber-400/10 px-3 py-1 rounded-full uppercase tracking-widest">Capítulo 01</span>
-            <div class="h-px bg-white/10 flex-1"></div>
-        </div>
+    <section id="intro" class="manual-section scroll-mt-24">
+        <span class="capitulo-badge">Capítulo 01</span>
         
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-16">
             <div class="space-y-8">
-                <h2 class="text-4xl font-black text-white uppercase font-brand tracking-tighter">Introducción y Filosofía</h2>
+                <h2 class="section-title">INTRODUCCIÓN Y <br><span>FILOSOFÍA</span></h2>
                 <div class="prose prose-invert max-w-none space-y-6">
                     <p class="text-slate-300 leading-relaxed text-sm">
                         El sistema <span class="text-amber-400 font-black">ABBA</span><span class="text-orange-500 font-black">MAT</span> no es simplemente un tablero de visualización; es una capa de <span class="text-amber-400 font-bold">Inteligencia Operativa</span> que se sitúa sobre el taller para eliminar la opacidad de los procesos manuales. Su objetivo principal es convertir la actividad física en indicadores de gestión indiscutibles.
@@ -722,9 +845,64 @@
 
     <!-- Continuará... -->
 
-    <!-- Continuará... -->
     <div class="text-center py-10">
-        <p class="text-slate-600 font-black uppercase tracking-[0.4em] text-xs">Desarrollado para ABBAMAT &copy; 2026</p>
+        <p class="opacity-30 font-black uppercase tracking-[0.4em] text-[10px]">Portal de Inteligencia Operativa &copy; 2026</p>
     </div>
 </div>
+
+    <aside class="sticky-nav">
+        <h3 class="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] mb-8">Navegación</h3>
+        <nav class="space-y-2">
+            <a href="#intro" class="nav-item">
+                <i class="fas fa-info"></i> Introducción
+            </a>
+            <a href="#interfaz" class="nav-item">
+                <i class="fas fa-tablet-alt"></i> Interfaz
+            </a>
+            <a href="#calculos" class="nav-item">
+                <i class="fas fa-calculator"></i> Cálculos
+            </a>
+            <a href="#mapa" class="nav-item">
+                <i class="fas fa-map-marked-alt"></i> Mapa
+            </a>
+            <a href="#stats" class="nav-item">
+                <i class="fas fa-chart-pie"></i> Estadísticas
+            </a>
+            <a href="#mantenimiento" class="nav-item">
+                <i class="fas fa-tools"></i> Mantenimiento
+            </a>
+            <a href="#backups" class="nav-item">
+                <i class="fas fa-shield-alt"></i> Seguridad
+            </a>
+        </nav>
+
+        <div class="mt-12 pt-8 border-t border-white/5 text-center">
+            <button onclick="window.print()" class="text-[9px] font-black text-amber-400/60 uppercase hover:text-white transition-colors">
+                <i class="fas fa-print mr-2"></i> IMPRIMIR MANUAL
+            </button>
+        </div>
+    </aside>
+
+</div>
+
+<script>
+    // Highlight nav items on scroll
+    window.addEventListener('scroll', () => {
+        let current = "";
+        const sections = document.querySelectorAll("section");
+        sections.forEach((section) => {
+            const sectionTop = section.offsetTop;
+            if (pageYOffset >= sectionTop - 150) {
+                current = section.getAttribute("id");
+            }
+        });
+
+        document.querySelectorAll(".nav-item").forEach((item) => {
+            item.classList.remove("active");
+            if (item.getAttribute("href").includes(current)) {
+                item.classList.add("active");
+            }
+        });
+    });
+</script>
 {% endblock %}
