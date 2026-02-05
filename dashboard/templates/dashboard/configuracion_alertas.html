@@ -4,20 +4,180 @@
 {% block title %}Gestión de Alertas - ABBAMAT{% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100;300;400;700;900&display=swap');
+
+    :root {
+        --premium-gold: #d4af37;
+        --gold-bright: #ffd700;
+        --dark-bg: #050505;
+        --glass-bg: rgba(255, 255, 255, 0.03);
+        --glass-border: rgba(255, 255, 255, 0.08);
+        --font-brand: 'Outfit', sans-serif;
+    }
+
+    body {
+        background-color: var(--dark-bg);
+        font-family: var(--font-brand);
+    }
+
+    .premium-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 40px 20px;
+    }
+
+    .alert-header {
+        position: relative;
+        padding: 50px;
+        background: linear-gradient(135deg, rgba(30, 30, 30, 0.5) 0%, rgba(10, 10, 10, 0.8) 100%);
+        border: 1px solid var(--glass-border);
+        border-radius: 40px;
+        margin-bottom: 40px;
+        backdrop-filter: blur(20px);
+        overflow: hidden;
+    }
+
+    .alert-header h1 {
+        font-size: 3rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: -0.05em;
+        margin: 0;
+        background: linear-gradient(to bottom, #fff 0%, #aaa 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    .alert-header h1 span {
+        background: linear-gradient(to bottom, var(--gold-bright), var(--premium-gold));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    .premium-card {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 35px;
+        padding: 40px;
+        backdrop-filter: blur(10px);
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .premium-card:hover {
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(212, 175, 55, 0.2);
+    }
+
+    .card-icon-bg {
+        position: absolute;
+        top: -10px;
+        right: -10px;
+        font-size: 150px;
+        opacity: 0.03;
+        transform: rotate(15deg);
+        pointer-events: none;
+    }
+
+    .input-premium {
+        width: 100%;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--glass-border);
+        border-radius: 18px;
+        padding: 18px 25px;
+        color: #fff;
+        font-family: var(--font-brand);
+        font-weight: 600;
+        transition: all 0.3s;
+    }
+
+    .input-premium:focus {
+        outline: none;
+        border-color: var(--premium-gold);
+        background: rgba(255, 255, 255, 0.08);
+        box-shadow: 0 0 20px rgba(212, 175, 55, 0.1);
+    }
+
+    .label-premium {
+        display: block;
+        font-size: 10px;
+        font-weight: 900;
+        text-transform: uppercase;
+        color: var(--premium-gold);
+        margin-bottom: 12px;
+        letter-spacing: 0.2em;
+        margin-left: 5px;
+    }
+
+    .btn-save {
+        width: 100%;
+        padding: 22px;
+        border-radius: 20px;
+        background: var(--premium-gold);
+        color: #000;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+        border: none;
+        cursor: pointer;
+        transition: all 0.3s;
+        box-shadow: 0 10px 30px rgba(212, 175, 55, 0.2);
+    }
+
+    .btn-save:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 20px 40px rgba(212, 175, 55, 0.4);
+        background: var(--gold-bright);
+    }
+
+    /* Toggle Switch */
+    .switch {
+        position: relative;
+        display: inline-block;
+        width: 60px;
+        height: 30px;
+    }
+
+    .switch input { opacity: 0; width: 0; height: 0; }
+
+    .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background-color: rgba(255, 255, 255, 0.1);
+        transition: .4s;
+        border-radius: 34px;
+        border: 1px solid var(--glass-border);
+    }
+
+    .slider:before {
+        position: absolute;
+        content: "";
+        height: 22px; width: 22px;
+        left: 4px; bottom: 3px;
+        background-color: #666;
+        transition: .4s;
+        border-radius: 50%;
+    }
+
+    input:checked + .slider { background-color: rgba(212, 175, 55, 0.2); border-color: var(--premium-gold); }
+    input:checked + .slider:before { transform: translateX(28px); background-color: var(--premium-gold); }
+
+</style>
+
+<div class="premium-container animate-in fade-in duration-1000">
     
-    <!-- Header Section -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-white/5">
-        <div>
-            <h1 class="text-4xl font-black text-white font-brand tracking-tighter uppercase">
-                Gestor de <span class="text-amber-400">Notificaciones</span>
-            </h1>
-            <p class="text-slate-400 font-medium mt-2">Configura alertas externas y parámetros críticos de planta.</p>
-        </div>
-        <div class="flex items-center gap-3">
-            <div class="px-4 py-2 rounded-xl bg-white/5 border border-white/5 flex items-center gap-2">
-                <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
-                <span class="text-[10px] font-black uppercase tracking-widest text-slate-300">Motor de Alertas Activo</span>
+    <div class="alert-header">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1>GESTOR DE <span>NOTIFICACIONES</span></h1>
+                <p class="text-white/40 font-medium">Configuración avanzada de alertas externas y criticidad de planta</p>
+            </div>
+            <div class="hidden md:flex items-center gap-4 bg-white/5 p-4 rounded-3xl border border-white/5">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span class="text-[9px] font-black uppercase tracking-widest text-emerald-500">Motor Activo</span>
             </div>
         </div>
     </div>
@@ -25,153 +185,121 @@
     <form method="POST" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {% csrf_token %}
         
-        <!-- TELEGRAM CONFIG -->
         <div class="lg:col-span-2 space-y-8">
-            <div class="p-8 rounded-[2rem] bg-slate-900/50 backdrop-blur-xl border border-white/10 shadow-2xl relative overflow-hidden group">
-                <div class="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
-                    <i class="fab fa-telegram text-8xl text-blue-400"></i>
-                </div>
-                
-                <div class="flex items-center justify-between mb-8">
-                    <div class="flex items-center gap-4">
-                        <div class="w-14 h-14 rounded-2xl bg-blue-500/20 text-blue-400 flex items-center justify-center text-2xl border border-blue-400/20">
+            <!-- Telegram -->
+            <div class="premium-card">
+                <i class="fab fa-telegram card-icon-bg" style="color: #0088cc;"></i>
+                <div class="flex items-center justify-between mb-10">
+                    <div class="flex items-center gap-5">
+                        <div class="w-16 h-16 rounded-2xl bg-blue-500/10 text-blue-400 flex items-center justify-center text-3xl border border-blue-500/20">
                             <i class="fab fa-telegram-plane"></i>
                         </div>
                         <div>
-                            <h3 class="text-xl font-black text-white uppercase tracking-tight">Canal de Telegram</h3>
-                            <p class="text-xs text-slate-500 font-bold">Alertas instantáneas via Bot</p>
+                            <h3 class="text-xl font-black text-white uppercase tracking-tight">Vía Telegram</h3>
+                            <p class="text-xs text-slate-500 font-bold">Protocolo Seguro de Bot de Planta</p>
                         </div>
                     </div>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" name="activar_telegram" class="sr-only peer" {% if config.activar_telegram %}checked{% endif %}>
-                        <div class="w-14 h-7 bg-white/5 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-slate-400 peer-checked:after:bg-blue-400 after:rounded-full after:h-5 after:w-6 after:transition-all peer-checked:bg-blue-500/20 border border-white/10"></div>
+                    <label class="switch">
+                        <input type="checkbox" name="activar_telegram" {% if config.activar_telegram %}checked{% endif %}>
+                        <span class="slider"></span>
                     </label>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2">Token del Bot</label>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div>
+                        <label class="label-premium">Bot Token ID</label>
                         <input type="text" name="telegram_token" value="{{ config.telegram_token|default:'' }}" 
-                               placeholder="123456789:ABCDE..."
-                               class="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:bg-white/10 transition-all font-tech">
+                               placeholder="000000:AAAAA..." class="input-premium">
                     </div>
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2">Chat ID (Grupo o User)</label>
+                    <div>
+                        <label class="label-premium">Canal / Chat ID</label>
                         <input type="text" name="telegram_chat_id" value="{{ config.telegram_chat_id|default:'' }}" 
-                               placeholder="-100123456789"
-                               class="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:bg-white/10 transition-all font-tech">
+                               placeholder="-100..." class="input-premium">
                     </div>
                 </div>
             </div>
 
-            <!-- WHATSAPP CONFIG -->
-            <div class="p-8 rounded-[2rem] bg-slate-900/50 backdrop-blur-xl border border-white/10 shadow-2xl relative overflow-hidden group">
-                <div class="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
-                    <i class="fab fa-whatsapp text-8xl text-emerald-400"></i>
-                </div>
-                
-                <div class="flex items-center justify-between mb-8">
-                    <div class="flex items-center gap-4">
-                        <div class="w-14 h-14 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-2xl border border-emerald-400/20">
+            <!-- WhatsApp -->
+            <div class="premium-card">
+                <i class="fab fa-whatsapp card-icon-bg" style="color: #25d366;"></i>
+                <div class="flex items-center justify-between mb-10">
+                    <div class="flex items-center gap-5">
+                        <div class="w-16 h-16 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-3xl border border-emerald-500/20">
                             <i class="fab fa-whatsapp"></i>
                         </div>
                         <div>
                             <h3 class="text-xl font-black text-white uppercase tracking-tight">WhatsApp Business</h3>
-                            <p class="text-xs text-slate-500 font-bold">API CallMeBot Gateway</p>
+                            <p class="text-xs text-slate-500 font-bold">Gateway CallMeBot Integrado</p>
                         </div>
                     </div>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" name="activar_whatsapp" class="sr-only peer" {% if config.activar_whatsapp %}checked{% endif %}>
-                        <div class="w-14 h-7 bg-white/5 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-slate-400 peer-checked:after:bg-emerald-400 after:rounded-full after:h-5 after:w-6 after:transition-all peer-checked:bg-emerald-500/20 border border-white/10"></div>
+                    <label class="switch">
+                        <input type="checkbox" name="activar_whatsapp" {% if config.activar_whatsapp %}checked{% endif %}>
+                        <span class="slider"></span>
                     </label>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2">Teléfono Destino</label>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div>
+                        <label class="label-premium">Número Teléfono</label>
                         <input type="text" name="whatsapp_phone" value="{{ config.whatsapp_phone|default:'' }}" 
-                               placeholder="+54911..."
-                               class="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:bg-white/10 transition-all font-tech">
+                               placeholder="+549..." class="input-premium">
                     </div>
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2">API Key</label>
+                    <div>
+                        <label class="label-premium">Credential API Key</label>
                         <input type="password" name="whatsapp_apikey" value="{{ config.whatsapp_apikey|default:'' }}" 
-                               placeholder="******"
-                               class="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:bg-white/10 transition-all font-tech">
+                               class="input-premium">
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- THRESHOLDS & SAVE -->
         <div class="space-y-8">
-            <div class="p-8 rounded-[2rem] bg-gradient-to-br from-slate-900 to-slate-950 border border-amber-400/20 shadow-2xl shadow-amber-900/10">
-                <h3 class="text-xs font-black text-amber-400 uppercase tracking-[0.3em] mb-6">Reglas de Negocio</h3>
+            <div class="premium-card !p-10 border-amber-500/20 bg-gradient-to-br from-black to-slate-900">
+                <h3 class="label-premium !text-amber-500">Reglas de Criticidad</h3>
                 
-                <div class="space-y-6">
-                    <div class="space-y-3">
-                        <div class="flex justify-between items-center px-1">
-                            <label class="text-xs font-bold text-slate-300">Minutos Detención</label>
-                            <span class="text-amber-400 font-tech font-bold" id="minVal">{{ config.minutos_detencion_critica }}m</span>
+                <div class="space-y-10 mt-8">
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center">
+                            <label class="text-xs font-black text-white/60 uppercase tracking-widest">Delay Detención</label>
+                            <span class="text-amber-500 font-black text-lg" id="minVal">{{ config.minutos_detencion_critica }}M</span>
                         </div>
                         <input type="range" name="minutos" min="5" max="120" step="5" value="{{ config.minutos_detencion_critica }}"
-                               oninput="document.getElementById('minVal').innerText = this.value + 'm'"
-                               class="w-full h-1.5 bg-white/5 rounded-lg appearance-none cursor-pointer accent-amber-400 border border-white/5">
-                        <p class="text-[10px] text-slate-500 leading-relaxed italic">
-                            Tiempo máximo que una máquina puede estar detenida sin reporte antes de disparar alerta.
+                               oninput="document.getElementById('minVal').innerText = this.value + 'M'"
+                               class="w-full h-2 bg-white/5 rounded-full appearance-none cursor-pointer accent-amber-500">
+                        <p class="text-[9px] text-white/30 italic leading-relaxed">
+                            Umbral de inactividad antes de considerar falla crítica y disparar protocolos remotos.
                         </p>
                     </div>
 
-                    <div class="pt-4 border-t border-white/5 space-y-4">
-                        <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold text-slate-300">Alertar Mantenimiento</span>
-                            <input type="checkbox" name="alertar_mantenimiento" class="w-5 h-5 rounded border-white/10 bg-white/5 text-amber-400 focus:ring-amber-400" {% if config.alertar_mantenimiento %}checked{% endif %}>
-                        </div>
+                    <div class="flex items-center justify-between p-6 rounded-3xl bg-white/5 border border-white/5">
+                        <span class="text-xs font-black text-white/80 uppercase tracking-tight">Alertar Mantenimiento</span>
+                        <label class="switch">
+                            <input type="checkbox" name="alertar_mantenimiento" {% if config.alertar_mantenimiento %}checked{% endif %}>
+                            <span class="slider"></span>
+                        </label>
                     </div>
-                </div>
 
-                <div class="mt-10">
-                    <button type="submit" class="w-full bg-amber-400 hover:bg-white text-black font-black uppercase tracking-widest py-5 rounded-2xl shadow-[0_0_25px_rgba(251,191,36,0.3)] transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3">
-                        <i class="fas fa-save"></i>
-                        Guardar Configuración
-                    </button>
-                    <p class="text-[9px] text-center text-slate-600 mt-4 uppercase tracking-widest font-black">
-                        Último cambio: {{ config.ultima_modificacion|date:"d/m H:i" }}
-                    </p>
+                    <div class="pt-6">
+                        <button type="submit" class="btn-save shadow-amber-500/10">
+                            <i class="fas fa-save mr-3"></i> Guardar Cambios
+                        </button>
+                        <p class="text-[8px] text-center text-white/20 mt-6 uppercase tracking-[0.3em] font-black">
+                            Sincronizado: {{ config.ultima_modificacion|date:"M d, H:i" }}
+                        </p>
+                    </div>
                 </div>
             </div>
 
-            {% comment %}
-            <!-- LOG RECIENTE -->
-            <div class="p-6 rounded-[2rem] bg-white/5 border border-white/5">
-                <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Alertas Recientes</h3>
-                <div class="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scroll">
-                    {% for h in historial %}
-                    <div class="p-3 rounded-xl bg-white/[0.03] border border-white/5 flex gap-3 items-center">
-                        <div class="w-2 h-2 rounded-full shrink-0 {% if h.resuelta %}bg-emerald-500{% else %}bg-amber-500 animate-pulse{% endif %}"></div>
-                        <div class="flex-1">
-                            <p class="text-[13px] text-white font-black uppercase tracking-tight">{{ h.maquina.nombre }}</p>
-                            <p class="text-[12px] text-white truncate mt-0.5">{{ h.mensaje }}</p>
-                        </div>
-                        <span class="text-[10px] font-tech text-slate-400 font-bold">{{ h.fecha_creacion|date:"H:i" }}</span>
-                    </div>
-                    {% empty %}
-                    <div class="py-8 text-center text-[10px] text-slate-600 italic">No hay historial reciente</div>
-                    {% endfor %}
+            <div class="p-8 rounded-[2.5rem] bg-white/[0.02] border border-white/5">
+                <div class="flex items-center gap-3 mb-6">
+                    <i class="fas fa-terminal text-amber-500/40 text-xs"></i>
+                    <h3 class="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Log de Notificaciones</h3>
+                </div>
+                <div class="text-center py-10 opacity-20 italic text-[10px] uppercase tracking-widest">
+                    Historial encriptado
                 </div>
             </div>
-            {% endcomment %}
         </div>
     </form>
 </div>
-
-<style>
-    .custom-scroll::-webkit-scrollbar {
-        width: 3px;
-    }
-    .custom-scroll::-webkit-scrollbar-thumb {
-        background: rgba(255,255,255,0.1);
-        border-radius: 10px;
-    }
-</style>
 {% endblock %}
