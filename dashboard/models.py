@@ -5,7 +5,6 @@ import datetime
 class VTMan(models.Model):
     use_db = 'sql_server'
     
-    # Clave primaria Real de la vista (HAP_ROW_ID) para evitar que Django agrupe registros por IDORDEN
     row_id = models.CharField(db_column='HAP_ROW_ID', primary_key=True, max_length=255)
     id_orden = models.BigIntegerField(db_column='IDORDEN')
     
@@ -51,19 +50,16 @@ class Maquina(models.Model):
 
     class Meta:
         managed = False
-        db_table = 'TMAN010' # Asumimos nombre tabla o vista, ajustamos si necesario
+        db_table = 'TMAN010'
         verbose_name = 'Maquina SQL Server'
         verbose_name_plural = 'Maquinas SQL Server'
 
-# NUEVO MODELO PARA MYSQL (GESTIÓN DE MÁQUINAS)
 class MaquinaConfig(models.Model):
-    # Sin 'use_db', irá a 'default' que es MySQL
     id_maquina = models.CharField(max_length=50, unique=True, verbose_name="ID de Máquina (Código)")
     nombre = models.CharField(max_length=100, verbose_name="Nombre Descriptivo")
     proceso_predeterminado = models.CharField(max_length=100, null=True, blank=True, verbose_name="Proceso Default")
     activa = models.BooleanField(default=True, verbose_name="Activa")
 
-    # Layout y Diseño
     TIPO_MAQUINA_CHOICES = [
         ('GENERICO', 'Genérico (Círculo)'),
         ('CNC', 'CNC (Cuadrado)'),
@@ -74,39 +70,29 @@ class MaquinaConfig(models.Model):
     ]
     tipo_maquina = models.CharField(max_length=20, choices=TIPO_MAQUINA_CHOICES, default='GENERICO', verbose_name="Tipo de Máquina")
     
-    # Coordenadas y Dimensiones (Porcentajes 0-100)
     pos_x = models.FloatField(default=0.0, verbose_name="Posición X (%)")
     pos_y = models.FloatField(default=0.0, verbose_name="Posición Y (%)")
-    
     dim_width = models.FloatField(default=4.0, verbose_name="Ancho (%)")
     dim_height = models.FloatField(default=4.0, verbose_name="Alto (%)")
     rotacion = models.FloatField(default=0.0, verbose_name="Rotación (Grados)")
-    
     label_size = models.FloatField(default=13.0, verbose_name="Tamaño Letra (px)")
     border_weight = models.FloatField(default=2.0, verbose_name="Grosor Línea (px)")
     visible_en_mapa = models.BooleanField(default=True, verbose_name="Visible en Mapa")
     
-    # Horarios Lun-Vie
     horario_inicio_sem = models.TimeField(verbose_name="Inicio Lun-Vie", default="07:00")
     horario_fin_sem = models.TimeField(verbose_name="Fin Lun-Vie", default="16:00")
-    
-    # Horarios Sabado (Opcional)
     trabaja_sabado = models.BooleanField(default=False)
     horario_inicio_sab = models.TimeField(verbose_name="Inicio Sábado", null=True, blank=True)
     horario_fin_sab = models.TimeField(verbose_name="Fin Sábado", null=True, blank=True)
-    
-    # Horarios Domingo (Opcional)
     trabaja_domingo = models.BooleanField(default=False)
     horario_inicio_dom = models.TimeField(verbose_name="Inicio Domingo", null=True, blank=True)
     horario_fin_dom = models.TimeField(verbose_name="Fin Domingo", null=True, blank=True)
 
-    # Mantenimiento Preventivo
-    frecuencia_preventivo_horas = models.IntegerField(default=0, verbose_name="Frecuencia Service (Hs)", help_text="0 = Desactivado")
-    fecha_ultimo_preventivo = models.DateTimeField(null=True, blank=True, verbose_name="Fecha Último Service")
-    fecha_proximo_preventivo = models.DateField(null=True, blank=True, verbose_name="Fecha Próximo Service (Agenda)")
+    frecuencia_preventivo_horas = models.IntegerField(default=0, verbose_name="Frecuencia Preventiva (Horas)")
+    fecha_ultimo_preventivo = models.DateTimeField(null=True, blank=True, verbose_name="Último Preventivo")
+    fecha_proximo_preventivo = models.DateField(null=True, blank=True, verbose_name="Próximo Preventivo")
 
     class Meta:
-        managed = True
         db_table = 'maquina_config'
         verbose_name = 'Configuración de Máquina'
         verbose_name_plural = 'Configuraciones de Máquinas'
@@ -114,244 +100,119 @@ class MaquinaConfig(models.Model):
     def __str__(self):
         return f"{self.nombre} ({self.id_maquina})"
 
-class AlertaHistorial(models.Model):
-    """
-    Registra alertas críticas (ej: máquinas detenidas > 20 min) para 
-    gestionar el envío a WhatsApp/Telegram y evitar spam.
-    """
-    maquina = models.ForeignKey(MaquinaConfig, on_delete=models.CASCADE, verbose_name="Máquina")
-    tipo = models.CharField(max_length=50, default='DETENCION_CRITICA')
-    mensaje = models.TextField()
-    fecha_creacion = models.DateTimeField(auto_now_add=True)
-    fecha_notificacion_ext = models.DateTimeField(null=True, blank=True, verbose_name="Enviado a WA/TG")
-    resuelta = models.BooleanField(default=False)
+class NotificacionConfig(models.Model):
+    telegram_token = models.CharField(max_length=255, blank=True, null=True, verbose_name="Token Bot Telegram")
+    telegram_chat_id = models.CharField(max_length=100, blank=True, null=True, verbose_name="Chat ID Telegram")
+    activar_telegram = models.BooleanField(default=False)
     
+    whatsapp_phone = models.CharField(max_length=50, blank=True, null=True, verbose_name="Número Destino WhatsApp")
+    whatsapp_apikey = models.CharField(max_length=255, blank=True, null=True, verbose_name="API Key WhatsApp", db_column='whatsapp_apikey')
+    activar_whatsapp = models.BooleanField(default=False)
+    
+    minutos_detencion_critica = models.IntegerField(default=60, verbose_name="Mins para Alerta Detención Crítica")
+    alertar_mantenimiento = models.BooleanField(default=True, verbose_name="Alertar Mantenimiento")
+    ultima_modificacion = models.DateTimeField(auto_now=True, db_column='ultima_modificacion')
+
     class Meta:
-        managed = True
+        db_table = 'notificacion_config'
+        verbose_name = 'Configuración de Notificaciones'
+
+    def __str__(self):
+        return "Configuración de Notificaciones"
+
+    @classmethod
+    def get_solo(cls):
+        obj, created = cls.objects.get_or_create(pk=1)
+        return obj
+
+class AlertaHistorial(models.Model):
+    tipo = models.CharField(max_length=50)
+    mensaje = models.TextField()
+    fecha_creacion = models.DateTimeField(auto_now_add=True, db_column='fecha_creacion')
+    fecha_notificacion_ext = models.DateTimeField(null=True, blank=True, db_column='fecha_notificacion_ext')
+    resuelta = models.BooleanField(default=False)
+    maquina_id = models.BigIntegerField(null=True, blank=True)
+
+    class Meta:
         db_table = 'alerta_historial'
         verbose_name = 'Historial de Alerta'
-        verbose_name_plural = 'Historial de Alertas'
-        ordering = ['-fecha_creacion']
 
     def __str__(self):
-        return f"{self.tipo} - {self.maquina.nombre} ({self.fecha_creacion})"
-
-class OperarioConfig(models.Model):
-    # Sin 'use_db', irá a 'default' que es MySQL
-    legajo = models.CharField(max_length=50, unique=True, verbose_name="Legajo")
-    nombre = models.CharField(max_length=150, verbose_name="Nombre Completo")
-    sector = models.CharField(max_length=100, default="PRODUCCION", verbose_name="Sector")
-    activo = models.BooleanField(default=True, verbose_name="Activo")
-
-    class Meta:
-        managed = True
-        db_table = 'operario_config'
-        verbose_name = 'Configuración de Operario'
-        verbose_name_plural = 'Configuraciones de Operarios'
-
-    def __str__(self):
-        return f"{self.nombre} ({self.legajo})"
+        return f"{self.tipo} - {self.fecha_creacion.strftime('%d/%m %H:%M')}"
 
 class Mantenimiento(models.Model):
-    TIPO_CHOICES = [
-        ('CORRECTIVO', 'Correctivo (Rotura)'),
-        ('PREVENTIVO', 'Preventivo (Programado)'),
-        ('MEJORA', 'Mejora / Instalación'),
-    ]
-    ESTADO_CHOICES = [
-        ('ABIERTO', 'Pendiente / Averiada'),
-        ('PROCESO', 'En Reparación'),
-        ('CERRADO', 'Reparada / Finalizada'),
-    ]
     maquina = models.ForeignKey(MaquinaConfig, on_delete=models.CASCADE, related_name='mantenimientos')
-    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default='CORRECTIVO')
-    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='ABIERTO')
-    descripcion_falla = models.TextField(verbose_name="Descripción de la Falla")
-    fecha_reporte = models.DateTimeField(default=timezone.now, verbose_name="Fecha del Reporte/Falla")
-    fecha_inicio_reparacion = models.DateTimeField(null=True, blank=True)
+    fecha_reporte = models.DateTimeField(auto_now_add=True)
     fecha_fin = models.DateTimeField(null=True, blank=True)
+    estado = models.CharField(max_length=20, default='ABIERTO', choices=[
+        ('ABIERTO', 'Abierto'),
+        ('PROCESO', 'En Proceso'),
+        ('CERRADO', 'Cerrado')
+    ])
+    tipo = models.CharField(max_length=50, default='CORRECTIVO')
     tecnico_asignado = models.CharField(max_length=100, null=True, blank=True)
-    observaciones_tecnicas = models.TextField(null=True, blank=True)
-
+    descripcion_falla = models.TextField()
+    detalle_resolucion = models.TextField(null=True, blank=True, db_column='observaciones_tecnicas')
+    fecha_inicio_reparacion = models.DateTimeField(null=True, blank=True)
+    
     class Meta:
-        managed = True
         db_table = 'mantenimiento_incidencias'
         verbose_name = 'Incidencia de Mantenimiento'
-        verbose_name_plural = 'Incidencias de Mantenimiento'
 
     def __str__(self):
-        return f"{self.maquina.nombre} - {self.tipo} ({self.estado})"
-
-    @property
-    def duracion_minutos(self):
-        end_time = self.fecha_fin
-        if not end_time:
-            # Si no ha finalizado, calculamos contra AHORA para mostrar tiempo acumulado en tiempo real
-            end_time = timezone.now()
-
-        total_minutes = 0.0
-        
-        # Convertir a zona horaria local para comparar correctamente con horarios de config (que son "reloj de pared")
-        # Asumimos que la DB está en UTC y el horario de config es Local
-        current_tz = timezone.get_current_timezone()
-        
-        start_local = self.fecha_reporte.astimezone(current_tz)
-        end_local = end_time.astimezone(current_tz)
-        
-        # Recorrer día por día
-        current_date = start_local.date()
-        final_date = end_local.date()
-        d = current_date
-        
-        config = self.maquina
-        
-        while d <= final_date:
-            weekday = d.weekday() # 0=Lunes
-            
-            # Determinar horario laboral del día
-            day_start = datetime.time(7,0)
-            day_end = datetime.time(16,0)
-            is_working_day = True
-            
-            if weekday < 5: # Lun-Vie
-                day_start = config.horario_inicio_sem
-                day_end = config.horario_fin_sem
-            elif weekday == 5: # Sab
-                is_working_day = config.trabaja_sabado
-                if is_working_day:
-                    day_start = config.horario_inicio_sab or datetime.time(7,0)
-                    day_end = config.horario_fin_sab or datetime.time(13,0)
-            else: # Dom
-                is_working_day = config.trabaja_domingo
-                if is_working_day:
-                    day_start = config.horario_inicio_dom or datetime.time(7,0)
-                    day_end = config.horario_fin_dom or datetime.time(13,0)
-            
-            if is_working_day:
-                # Construir datetimes del turno (time aware)
-                shift_start_dt = datetime.datetime.combine(d, day_start)
-                shift_start_dt = timezone.make_aware(shift_start_dt, current_tz)
-                
-                shift_end_dt = datetime.datetime.combine(d, day_end)
-                shift_end_dt = timezone.make_aware(shift_end_dt, current_tz)
-                
-                # Manejo de turno nocturno cruzando medianoche
-                if shift_end_dt < shift_start_dt:
-                    shift_end_dt += datetime.timedelta(days=1)
-                
-                # Intersección: max(inicio_real, inicio_turno) y min(fin_real, fin_turno)
-                effective_start = max(start_local, shift_start_dt)
-                effective_end = min(end_local, shift_end_dt)
-                
-                if effective_end > effective_start:
-                    diff = effective_end - effective_start
-                    total_minutes += diff.total_seconds() / 60.0
-            
-            d += datetime.timedelta(days=1)
-            
-        return int(total_minutes)
-
-    @property
-    def duracion_hhmm(self):
-        mins = self.duracion_minutos
-        hours = int(mins // 60)
-        minutes = int(mins % 60)
-        return f"{hours:02d}h {minutes:02d}m"
+        return f"{self.maquina} - {self.fecha_reporte}"
 
 class AuditLog(models.Model):
-    ACTION_CHOICES = [
-        ('CREATE', 'Creación'),
-        ('UPDATE', 'Actualización'),
-        ('DELETE', 'Eliminación'),
-    ]
-    
     usuario = models.CharField(max_length=100, null=True, blank=True, verbose_name="Usuario")
-    modelo = models.CharField(max_length=50, verbose_name="Entidad Afectada") # Ej: MaquinaConfig, Incidencia
-    referencia_id = models.CharField(max_length=100, verbose_name="ID Referencia") # ID del objeto
-    accion = models.CharField(max_length=20, choices=ACTION_CHOICES)
-    detalle = models.TextField(verbose_name="Detalle del Cambio") # JSON or Text description of what changed
+    modelo = models.CharField(max_length=50, verbose_name="Entidad Afectada", default='N/A')
+    referencia_id = models.CharField(max_length=100, verbose_name="ID Referencia", default='0')
+    accion = models.CharField(max_length=20, choices=[('CREATE', 'Creación'), ('UPDATE', 'Actualización'), ('DELETE', 'Eliminación')], default='UPDATE')
+    detalle = models.TextField(verbose_name='Detalle del Cambio', null=True, blank=True)
     fecha = models.DateTimeField(default=timezone.now)
 
     class Meta:
-        managed = True
         db_table = 'audit_log_cambios'
         verbose_name = 'Registro de Auditoría'
         verbose_name_plural = 'Registros de Auditoría'
         ordering = ['-fecha']
 
     def __str__(self):
-        return f"{self.fecha} - {self.usuario} - {self.accion} {self.modelo}"
+        return f"{self.fecha} - {self.accion} - {self.modelo}"
 
 class BackupHistorial(models.Model):
-    """
-    Registra los backups creados y restaurados del sistema
-    """
-    TIPO_CHOICES = [
-        ('MYSQL', 'Base de Datos MySQL'),
-        ('COMPLETO', 'Sistema Completo (DB + Código)'),
-    ]
-    ESTADO_CHOICES = [
-        ('EXITOSO', 'Exitoso'),
-        ('ERROR', 'Error'),
-        ('RESTAURADO', 'Restaurado'),
-    ]
+    fecha_creacion = models.DateTimeField(auto_now_add=True, db_column='fecha_creacion')
+    tipo = models.CharField(max_length=20) # MYSQL, COMPLETO
+    estado = models.CharField(max_length=20, default='EXITOSO')
+    usuario = models.CharField(max_length=100, null=True, blank=True)
+    notas = models.TextField(blank=True, null=True)
     
-    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default='COMPLETO')
-    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='EXITOSO')
-    archivo_db = models.CharField(max_length=255, null=True, blank=True, verbose_name="Archivo DB")
-    archivo_codigo = models.CharField(max_length=255, null=True, blank=True, verbose_name="Archivo Código")
-    tamano_db_mb = models.FloatField(default=0.0, verbose_name="Tamaño DB (MB)")
-    tamano_codigo_mb = models.FloatField(default=0.0, verbose_name="Tamaño Código (MB)")
-    fecha_creacion = models.DateTimeField(default=timezone.now, verbose_name="Fecha de Creación")
-    usuario = models.CharField(max_length=100, null=True, blank=True, verbose_name="Usuario")
-    notas = models.TextField(null=True, blank=True, verbose_name="Notas")
+    archivo_db = models.CharField(max_length=255, null=True, blank=True)
+    tamano_db_mb = models.FloatField(default=0.0)
+    
+    archivo_codigo = models.CharField(max_length=255, null=True, blank=True)
+    tamano_codigo_mb = models.FloatField(default=0.0)
     
     class Meta:
-        managed = True
         db_table = 'backup_historial'
         verbose_name = 'Historial de Backup'
-        verbose_name_plural = 'Historial de Backups'
-        ordering = ['-fecha_creacion']
-    
-    def __str__(self):
-        return f"{self.tipo} - {self.fecha_creacion.strftime('%Y-%m-%d %H:%M')}"
-    
+
     @property
     def tamano_total_mb(self):
-        return self.tamano_db_mb + self.tamano_codigo_mb
-
-class NotificacionConfig(models.Model):
-    """
-    Configuración global de alertas y notificaciones externas.
-    """
-    # Telegram
-    telegram_token = models.CharField(max_length=255, null=True, blank=True, verbose_name="Token del Bot de Telegram")
-    telegram_chat_id = models.CharField(max_length=100, null=True, blank=True, verbose_name="ID de Chat de Telegram")
-    activar_telegram = models.BooleanField(default=False, verbose_name="Activar Notificaciones Telegram")
-    
-    # WhatsApp (CallMeBot)
-    whatsapp_phone = models.CharField(max_length=50, null=True, blank=True, verbose_name="Teléfono WhatsApp (Formato Int.)")
-    whatsapp_apikey = models.CharField(max_length=100, null=True, blank=True, verbose_name="API Key WhatsApp")
-    activar_whatsapp = models.BooleanField(default=False, verbose_name="Activar Notificaciones WhatsApp")
-    
-    # Thresholds
-    minutos_detencion_critica = models.IntegerField(default=20, verbose_name="Minutos para Alerta de Detención")
-    alertar_mantenimiento = models.BooleanField(default=True, verbose_name="Alertar Apertura de Mantenimiento")
-    
-    # Metadata
-    ultima_modificacion = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        managed = True
-        db_table = 'notificacion_config'
-        verbose_name = 'Configuración de Notificaciones'
-        verbose_name_plural = 'Configuraciones de Notificaciones'
+        return (self.tamano_db_mb or 0) + (self.tamano_codigo_mb or 0)
 
     def __str__(self):
-        return f"Configuración de Alertas (Modificado: {self.ultima_modificacion.strftime('%Y-%m-%d %H:%M')})"
+        return f"Backup {self.fecha_creacion.strftime('%d/%m/%Y %H:%M')}"
 
-    @classmethod
-    def get_solo(cls):
-        """Devuelve la única instancia de configuración, creándola si no existe."""
-        obj, created = cls.objects.get_or_create(pk=1)
-        return obj
+
+class OperarioConfig(models.Model):
+    legajo = models.CharField(max_length=50, unique=True, verbose_name="Legajo (ID ERP)")
+    nombre = models.CharField(max_length=150, verbose_name="Nombre Completo")
+    activo = models.BooleanField(default=True)
+    sector = models.CharField(max_length=50, default='PRODUCCION')
+
+    class Meta:
+        db_table = 'operario_config'
+        verbose_name = 'Configuración de Operario'
+
+    def __str__(self):
+        return f"{self.nombre} ({self.legajo})"

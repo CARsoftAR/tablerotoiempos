@@ -26,6 +26,8 @@ from .views_backup import (
 )
 
 
+
+
 def dashboard_produccion(request, return_context=False, force_date=None, force_start=None, force_end=None, force_format=None):
     # Rango de fechas: HOY (para ver estado en tiempo real)
     # Rango de fechas: HOY
@@ -916,6 +918,8 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         t_std_hrs = data['tiempo_cotizado'] / 60.0
         qty = data['cantidad_producida']
         
+        # Turno promedio para personal (9hs por día trabajado o del periodo)
+        # Para hoy, usamos el tiempo transcurrido del turno para que el OEE sea real
         # Turno promedio para personal (9hs por día trabajado o del periodo)
         # Para hoy, usamos el tiempo transcurrido del turno para que el OEE sea real
         t_disp_p = 0.0
@@ -2161,6 +2165,8 @@ def estadisticas_avanzadas(request):
     operator_stats = {} 
     machine_stats = {} # Para cuello de botella y ranking sectorial
     
+    all_ops_db = {o.legajo: o.nombre for o in OperarioConfig.objects.all()}
+    
     # Horarios promedio para proyección (podríamos sacarlo de MaquinaConfig)
     # Asumimos turno estándar 07:00 a 16:00 (9hs)
     SHIFT_START_HOUR = 7
@@ -2168,12 +2174,19 @@ def estadisticas_avanzadas(request):
     SHIFT_TOTAL_MINS = (SHIFT_END_HOUR - SHIFT_START_HOUR) * 60
     
     # Main Loop over Days (avoiding cross-db aggregation issues)
+    AUDIT_START_DATE = datetime.date(2026, 2, 5) # Comienzo solicitado por el usuario
+
     for i in range(days):
         d_loop = start_date + datetime.timedelta(days=i)
         start_str = d_loop.strftime('%Y-%m-%d')
-        qs_day = VTMan.objects.extra(where=["CONVERT(date, FECHA) = %s"], params=[start_str])
+        qs_day = VTMan.objects.extra(where=["CONVERT(date, FECHA) = %s"], params=[start_str]).order_by('hora_inicio')
         
-        # --- Daily Aggregation ---
+        for reg in qs_day:
+            uid = str(reg.id_concepto or '').strip()
+            mid = str(reg.id_maquina or '').strip()
+            h_ini = reg.hora_inicio
+            h_fin = reg.hora_fin
+            if not uid or uid == 'None': continue
         aggregation = qs_day.aggregate(
             sum_real=Sum('tiempo_minutos'),
             sum_std=Sum('tiempo_cotizado'),
@@ -2364,6 +2377,7 @@ def estadisticas_avanzadas(request):
         'projection': projection,
         'sector_ranking': sector_ranking,
         'maintenance': maintenance_status,
+        'audit': [],
         'heatmap': [
             {'name': m['name'], 'data': [{'x': 'Incidencias', 'y': m['incidencias']}]} 
             for m in maintenance_status if m['incidencias'] > 0
