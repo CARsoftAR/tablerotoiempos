@@ -978,15 +978,61 @@
 
         .trace-path {
             fill: none;
-            stroke: var(--trace-violet);
-            stroke-width: 0.2;
-            stroke-dasharray: 2 1;
-            animation: trace-dash 2s linear infinite;
-            filter: drop-shadow(0 0 2px var(--trace-violet-glow));
+            stroke: #c084fc; /* Vibrant Violet */
+            stroke-width: 0.4;
+            stroke-dasharray: 3 2;
+            animation: trace-dash 3s linear infinite, trace-neon-pulse 4s ease-in-out infinite;
+            filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 3px var(--trace-violet-glow));
         }
 
         @keyframes trace-dash {
-            to { stroke-dashoffset: -15; }
+            from { stroke-dashoffset: 20; }
+            to { stroke-dashoffset: 0; }
+        }
+
+        @keyframes trace-neon-pulse {
+            0%, 100% { 
+                opacity: 0.3; 
+                filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px var(--trace-violet-glow));
+            }
+            50% { 
+                opacity: 1; 
+                filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 8px var(--trace-violet-glow));
+                stroke-width: 0.5;
+            }
+        }
+
+        .trace-path-emerald {
+            fill: none;
+            stroke: #10b981; /* Emerald Green */
+            stroke-width: 0.4;
+            stroke-dasharray: 3 2;
+            animation: trace-dash 3s linear infinite, trace-emerald-pulse 4s ease-in-out infinite;
+            filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 3px rgba(16, 185, 129, 0.6));
+        }
+
+        @keyframes trace-emerald-pulse {
+            0%, 100% { 
+                opacity: 0.3; 
+                filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px rgba(16, 185, 129, 0.4));
+            }
+            50% { 
+                opacity: 1; 
+                filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 8px rgba(16, 185, 129, 0.9));
+                stroke-width: 0.5;
+            }
+        }
+
+        .dispatch-hub {
+            fill: rgba(16, 185, 129, 0.1);
+            stroke: #10b981;
+            stroke-width: 0.5;
+            animation: hub-pulse 3s infinite ease-in-out;
+        }
+
+        @keyframes hub-pulse {
+            0%, 100% { transform: scale(1); opacity: 0.5; filter: blur(2px); }
+            50% { transform: scale(1.1); opacity: 0.8; filter: blur(4px); }
         }
 
         .trace-arrow {
@@ -3057,8 +3103,8 @@
                     <marker id="trace-arrowhead" markerWidth="3" markerHeight="3" refX="2.5" refY="1.5" orient="auto">
                         <polygon points="0 0, 3 1.5, 0 3" fill="var(--trace-violet)" />
                     </marker>
-                    <filter id="trace-glow-pulse" x="-50%" y="-50%" width="200%" height="200%">
-                        <feGaussianBlur stdDeviation="0.3" result="blur" />
+                    <filter id="trace-glow-pulse" x="-100%" y="-100%" width="300%" height="300%">
+                        <feGaussianBlur stdDeviation="0.8" result="blur" />
                         <feComposite in="SourceGraphic" in2="blur" operator="over" />
                     </filter>
                 </defs>
@@ -3235,54 +3281,59 @@
                     // Logistics Path Style
                     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
                     path.setAttribute("d", dispatchPathD);
-                    path.setAttribute("stroke", "#f59e0b"); // Amber/Orange for Logistics
-                    path.setAttribute("stroke-width", "0.15");
-                    path.setAttribute("stroke-dasharray", "0.5, 0.5"); // Dashed line
-                    path.setAttribute("fill", "none");
-                    path.setAttribute("opacity", "0.8");
+                    path.setAttribute("class", "trace-path-emerald");
                     svg.appendChild(path);
 
-                    // FORKLIFT (AUTOELEVADOR) GROUP
-                    // REALISTIC DISPATCH SCENE (Fixed Proportions & Centering)
-                    const dispatchScene = document.createElementNS("http://www.w3.org/2000/svg", "g");
-                    dispatchScene.style.pointerEvents = "none";
-                    dispatchScene.setAttribute("pointer-events", "none"); 
-                    // Centered precisely: width 32 (16 each side), height 24 (12 each side)
-                    dispatchScene.setAttribute("transform", `translate(${dispatchX - 16}, ${dispatchY - 12})`); 
-                    dispatchScene.style.mixBlendMode = "screen";
-                    dispatchScene.innerHTML = `
-                        <foreignObject width="32" height="24" overflow="visible" style="pointer-events: none;">
-                            <div xmlns="http://www.w3.org/1999/xhtml" style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; pointer-events: none;">
-                                <img src="/static/dashboard/images/despacho_realista.png?v=${new Date().getTime()}" 
-                                     style="width: 100%; height: auto; mix-blend-mode: screen; pointer-events: none;" 
-                                     alt="Despacho Realista" />
-                            </div>
-                        </foreignObject>
-                    `;
-                    svg.appendChild(dispatchScene);
+                    // --- SOFTER DISPATCH INDICATOR (Replacing clunky image) ---
+                    const dispatchHub = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                    dispatchHub.setAttribute("transform", `translate(${dispatchX}, ${dispatchY})`);
+                    
+                    // Add background soft glow
+                    const hubGlow = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                    hubGlow.setAttribute("r", "4");
+                    hubGlow.setAttribute("class", "dispatch-hub");
+                    dispatchHub.appendChild(hubGlow);
 
-                    // ANIMATED PARTICLE EFFECT (Replacing the goods image)
-                    const sampiGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                    // Add central icon/point
+                    const hubCenter = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                    hubCenter.setAttribute("r", "1");
+                    hubCenter.setAttribute("fill", "#10b981");
+                    hubCenter.setAttribute("filter", "url(#trace-glow-pulse)");
+                    dispatchHub.appendChild(hubCenter);
+
+                    // Add a small text label
+                    const hubLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                    hubLabel.setAttribute("y", "6");
+                    hubLabel.setAttribute("text-anchor", "middle");
+                    hubLabel.setAttribute("fill", "#10b981");
+                    hubLabel.setAttribute("style", "font-size: 1.5px; font-weight: 800; font-family: Inter; text-transform: uppercase; letter-spacing: 0.1px;");
+                    hubLabel.textContent = "DESPACHO";
+                    dispatchHub.appendChild(hubLabel);
+
+                    svg.appendChild(dispatchHub);
+
+                    // ANIMATED PARTICLE EFFECT (Logistics)
+                    const logisticsParticleGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
                     
                     const particle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
                     particle.setAttribute("r", "0.5");
-                    particle.setAttribute("fill", "white");
+                    particle.setAttribute("fill", "#10b981"); // Match emerald
                     particle.setAttribute("filter", "url(#trace-glow-pulse)");
-                    sampiGroup.appendChild(particle);
+                    logisticsParticleGroup.appendChild(particle);
 
                     // Animate the Group along the path
                     const anim = document.createElementNS("http://www.w3.org/2000/svg", "animateMotion");
                     anim.setAttribute("dur", "6s");
-                    anim.setAttribute("begin", "1s"); // Wait a bit after drawing
+                    anim.setAttribute("begin", "1s"); 
                     anim.setAttribute("repeatCount", "indefinite");
                     anim.setAttribute("path", dispatchPathD);
-                    anim.setAttribute("rotate", "auto"); // Rotate to follow path direction
-                    anim.setAttribute("keyTimes", "0; 0.8; 1"); // Arrive and wait
+                    anim.setAttribute("rotate", "auto"); 
+                    anim.setAttribute("keyTimes", "0; 0.8; 1"); 
                     anim.setAttribute("keyPoints", "0; 1; 1");
                     anim.setAttribute("calcMode", "linear");
                     
-                    sampiGroup.appendChild(anim);
-                    svg.appendChild(sampiGroup);
+                    logisticsParticleGroup.appendChild(anim);
+                    svg.appendChild(logisticsParticleGroup);
 
 
                 }

@@ -699,6 +699,9 @@ document.addEventListener("DOMContentLoaded", function() {
                         const avgEl = document.getElementById('avgOeeValue');
                         if(avgEl) avgEl.textContent = avgOee + '%';
 
+                        const maxVal = Math.max(...chartData.trend.map(i => i.oee || 0));
+                        const yMax = Math.max(120, Math.ceil(maxVal / 20) * 20 + 20);
+
                         const optionsOee = {
                             series: [{ name: 'OEE Global', data: chartData.trend.map(d => d.oee) }],
                             chart: { 
@@ -716,8 +719,25 @@ document.addEventListener("DOMContentLoaded", function() {
                             fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.6, opacityTo: 0.05, stops: [0, 100] } },
                             stroke: { curve: 'smooth', width: 4 },
                             xaxis: { categories: chartData.trend.map(d => d.date), labels: { style: { colors: '#ffffff', fontWeight: 700 } } },
-                            yaxis: { min: 0, max: 110, labels: { style: { colors: '#ffffff', fontWeight: 700 }, formatter: v => v.toFixed(0) + "%" } },
-                            grid: { borderColor: 'rgba(255,255,255,0.05)', strokeDashArray: 8 },
+                            yaxis: { 
+                                min: 0, 
+                                max: yMax,
+                                forceNiceScale: true,
+                                labels: { style: { colors: '#ffffff', fontWeight: 700 }, formatter: v => v.toFixed(0) + "%" } 
+                            },
+                            annotations: {
+                                yaxis: [{
+                                    y: 100,
+                                    borderColor: '#ef4444',
+                                    strokeDashArray: 4,
+                                    label: {
+                                        borderColor: '#ef4444',
+                                        style: { color: '#fff', background: '#ef4444', fontSize: '10px', fontWeight: 'bold' },
+                                        text: 'META 100%'
+                                    }
+                                }]
+                            },
+                            grid: { borderColor: 'rgba(255,255,255,0.05)', strokeDashArray: 8, padding: { top: 20 } },
                             markers: { size: 6, colors: ['#0f172a'], strokeColors: '#fbbf24', strokeWidth: 3, hover: { size: 9, sizeOffset: 3 } },
                             theme: { mode: 'dark' },
                             tooltip: {

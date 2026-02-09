@@ -932,13 +932,56 @@
         const paretoData = JSON.parse('{{ pareto_data|safe }}');
 
         if(document.getElementById('chart-trend')) {
+            const maxVal = Math.max(...trendData.map(i => i.oee || 0));
+            const yMax = Math.max(120, Math.ceil(maxVal / 20) * 20 + 20);
+
             new ApexCharts(document.getElementById('chart-trend'), {
                 series: [{ name: 'OEE Global', data: trendData.map(i => i.oee) }],
-                chart: { height: '100%', type: 'line', toolbar: { show: false }, foreColor: '#94a3b8' },
+                chart: { 
+                    height: '100%', 
+                    type: 'line', 
+                    toolbar: { show: false }, 
+                    foreColor: '#94a3b8',
+                    padding: { top: 0, right: 0, bottom: 0, left: 0 }
+                },
                 stroke: { curve: 'smooth', width: 4 },
-                xaxis: { categories: trendData.map(i => i.day) },
-                yaxis: { max: 100 },
-                grid: { borderColor: '#334155' }
+                xaxis: { 
+                    categories: trendData.map(i => i.day),
+                    labels: {
+                        style: { fontSize: '10px' },
+                        rotate: -45,
+                        rotateAlways: false
+                    }
+                },
+                yaxis: { 
+                    min: 0,
+                    max: yMax,
+                    forceNiceScale: true,
+                    labels: {
+                        style: { fontSize: '10px' },
+                        formatter: (val) => val.toFixed(0) + '%'
+                    }
+                },
+                annotations: {
+                    yaxis: [{
+                        y: 100,
+                        borderColor: '#ef4444',
+                        label: {
+                            borderColor: '#ef4444',
+                            style: { color: '#fff', background: '#ef4444', fontSize: '10px', fontWeight: 'bold' },
+                            text: '100%'
+                        }
+                    }]
+                },
+                grid: { 
+                    borderColor: '#334155',
+                    strokeDashArray: 4,
+                    padding: {
+                        top: 20,
+                        right: 20
+                    }
+                },
+                tooltip: { theme: 'dark' }
             }).render();
         }
 
