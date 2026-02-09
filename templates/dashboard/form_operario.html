@@ -77,6 +77,18 @@
                     </div>
                 </div>
 
+                <!-- Vacaciones -->
+                <div class="bg-amber-50 border border-amber-100 rounded-xl p-5 flex items-center justify-between">
+                    <div>
+                        <label for="en_vacaciones" class="block text-base font-bold text-amber-900 cursor-pointer">En Vacaciones</label>
+                        <p class="text-xs text-amber-600">Si está marcado, se excluirá temporalmente de las estadísticas de producción.</p>
+                    </div>
+                    <div class="relative inline-block w-14 align-middle select-none transition duration-200 ease-in">
+                        <input type="checkbox" name="en_vacaciones" id="en_vacaciones" class="toggle-checkbox absolute block w-7 h-7 rounded-full bg-white border-4 appearance-none cursor-pointer border-amber-200 checked:right-0 checked:border-amber-600 transition-all duration-300 shadow-sm" {% if operario.en_vacaciones %}checked{% endif %}/>
+                        <label for="en_vacaciones" class="toggle-label block overflow-hidden h-7 rounded-full bg-amber-200 cursor-pointer"></label>
+                    </div>
+                </div>
+
             </div>
 
             <!-- Footer Buttons -->

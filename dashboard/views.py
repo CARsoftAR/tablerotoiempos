@@ -144,7 +144,8 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         operarios_db = OperarioConfig.objects.all()
         for o in operarios_db:
             nombres_operarios[o.legajo] = o.nombre
-            if o.activo and o.sector == 'PRODUCCION':
+            # EXCLUSIÓN CRÍTICA: Los operarios de vacaciones NO se tienen en cuenta para producción
+            if o.activo and o.sector == 'PRODUCCION' and not o.en_vacaciones:
                 operarios_activos_ids.add(o.legajo)
     except: pass
 
@@ -262,7 +263,7 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
 
         non_prod_keywords = ['REPROCESO', 'RETRABAJO', 'DESCARTE', 'SCRAP']
         # Sincronizado con obtener_auditoria: Solo descansos reales restan disponibilidad total
-        descanso_keywords = ['DESCANSO', 'ALMUERZO', 'PAUSA']
+        descanso_keywords = ['DESCANSO', 'ALMUERZO', 'PAUSA', 'VACACIONES', 'LICENCIA']
         
         # Estas tareas son laborales pero no tienen estándar productivo, usamos Regla 1:1
         special_keywords = [
@@ -1194,7 +1195,7 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         h_perf = (h_std * 60 / h_prod * 100) if h_prod > 0 else 0
         history_trend.append({
             'day': d_check.strftime('%d/%m'),
-            'oee': round(h_perf * 0.8, 1) # Estimación rápida OEE Histórico
+            'oee': round(h_perf, 1) # Eliminado el factor 0.8 arbitrario
         })
 
     # 2. Pareto de Paradas (Motivos de interrupción)
@@ -1507,7 +1508,8 @@ def crear_operario(request):
                 legajo=legajo,
                 nombre=nombre,
                 sector=sector,
-                activo=request.POST.get('activo') == 'on'
+                activo=request.POST.get('activo') == 'on',
+                en_vacaciones=request.POST.get('en_vacaciones') == 'on'
             )
             messages.success(request, 'Operario creado correctamente.')
             return redirect('gestion_personal')
@@ -1526,6 +1528,7 @@ def editar_operario(request, pk):
             operario.nombre = request.POST.get('nombre').strip()
             operario.sector = request.POST.get('sector').strip() or "PRODUCCION"
             operario.activo = request.POST.get('activo') == 'on'
+            operario.en_vacaciones = request.POST.get('en_vacaciones') == 'on'
             operario.save()
             messages.success(request, 'Operario actualizado.')
             return redirect(reverse('gestion_personal') + f'?page={page}')
@@ -2200,15 +2203,48 @@ def estadisticas_avanzadas(request):
         active_machines_day = list(qs_day.values_list('id_maquina', flat=True).distinct())
         active_machines_count = len(active_machines_day) or 1
         
-        # Approx OEE for Trend
-        total_planned_mins = active_machines_count * 540 # Default 9hs
+        # --- DYNAMIC AVAILABILITY (Synchronized with main dashboard) ---
+        total_planned_mins_day = 0
+        from .models import MaquinaConfig
+        m_configs_day = {m.id_maquina: m for m in MaquinaConfig.objects.filter(id_maquina__in=active_machines_day)}
+        
+        for mid in active_machines_day:
+            mcfg = m_configs_day.get(mid)
+            m_start = datetime.time(7, 0)
+            m_end = datetime.time(16, 0)
+            works = True
+            if mcfg:
+                wd = d_loop.weekday()
+                if wd < 5: 
+                    m_start, m_end = mcfg.horario_inicio_sem, mcfg.horario_fin_sem
+                elif wd == 5: 
+                    works, m_start, m_end = mcfg.trabaja_sabado, mcfg.horario_inicio_sab or m_start, mcfg.horario_fin_sab or m_end
+                else: 
+                    works, m_start, m_end = mcfg.trabaja_domingo, mcfg.horario_inicio_dom or m_start, mcfg.horario_fin_dom or m_end
+            
+            if works:
+                def t2m(t): return t.hour * 60 + t.minute
+                s_m, e_m = t2m(m_start), t2m(m_end)
+                if e_m < s_m: e_m += 1440
+                full_m = e_m - s_m
+                
+                if d_loop == today_date:
+                    cur_m = now_local.hour * 60 + now_local.minute
+                    if cur_m < s_m: total_planned_mins_day += 0
+                    elif cur_m > e_m: total_planned_mins_day += full_m
+                    else: total_planned_mins_day += (cur_m - s_m)
+                else:
+                    total_planned_mins_day += full_m
+
         total_real_mins = aggregation['sum_real'] or 0
-        avail = min(1.0, (total_real_mins / total_planned_mins)) if total_planned_mins > 0 else 0
+        avail = min(1.0, (total_real_mins / total_planned_mins_day)) if total_planned_mins_day > 0 else 0
         
         prod_mins_only = qs_day.filter(es_interrupcion=False).aggregate(s=Sum('tiempo_minutos'))['s'] or 0
+        # sum_std is in HOURS from ERP, convert to Minutes for perf if prod_mins is mins
+        # OR: stays as Ratio if we use (sum_std_hrs / prod_hrs)
         perf = ((aggregation['sum_std'] or 0) / (prod_mins_only / 60.0)) if prod_mins_only > 0 else 0
         
-        oee_day = min(100.0, (avail * perf * 1.0) * 100) if d_loop.weekday() != 6 else 0
+        oee_day = min(100.0, (avail * perf * 100.0)) if d_loop.weekday() != 6 else 0
         trend_data.append({'full_date': d_loop.strftime('%Y-%m-%d'), 'date': d_loop.strftime('%d/%m'), 'oee': round(oee_day, 1)})
 
         # --- Machine & Bottleneck Accumulation ---
@@ -2275,13 +2311,15 @@ def estadisticas_avanzadas(request):
         
         mins_passed = (current_hour - SHIFT_START_HOUR) * 60 + current_min
         if 0 < mins_passed < SHIFT_TOTAL_MINS:
-            # Factor de aceleración/desaceleración basado en los últimos 30 min (simulado o simplificado)
             projection['current'] = current_oee
-            # Proporción simple: si mantengo este OEE, terminaré en el mismo OEE (Avail y Perf promedio)
-            # Pero si Avail cae, el final cae. Por ahora usamos el corriente como base proyectada estable.
-            projection['projected'] = round(current_oee * 1.05 if current_oee < 85 else current_oee, 1) # Simulación de optimismo
-            if current_oee > 80: projection['trend'] = 'up'
-            elif current_oee < 60: projection['trend'] = 'down'
+            # Proyección lineal: Si mantengo el ritmo de eficiencia (Std / Tiempo Transcurrido)
+            # Extrapolamos el OEE actual a la jornada completa
+            projection['projected'] = current_oee
+            # Trend based on last 2 records
+            if len(trend_data) > 2:
+                prev_oee = trend_data[-2]['oee']
+                if current_oee > prev_oee + 5: projection['trend'] = 'up'
+                elif current_oee < prev_oee - 5: projection['trend'] = 'down'
         else:
             projection['current'] = current_oee
             projection['projected'] = current_oee

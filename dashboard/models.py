@@ -208,6 +208,7 @@ class OperarioConfig(models.Model):
     legajo = models.CharField(max_length=50, unique=True, verbose_name="Legajo (ID ERP)")
     nombre = models.CharField(max_length=150, verbose_name="Nombre Completo")
     activo = models.BooleanField(default=True)
+    en_vacaciones = models.BooleanField(default=False, verbose_name="En Vacaciones")
     sector = models.CharField(max_length=50, default='PRODUCCION')
 
     class Meta:
