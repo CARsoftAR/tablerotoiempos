@@ -279,6 +279,32 @@
                         </label>
                     </div>
 
+                    <div class="space-y-4 pt-4">
+                        <div class="flex justify-between items-center">
+                            <label class="text-xs font-black text-white/60 uppercase tracking-widest">Días de Auditoría</label>
+                            <span class="text-sky-500 font-black text-lg" id="dayVal">{{ config.dias_atras_auditoria }}D</span>
+                        </div>
+                        <input type="range" name="dias_atras" min="1" max="15" step="1" value="{{ config.dias_atras_auditoria }}"
+                               oninput="document.getElementById('dayVal').innerText = this.value + 'D'"
+                               class="w-full h-2 bg-white/5 rounded-full appearance-none cursor-pointer accent-sky-500">
+                        <p class="text-[9px] text-white/30 italic leading-relaxed">
+                            Lapso de tiempo hacia atrás que el sistema verificará automáticamente en busca de anomalías de rendimiento (hoy, ayer, hasta 15 días).
+                        </p>
+                    </div>
+
+                    <div class="pt-6 border-t border-white/5 space-y-4">
+                        <label class="label-premium !text-sky-500">Auditoría Forzada</label>
+                        <div class="grid grid-cols-2 gap-4">
+                            <a href="?audit_days=1" class="p-4 rounded-2xl bg-white/5 border border-white/10 text-[10px] font-black text-center hover:bg-sky-500/10 hover:border-sky-500/30 transition-all uppercase tracking-widest text-white/60">
+                                Auditar Ayer
+                            </a>
+                            <a href="?audit_days=7" class="p-4 rounded-2xl bg-white/5 border border-white/10 text-[10px] font-black text-center hover:bg-sky-500/10 hover:border-sky-500/30 transition-all uppercase tracking-widest text-white/60">
+                                Auditar Semana
+                            </a>
+                        </div>
+                        <p class="text-[8px] text-white/20 italic">Utilice estos botones para buscar anomalías en días pasados de forma inmediata.</p>
+                    </div>
+
                     <div class="pt-6">
                         <button type="submit" class="btn-save shadow-amber-500/10">
                             <i class="fas fa-save mr-3"></i> Guardar Cambios

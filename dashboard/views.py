@@ -353,7 +353,8 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                          'name': u_name, 
                          'task': u_task,
                          'obs': raw_obs,
-                         'art': raw_art_d
+                         'art': raw_art_d,
+                         'op_number': reg.get('id_orden') or '---'
                      }
         
         # 2. Caso: Máquina Asignada (Solo si no es unassigned)
@@ -550,7 +551,8 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                         'article': art or "---",
                         'perf': op_perf,
                         'avail': op_avail,
-                        'uid': uid
+                        'uid': uid,
+                        'op_number': reg.get('id_orden') or '---'
                     }
             
             # Cálculo de Tiempos
@@ -1316,7 +1318,8 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         unassigned_operators_list.append({
             'uid': uid,
             'name': info['name'],
-            'task': info['task']
+            'task': info['task'],
+            'op_number': info.get('op_number', '---')
         })
     
     # Ordenar por nombre
@@ -2612,114 +2615,148 @@ def detalle_oee_dia(request):
 
     return JsonResponse(response_data)
 
+def run_data_audit(request, days_back=1):
+    """
+    Función interna que recorre los días hacia atrás buscando anomalías de rendimiento.
+    Retorna la cantidad de alertas nuevas creadas.
+    """
+    from .models import AlertaHistorial
+    from datetime import timedelta
+    
+    new_alerts_count = 0
+    now = timezone.localtime(timezone.now())
+    hoy = now.date()
+    
+    for i in range(days_back):
+        target_date = hoy - timedelta(days=i)
+        target_str = target_date.strftime('%Y-%m-%d')
+        
+        # Obtener KPIs del día
+        try:
+            # Reutilizamos dashboard_produccion para obtener los KPIs procesados por operario
+            data = dashboard_produccion(request, return_context=True, force_date=target_str)
+        except:
+            continue
+            
+        personal_data = data.get('lista_kpis_personal', [])
+        for p in personal_data:
+            p_name = p.get('operator_name', p.get('name', 'S/N'))
+            p_legajo = str(p.get('id', ''))
+            p_perf = p.get('performance', 0)
+            p_hrs = p.get('horas_prod', 0)
+            
+            # Solo alertar si tiene producción significativa (> 30 mins)
+            if p_hrs > 0.5:
+                anomalia = None
+                if p_perf < 35:
+                    anomalia = f"Rendimiento MUY BAJO ({p_perf:.1f}%)"
+                elif p_perf > 200:
+                    anomalia = f"Rendimiento IRREAL/EXCESIVO ({p_perf:.1f}%)"
+                
+                if anomalia:
+                    fecha_label = target_date.strftime('%d/%m')
+                    msg = f"🔍 Verificación requerida: {p_name} ({p_legajo}). {anomalia} detectado el {fecha_label}. Por favor, verifique que los tiempos y piezas sean correctos."
+                    
+                    # Evitar duplicados (mismo operario y misma fecha de producción referenciada)
+                    if not AlertaHistorial.objects.filter(
+                        tipo='ANOMALIA_DATOS',
+                        mensaje__icontains=p_legajo
+                    ).filter(mensaje__icontains=fecha_label).exists():
+                        AlertaHistorial.objects.create(
+                            tipo='ANOMALIA_DATOS',
+                            mensaje=msg,
+                            resuelta=False
+                        )
+                        new_alerts_count += 1
+    return new_alerts_count
+
 def check_alerts(request):
     """
     API Endpoint JSON para verificar alertas en tiempo real.
-    NUEVA IMPLEMENTACIÓN: Usa directamente los datos del dashboard principal para evitar errores de timezone.
     """
     alerts_to_return = []
     
-    # PASO 1: Obtener datos del dashboard principal (que ya calcula correctamente todos los tiempos)
+    # PASO 1: Obtener configuración
+    from .models import NotificacionConfig, AlertaHistorial
+    config = NotificacionConfig.get_solo()
+    umbral_mins = config.minutos_detencion_critica
+    now = timezone.localtime(timezone.now())
+    
+    # PASO 2: AUDITORÍA DE ANOMALÍAS (Multi-día configurable)
+    # Ejecutamos la auditoría según el lapso configurado (hoy, ayer, N días)
+    # Nota: Para evitar lentitud extremas en polling, limitamos a 2 días en polling automático,
+    # el resto se puede disparar desde la configuración.
+    dias_auto = min(2, config.dias_atras_auditoria or 1)
+    run_data_audit(request, days_back=dias_auto)
+
+    # PASO 3: Obtener datos del dashboard principal para alertas de máquinas (Tiempo Real)
     try:
         dashboard_data = dashboard_produccion(request, return_context=True, force_date='today')
     except Exception as e:
-        return JsonResponse({'alerts': [], 'error': f'Error al obtener datos del dashboard: {str(e)}'})
+        return JsonResponse({'alerts': [], 'error': f'Error al obtener datos: {str(e)}'})
     
-    # PASO 2: Cargar configuración
-    from .models import NotificacionConfig
-    config = NotificacionConfig.get_solo()
-    umbral_mins = config.minutos_detencion_critica
-    
-    now = timezone.localtime(timezone.now())
-    
-    # PASO 3: Obtener tickets de mantenimiento activos
+    # PASO 4: Tickets de mantenimiento activos
     open_tickets = set(Mantenimiento.objects.filter(
         estado__in=['ABIERTO', 'PROCESO']
     ).values_list('maquina__id_maquina', flat=True))
     
-    # PASO 4: Pre-cargar alertas abiertas
+    # PASO 5: Pre-cargar alertas abiertas
     open_alerts = {
         a.maquina_id: a for a in AlertaHistorial.objects.filter(resuelta=False)
     }
     
-    # PASO 5: Procesar cada máquina usando los datos ya calculados del dashboard
+    # PASO 6: Procesar máquinas (Detenciones Críticas)
     machines_data = dashboard_data.get('cards_data', [])
-    
     for machine in machines_data:
         machine_id = machine.get('id')
         machine_name = machine.get('name', machine_id)
         
-        # Buscar la config de esta máquina
         try:
             m_config = MaquinaConfig.objects.get(id_maquina=machine_id)
         except MaquinaConfig.DoesNotExist:
             continue
         
-        # Si está en mantenimiento, cerrar alertas existentes
         if machine_id in open_tickets:
             if m_config.id in open_alerts:
                 a = open_alerts[m_config.id]
                 a.resuelta = True
-                a.fecha_resolucion = now
-                a.detalle_resolucion = "Auto-cierre: Máquina en Mantenimiento"
                 a.save()
             continue
         
-        # USAR LOS DATOS YA CALCULADOS DEL DASHBOARD
         is_online = machine.get('is_online', False)
         idle_mins = machine.get('idle_mins', 0)
         
-        # Determinar si debe alertar
-        # El dashboard ya calculó correctamente el tiempo de inactividad
-        should_alert = False
-        
-        # Si la máquina NO está online Y tiene más del umbral de minutos inactiva
         if not is_online and idle_mins > umbral_mins:
-            should_alert = True
-        
-        # Gestión de alertas
-        if should_alert:
             msg = f"⚠️ {machine_name} lleva {int(idle_mins)} min. detenida sin motivo reportado."
             
             if m_config.id in open_alerts:
-                # Actualizar alerta existente
                 existing = open_alerts[m_config.id]
                 existing.mensaje = msg
                 existing.save(update_fields=['mensaje'])
-                
-                alerts_to_return.append({
-                    'type': 'error',
-                    'id': existing.id,
-                    'title': 'Detención Crítica',
-                    'message': msg,
-                    'time': now.strftime("%H:%M")
-                })
+                alerts_to_return.append({'type': 'error', 'id': existing.id, 'title': 'Detención Crítica', 'message': msg, 'time': now.strftime("%H:%M")})
             else:
-                # Crear nueva alerta
-                new_alert = AlertaHistorial.objects.create(
-                    maquina=m_config,
-                    tipo='DETENCION_CRITICA',
-                    mensaje=msg
-                )
+                new_alert = AlertaHistorial.objects.create(maquina_id=m_config.id, tipo='DETENCION_CRITICA', mensaje=msg)
                 if send_external_notification(msg):
                     new_alert.fecha_notificacion_ext = now
                     new_alert.save()
-                    
-                alerts_to_return.append({
-                    'type': 'error',
-                    'id': new_alert.id,
-                    'title': 'Detención Crítica',
-                    'message': msg,
-                    'time': now.strftime("%H:%M")
-                })
+                alerts_to_return.append({'type': 'error', 'id': new_alert.id, 'title': 'Detención Crítica', 'message': msg, 'time': now.strftime("%H:%M")})
         else:
-            # AUTO-RESOLVER si existe alerta pero la máquina ya está activa
             if m_config.id in open_alerts:
                 a = open_alerts[m_config.id]
                 a.resuelta = True
-                a.fecha_resolucion = now
-                a.detalle_resolucion = "Auto-cierre: Actividad detectada"
                 a.save()
+    
+    # PASO 7: Agregar alertas de anomalías (Warning/Audit) a la respuesta de la campana
+    # Mostramos las alertas no resueltas de anomalías creadas recientemente
+    anomalias = AlertaHistorial.objects.filter(tipo='ANOMALIA_DATOS', resuelta=False).order_by('-fecha_creacion')[:10]
+    for anom in anomalias:
+        alerts_to_return.append({
+            'type': 'warning',
+            'id': anom.id,
+            'title': 'Anomalía Detectada',
+            'message': anom.mensaje,
+            'time': anom.fecha_creacion.strftime("%H:%M")
+        })
         
     return JsonResponse({'alerts': alerts_to_return})
 
@@ -2926,7 +2963,8 @@ def plant_map(request):
         unassigned_operators.append({
             'name': u_op.get('name'),
             'process': u_op.get('task', '---'),
-            'article': 'TAREA GENERAL / VARIOS', # En sin asignar suele ser tarea general
+            'article': 'TAREA GENERAL / VARIOS',
+            'op_number': u_op.get('op_number', '---'),
             'perf': 0,
             'avail': 0,
         })
@@ -3237,8 +3275,21 @@ def gestionar_alertas(request):
     """
     from .models import NotificacionConfig, AlertaHistorial
     config = NotificacionConfig.get_solo()
-    historial = AlertaHistorial.objects.all()[:50] # Ver las últimas 50 alertas
+    historial = AlertaHistorial.objects.all().order_by('-fecha_creacion')[:50]
     
+    # NUEVO: Disparador manual de auditoría desde URL (?audit_days=X)
+    audit_days = request.GET.get('audit_days')
+    if audit_days:
+        try:
+            days = int(audit_days)
+            from django.contrib import messages
+            # Llamamos a una función interna de auditoría para no duplicar código
+            result = run_data_audit(request, days_back=days)
+            messages.info(request, f"Auditoría finalizada: Se revisaron {days} días y se generaron {result} nuevas alertas.")
+            return redirect('gestionar_alertas')
+        except Exception as e:
+            messages.error(request, f"Error en auditoría: {str(e)}")
+
     if request.method == 'POST':
         # Telegram
         config.telegram_token = request.POST.get('telegram_token')
@@ -3258,6 +3309,11 @@ def gestionar_alertas(request):
             
         config.alertar_mantenimiento = 'alertar_mantenimiento' in request.POST
         
+        try:
+            config.dias_atras_auditoria = int(request.POST.get('dias_atras', 1))
+        except ValueError:
+            config.dias_atras_auditoria = 1
+            
         config.save()
         messages.success(request, "Configuración de notificaciones actualizada correctamente.")
         

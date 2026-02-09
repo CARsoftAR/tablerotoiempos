@@ -111,6 +111,7 @@ class NotificacionConfig(models.Model):
     
     minutos_detencion_critica = models.IntegerField(default=60, verbose_name="Mins para Alerta Detención Crítica")
     alertar_mantenimiento = models.BooleanField(default=True, verbose_name="Alertar Mantenimiento")
+    dias_atras_auditoria = models.IntegerField(default=1, verbose_name="Días hacia atrás para auditar anomalías")
     ultima_modificacion = models.DateTimeField(auto_now=True, db_column='ultima_modificacion')
 
     class Meta:

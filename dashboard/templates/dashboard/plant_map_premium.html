@@ -940,6 +940,25 @@
             align-items: center;
             gap: 6px;
         }
+
+        .btn-copy-op {
+            background: rgba(251, 191, 36, 0.1);
+            border: 1px solid var(--premium-gold);
+            color: var(--premium-gold);
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 10px;
+        }
+        .btn-copy-op:hover {
+            background: var(--premium-gold);
+            color: #000;
+        }
         
         .unassigned-op-detail i {
             font-size: 9px;
@@ -1492,17 +1511,18 @@
                          {% if m.active_operators %}
                             <div class="operator-group">
                                 {% for op_name, op_info in m.active_operators %}
-                                <div class="operator-indicator" 
-                                     style="z-index: {{ 100|add:forloop.counter0 }};" 
-                                     onmousemove="showOperatorTooltip(event, '{{ op_name }}', '{{ op_info.process }}', '{{ op_info.article }}', '{{ op_info.perf|floatformat:2 }}', '{{ op_info.avail|floatformat:2 }}')"
-                                     onmouseleave="hideTooltip(event)">
+                                 <div class="operator-indicator" 
+                                      style="z-index: {{ 100|add:forloop.counter0 }}; cursor: pointer;" 
+                                      onmousemove="showOperatorTooltip(event, '{{ op_name }}', '{{ op_info.process }}', '{{ op_info.article }}', '{{ op_info.perf|floatformat:2 }}', '{{ op_info.avail|floatformat:2 }}', '{{ op_info.op_number }}')"
+                                      onmouseleave="hideTooltip(event)"
+                                      onclick="copyToClipboard('{{ op_info.op_number }}', event)">
                                     <i class="fa-solid fa-user-check"></i>
-                                </div>
+                                 </div>
                                 {% endfor %}
                             </div>
                         {% elif m.operario and m.operario != 'S/A' and m.status != 'STOPPED' and m.status != 'OFFLINE' %}
-                            <div class="operator-group">
-                                <div class="operator-indicator" title="Operario: {{ m.operario }}">
+                             <div class="operator-group">
+                                <div class="operator-indicator" title="Operario: {{ m.operario }}" style="cursor: pointer;" onclick="copyToClipboard('{{ m.current_order }}', event)">
                                     <i class="fa-solid fa-user-check"></i>
                                 </div>
                             </div>
@@ -1803,6 +1823,17 @@
                 <div class="unassigned-op-detail">
                     <i class="fa-solid fa-microchip"></i>
                     <span>{{ op.article|truncatechars:40 }}</span>
+                </div>
+                <div class="unassigned-op-detail" style="justify-content: space-between; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 6px; margin-top: 6px;">
+                    <div style="display: flex; align-items: center; gap: 6px; font-weight: 700; color: #fff;">
+                        <i class="fa-solid fa-hashtag" style="color: var(--premium-gold);"></i>
+                        <span>Nro. OP: {{ op.op_number|default:"---" }}</span>
+                    </div>
+                    {% if op.op_number and op.op_number != '---' %}
+                    <button class="btn-copy-op" onclick="copyToClipboard('{{ op.op_number }}', event)" title="Copiar número de OP">
+                        <i class="fa-solid fa-copy"></i>
+                    </button>
+                    {% endif %}
                 </div>
                 {% if op.perf > 0 or op.avail > 0 %}
                 <div style="display: flex; gap: 10px; margin-top: 6px; font-size: 10px;">
@@ -2180,7 +2211,7 @@
         }
 
         // NEW: Specific Tooltip for Operator Icons - Matches Main Tooltip Style (Full Detail)
-        function showOperatorTooltip(e, name, process, article, perf, avail) {
+        function showOperatorTooltip(e, name, process, article, perf, avail, opNumber) {
             e.stopPropagation(); // Prevent machine tooltip
             
             tooltip.style.display = 'block';
@@ -2211,6 +2242,10 @@
                 <div class="tooltip-row">
                      <span class="tooltip-label">Artículo:</span>
                      <span class="tooltip-value description-truncate">${article || '---'}</span>
+                </div>
+                <div class="tooltip-row">
+                     <span class="tooltip-label">Nro. OP:</span>
+                     <span class="tooltip-value" style="color: var(--premium-gold); font-weight: 800;">${opNumber || '---'}</span>
                 </div>
                 <!-- Footer with Stats (from Machine) -->
                 <div class="tooltip-footer">
@@ -2382,6 +2417,45 @@
                 savePosition(id, xPercent, yPercent);
             });
             alert('Máquinas distribuidas en cuadrícula.');
+        }
+
+        function copyToClipboard(text, event) {
+            if (event) event.stopPropagation();
+            if (!text || text === '---') return;
+            
+            // Si el navegador soporta la API moderna y es un contexto seguro (Localhost o HTTPS)
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showToast(`OP ${text} copiada al portapapeles`);
+                }).catch(err => {
+                    copyFallback(text);
+                });
+            } else {
+                // Fallback para contextos no seguros (HTTP en red local)
+                copyFallback(text);
+            }
+        }
+
+        function copyFallback(text) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-9999px";
+            textArea.style.top = "0";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showToast(`OP ${text} copiada al portapapeles`);
+                } else {
+                    showToast('Error al copiar al portapapeles', 'error');
+                }
+            } catch (err) {
+                showToast('Error al copiar al portapapeles', 'error');
+            }
+            document.body.removeChild(textArea);
         }
 
         function resetPositions() {
