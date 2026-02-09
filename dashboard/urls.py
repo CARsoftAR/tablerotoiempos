@@ -51,4 +51,8 @@ urlpatterns = [
     
     # Manual de Usuario
     path('manual/', views.manual_usuario, name='manual_usuario'),
+    
+    # AI Chat API
+    path('api/chat-ia/', views.chat_ia_api, name='chat_ia_api'),
 ]
+

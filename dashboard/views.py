@@ -906,6 +906,10 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         total_horas_prod += t_op_hrs
         total_horas_disp += t_disp_periodo 
         global_downtime += max(0, (t_disp_periodo - t_op_hrs) * 60)
+        
+        # DEBUG LOG: Acumulación por máquina
+        if t_std_hrs > 0.01:
+            print(f"DEBUG [{mid}]: std={t_std_hrs:.2f}h, prod={t_op_hrs:.2f}h, disp={t_disp_periodo:.2f}h")
 
     # 4. Calcular KPIs finales por Personal
     lista_kpis_personal = []
@@ -1083,9 +1087,29 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
     h_unassigned_std = unassigned_std / 60.0
     h_unassigned_prod = unassigned_time / 60.0
 
+    # DEBUG LOG: Antes de sumar unassigned
+    print(f"\n=== DEBUG OEE CALCULATION ===")
+    print(f"total_horas_std (antes unassigned): {total_horas_std:.2f} hs")
+    print(f"total_horas_prod (antes unassigned): {total_horas_prod:.2f} hs")
+    print(f"total_horas_disp: {total_horas_disp:.2f} hs")
+    print(f"h_unassigned_std: {h_unassigned_std:.2f} hs")
+    print(f"h_unassigned_prod: {h_unassigned_prod:.2f} hs")
+    
     total_horas_std += h_unassigned_std
     total_horas_prod += h_unassigned_prod
-    # total_horas_disp no se toca por unassigned porque no tienen turno
+    
+    # CORRECCIÓN DE LÓGICA OEE (NORMALIZACIÓN AL 100%):
+    # Si hay producción en máquinas "Sin Asignar" (Inactivas o Viejas), debemos
+    # sumar ese tiempo al DISPONIBLE también. De lo contrario, tenemos más horas
+    # producidas que disponibles, generando OEE > 100%.
+    # Asumimos que si se usó, estuvo disponible al menos ese tiempo.
+    if h_unassigned_prod > 0:
+        total_horas_disp += h_unassigned_prod
+    
+    # DEBUG LOG: Después de sumar unassigned y normalizar disp
+    print(f"total_horas_std (final): {total_horas_std:.2f} hs")
+    print(f"total_horas_prod (final): {total_horas_prod:.2f} hs")
+    print(f"total_horas_disp (final ajustado): {total_horas_disp:.2f} hs")
 
     if total_horas_disp > 0:
         promedio_oee = (total_horas_std / total_horas_disp) * 100.0
@@ -1094,6 +1118,15 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         promedio_oee = avg_availability = 0.0
         
     avg_performance = (total_horas_std / total_horas_prod) * 100.0 if total_horas_prod > 0 else 0.0
+    
+    # DEBUG LOG: KPIs calculados
+    print(f"\n=== KPIs CALCULADOS ===")
+    print(f"promedio_oee: {promedio_oee:.2f}%")
+    print(f"avg_availability: {avg_availability:.2f}%")
+    print(f"avg_performance: {avg_performance:.2f}%")
+    print(f"Fórmula OEE: {total_horas_std:.2f} / {total_horas_disp:.2f} * 100 = {promedio_oee:.2f}%")
+    print(f"Fórmula Disp: {total_horas_prod:.2f} / {total_horas_disp:.2f} * 100 = {avg_availability:.2f}%")
+    print(f"Fórmula Rend: {total_horas_std:.2f} / {total_horas_prod:.2f} * 100 = {avg_performance:.2f}%")
     
     # CALIDAD: (Aceptadas / Totales) * 100
     total_piezas_real = global_actual_qty + global_rejected_qty
@@ -3270,3 +3303,25 @@ def manual_usuario(request):
     }
     
     return render(request, 'dashboard/manual.html', context)
+
+from django.views.decorators.csrf import csrf_exempt
+import json
+
+@csrf_exempt
+@csrf_exempt
+def chat_ia_api(request):
+    """ API para interacción con el Auditor de IA de Planta """
+    if request.method == 'POST':
+        try:
+            from .ai_logic import get_ai_analysis
+            data = json.loads(request.body)
+            query = data.get('query', '')
+            context_url = data.get('context', '')
+            image_data = data.get('image', None) # Base64 Image
+            
+            response = get_ai_analysis(query, context_url=context_url, image_data=image_data)
+            return JsonResponse({'status': 'success', 'response': response})
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+    return JsonResponse({'status': 'error', 'message': 'Solo peticiones POST'}, status=405)
+
