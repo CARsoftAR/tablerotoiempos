@@ -101,6 +101,7 @@
                 <i class="fas fa-route w-5 text-center group-hover:scale-110 transition-transform"></i>
                 <span class="text-sm font-bold tracking-wide">Trazabilidad</span>
             </a>
+
             <a href="{% url 'lista_mantenimiento' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all group {% if 'mantenimiento' in request.resolver_match.url_name %}bg-white/10 border border-white/10 text-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.15)]{% else %}text-slate-400 hover:bg-white/5 hover:text-white{% endif %}">
                 <i class="fas fa-tools w-5 text-center group-hover:scale-110 transition-transform"></i>
                 <span class="text-sm font-bold tracking-wide">Mantenimiento</span>

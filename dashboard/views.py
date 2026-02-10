@@ -3268,6 +3268,9 @@ def get_trace_flow(request):
             'message': f'Error al obtener trazabilidad: {str(e)}'
         }, status=500)
 
+
+
+
 def gestionar_alertas(request):
     """
     Vista para configurar las notificaciones externas (Telegram/WhatsApp)

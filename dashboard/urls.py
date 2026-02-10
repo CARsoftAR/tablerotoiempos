@@ -49,6 +49,8 @@ urlpatterns = [
     path('trazabilidad/', views.trazabilidad_piezas, name='trazabilidad_piezas'),
     path('api/trace-flow/', views.get_trace_flow, name='get_trace_flow'),
     
+
+    
     # Manual de Usuario
     path('manual/', views.manual_usuario, name='manual_usuario'),
     
