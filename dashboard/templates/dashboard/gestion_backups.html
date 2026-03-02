@@ -363,6 +363,7 @@
     .modal-actions {
         display: flex;
         gap: 15px;
+        margin-top: 30px;
     }
 
     .btn-modal {
@@ -395,11 +396,26 @@
 
     .close-modal:hover { color: #fff; }
 
-    /* Custom Scrollbar */
-    ::-webkit-scrollbar { width: 8px; }
-    ::-webkit-scrollbar-track { background: #050505; }
-    ::-webkit-scrollbar-thumb { background: #222; border-radius: 10px; }
-    ::-webkit-scrollbar-thumb:hover { background: #333; }
+    .loading {
+        display: none;
+        margin-bottom: 25px;
+        text-align: center;
+    }
+    .loading.active {
+        display: block;
+    }
+    .spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid rgba(212, 175, 55, 0.1);
+        border-radius: 50%;
+        border-top-color: var(--premium-gold);
+        animation: spin 1s ease-in-out infinite;
+        margin: 0 auto 15px;
+    }
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
 
 </style>
 

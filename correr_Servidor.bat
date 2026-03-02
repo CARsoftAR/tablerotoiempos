@@ -36,7 +36,7 @@ echo  Presiona Ctrl+C para detener
 echo ========================================
 echo.
 
-REM Ejecutar el servidor en 0.0.0.0:8000 para acceso desde red local
-python manage.py runserver 0.0.0.0:8000
+REM Ejecutar el servidor en 0.0.0.0:1000 para acceso desde red local
+python manage.py runserver 0.0.0.0:1000
 
 pause
