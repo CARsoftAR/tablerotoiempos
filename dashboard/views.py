@@ -253,7 +253,22 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         mid = str(reg['id_maquina']).strip() if reg.get('id_maquina') else None
         duracion = reg['tiempo_minutos'] or 0.0
         qty = reg['cantidad_producida'] or 0.0
-        std_mins = (reg['tiempo_cotizado'] or 0.0) * 60.0
+        raw_std = reg['tiempo_cotizado'] or 0.0
+        
+        # SMART TIME SCALING: Detect if ERP provides hours or minutes
+        # Rule: If qty > 0 and raw_std/qty < 12, it's likely hours (e.g. 0.42 hrs vs 25 mins)
+        # Exception: Special cases like matricería often already come in minutes (large values)
+        is_matriceria_row = 'MATRICER' in str(reg.get('articulod') or '').upper() or 'MATRICER' in str(reg.get('observaciones') or '').upper()
+        
+        if qty > 0 and not is_matriceria_row:
+            std_per_unit = raw_std / qty
+            if std_per_unit < 12: # Threshold to distinguish hours (e.g. 0.5) from minutes (e.g. 30)
+                std_mins = raw_std * 60.0
+            else:
+                std_mins = raw_std
+        else:
+            std_mins = raw_std * 60.0 if raw_std < 12 and raw_std > 0 else raw_std
+
         
         # Identificar Reproceso o tareas que no deben sumar a Cantidad Real
         raw_id_op = str(reg.get('id_operacion') or "").strip().upper()
@@ -422,7 +437,11 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                     data['latest_obs'] = current_reason
 
                 data['latest_date'] = reg['fecha']
-                data['current_order'] = reg['id_orden']
+                # Sticky logic for current_order: only update if truthy and valid
+                raw_id_orden = reg.get('id_orden')
+                if raw_id_orden and str(raw_id_orden).strip() not in ['', '0', 'None', '---']:
+                    data['current_order'] = str(raw_id_orden).strip()
+                
                 data['latest_is_active'] = is_session_active
                 data['latest_is_interrupcion'] = (reg.get('es_interrupcion') == True or is_descanso)
                 data['latest_is_proceso'] = (reg.get('es_proceso') == True)
@@ -473,10 +492,14 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                         # REGLA OEE MATRICERÍA: En trabajos de larga duración, tratamos la matricería como 100% eficiente (Estándar = Real).
                         data['tiempo_cotizado'] += duracion
                         global_planned_time += duracion
-                    else:
+                    elif (qty > 0 or (is_armado and std_mins > 0)):
                         # Para trabajos de SERIE (incluido ARMADO): Sumamos el estándar del ERP.
                         data['tiempo_cotizado'] += std_mins
                         global_planned_time += std_mins
+                    elif is_session_active and qty == 0:
+                        # FIX: Rendimiento Neutro para máquinas empezando la pieza (evita 0% al inicio)
+                        data['tiempo_cotizado'] += duracion
+                        global_planned_time += duracion
                     
                 # Acumulamos tiempos para el operario (si existe) para cálculo individual
                 # Acumulamos tiempos para el operario (si existe) para cálculo individual
@@ -527,8 +550,12 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                         # Std Delta Logic (Same as Personal KPI)
                         if is_matriceria:
                             d_std = duracion
-                        elif (qty > 0 or (is_armado and std_mins > 0)) and not is_online_record:
+                        elif (qty > 0 or (is_armado and std_mins > 0)):
+                            # FIX: Permitir sumar estándar aun en ONLINE si hay cantidad/tiempos reales
                             d_std = std_mins
+                        elif is_session_active and qty == 0:
+                            # Rendimiento Neutro si está empezando la pieza
+                            d_std = duracion
                             
                     # Final Values
                     final_op = g_op + d_op
@@ -546,13 +573,23 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                     if total_time > 0.001:
                         op_avail = (final_op / total_time) * 100.0
                         
+                    # Sticky logic for operator's op_number
+                    existing_op = data['active_operators'].get(op_full_name, {})
+                    prev_op_num = str(existing_op.get('op_number', '---')).strip()
+                    raw_id_orden = reg.get('id_orden')
+                    
+                    # Solo actualizamos si traemos una OP real, sino matenemos la anterior
+                    final_op_num = prev_op_num
+                    if raw_id_orden and str(raw_id_orden).strip() not in ['', '0', 'None', '---']:
+                        final_op_num = str(raw_id_orden).strip()
+
                     data['active_operators'][op_full_name] = {
                         'process': proc_val,
                         'article': art or "---",
                         'perf': op_perf,
                         'avail': op_avail,
                         'uid': uid,
-                        'op_number': reg.get('id_orden') or '---'
+                        'op_number': final_op_num
                     }
             
             # Cálculo de Tiempos
@@ -603,7 +640,12 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 per['max_time'] = reg_time
                 per['latest_obs'] = (obs_val or "ONLINE").strip().upper()
                 per['latest_machine'] = mid or per.get('latest_machine', '')
-                per['current_order'] = reg['id_orden']
+                
+                # Sticky for Personal order
+                new_p_order = reg.get('id_orden')
+                if new_p_order and str(new_p_order).strip() not in ['', 'None', '0']:
+                    per['current_order'] = new_p_order
+                
                 # Fallback: si no hay artículo, usamos el nombre de la operación
                 art_d = (str(reg.get('articulod') or "").strip() or str(reg.get('operacion') or "").strip()).upper()
                 if art_d:
@@ -624,7 +666,6 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         
         if obs_val:
             per['has_any_obs'] = True
-
         h_inicio = reg.get('hora_inicio')
         h_fin = reg.get('hora_fin')
         intervalo = "--:--"
@@ -657,8 +698,8 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             # No suma cantidad
             pass
         else:
-            if not is_online_record:
-                upers['cantidad_producida'] += qty
+            # Se permite sumar piezas aun en registros ONLINE si vienen con data
+            upers['cantidad_producida'] += qty
             
             # REGLA OEE MATRICERÍA para Personal (Sincronizada)
             added_row_std_p = False
@@ -667,8 +708,13 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 upers['tiempo_cotizado'] += duracion
                 added_row_std_p = True
             else:
-                if (qty > 0) and not is_online_record:
+                # FIX: Permitir estándar en ONLINE si hay piezas, o neutro si es sesión activa sin piezas
+                if qty > 0:
                     upers['tiempo_cotizado'] += std_mins
+                    added_row_std_p = True
+                elif is_session_active and qty == 0:
+                    # Evitar el 0% al inicio de la jornada/orden
+                    upers['tiempo_cotizado'] += duracion
                     added_row_std_p = True
         
         if is_descanso:
@@ -723,6 +769,13 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 # Actualizar SOLO el diccionario del operario (para su tooltip de ícono)
                 op_info['avail'] = p_avail
                 op_info['perf'] = p_perf
+                
+                # Sincronizar OP: Prioridad 1 Personal, Prioridad 2 Máquina
+                op_val = str(per_stats.get('current_order', '---')).strip()
+                if not op_val or op_val in ['', '0', 'None', '---']:
+                    op_val = str(m_data.get('current_order', '---')).strip()
+                
+                op_info['op_number'] = op_val
             
             # OVERRIDE FIX: Si el operario tiene una tarea Manual activa y la máquina dice "ONLINE",
             # mostramos la tarea manual (ej: "Cortando...") en lugar de "ONLINE", ya que es más específico.
@@ -1218,19 +1271,47 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         d_check = today_date - datetime.timedelta(days=i)
         if d_check.weekday() == 6: continue # Saltar domingos
         
-        # Básicamente: sumamos std y prod de ese día
         d_start = timezone.make_aware(datetime.datetime.combine(d_check, datetime.time.min), datetime.timezone.utc)
         d_end = timezone.make_aware(datetime.datetime.combine(d_check, datetime.time.max), datetime.timezone.utc)
         
-        # Simplificamos Performance para el histórico (Ratio de sumas)
-        hist_data = VTMan.objects.filter(fecha__range=(d_start, d_end))
-        h_std = hist_data.aggregate(s=Sum('tiempo_cotizado'))['s'] or 0.0
-        h_prod = hist_data.aggregate(s=Sum('tiempo_minutos'))['s'] or 0.0
+        # CORRECCIÓN: Aplicar el mismo escalado inteligente de unidades que en el loop principal.
+        # El ERP envía 'tiempo_cotizado' en horas para piezas de serie (ej: 0.5 hrs)
+        # pero en minutos para trabajos de matricería (ej: 280 mins).
+        # Iteramos registro a registro para convertir correctamente.
+        hist_records = VTMan.objects.filter(fecha__range=(d_start, d_end)).values(
+            'tiempo_cotizado', 'tiempo_minutos', 'cantidad_producida', 'articulod', 'es_interrupcion'
+        )
+        
+        h_std_mins_total = 0.0
+        h_prod_mins_total = 0.0
+        
+        for hrec in hist_records:
+            if hrec.get('es_interrupcion'):
+                continue  # No contar interrupciones para el ratio de rendimiento
             
-        h_perf = (h_std * 60 / h_prod * 100) if h_prod > 0 else 0
+            h_qty = hrec['cantidad_producida'] or 0.0
+            h_raw_std = hrec['tiempo_cotizado'] or 0.0
+            h_duracion = hrec['tiempo_minutos'] or 0.0
+            h_art = str(hrec.get('articulod') or '').upper()
+            h_is_matriceria = 'MATRICER' in h_art
+            
+            # Smart scaling: identical logic to main KPI loop
+            if h_qty > 0 and not h_is_matriceria:
+                std_per_unit = h_raw_std / h_qty
+                if std_per_unit < 12:
+                    h_std_mins = h_raw_std * 60.0
+                else:
+                    h_std_mins = h_raw_std
+            else:
+                h_std_mins = h_raw_std * 60.0 if (h_raw_std < 12 and h_raw_std > 0) else h_raw_std
+            
+            h_std_mins_total += h_std_mins
+            h_prod_mins_total += h_duracion
+            
+        h_perf = min(100.0, (h_std_mins_total / h_prod_mins_total * 100)) if h_prod_mins_total > 0 else 0
         history_trend.append({
             'day': d_check.strftime('%d/%m'),
-            'oee': round(h_perf, 1) # Eliminado el factor 0.8 arbitrario
+            'oee': round(h_perf, 1)
         })
 
     # 2. Pareto de Paradas (Motivos de interrupción)
@@ -2088,7 +2169,7 @@ def crear_incidencia(request):
             except:
                 pass
         
-        Mantenimiento.objects.create(
+        incidencia = Mantenimiento.objects.create(
             maquina_id=maquina_id,
             tipo=tipo,
             descripcion_falla=descripcion,
@@ -2096,6 +2177,16 @@ def crear_incidencia(request):
             fecha_reporte=fecha_final,
             estado='ABIERTO'
         )
+        
+        # NOTIFICACIÓN EXTERNA
+        try:
+            from .utils_notifications import send_external_notification
+            nombre_m = incidencia.maquina.nombre
+            msg = f"🛠️ *NUEVA FALLA REPORTADA*\n📍 Maquina: {nombre_m}\n📝 Falla: {descripcion}\n👤 Responsable: {tecnico or 'Sin asignar'}"
+            send_external_notification(msg)
+        except Exception as e:
+            print(f"Error enviando notif mantenimiento: {e}")
+
         messages.success(request, "Incidencia reportada correctamente.")
         return redirect('lista_mantenimiento')
     return redirect('lista_mantenimiento')
@@ -2111,11 +2202,28 @@ def gestionar_incidencia(request, pk):
         incidencia.estado = 'PROCESO'
         incidencia.fecha_inicio_reparacion = timezone.now()
         messages.info(request, f"Se ha iniciado la reparación de la máquina {incidencia.maquina.nombre}.")
+        
+        # NOTIFICACIÓN EXTERNA (INICIO)
+        try:
+            from .utils_notifications import send_external_notification
+            msg = f"🔧 *REPARACIÓN INICIADA*\n📍 Maquina: {incidencia.maquina.nombre}\n⏳ Estado: TÉCNICO EN SITIO"
+            send_external_notification(msg)
+        except: pass
+
     elif accion == 'cerrar':
         incidencia.estado = 'CERRADO'
         incidencia.fecha_fin = timezone.now()
-        incidencia.observaciones_tecnicas = request.POST.get('observaciones')
+        obs_tecnicas = request.POST.get('observaciones')
+        incidencia.observaciones_tecnicas = obs_tecnicas
         messages.success(request, f"Reparación finalizada. La máquina {incidencia.maquina.nombre} vuelve a estar operativa.")
+        
+        # NOTIFICACIÓN EXTERNA (CIERRE)
+        try:
+            from .utils_notifications import send_external_notification
+            msg = f"✅ *REPARACIÓN FINALIZADA*\n📍 Maquina: {incidencia.maquina.nombre}\n⚙️ Estado: OPERATIVA\n📝 Resumen: {obs_tecnicas or 'Sin observaciones'}"
+            send_external_notification(msg)
+        except: pass
+
         
     incidencia.save()
     return redirect('lista_mantenimiento')
@@ -2272,15 +2380,40 @@ def estadisticas_avanzadas(request):
                 else:
                     total_planned_mins_day += full_m
 
-        total_real_mins = aggregation['sum_real'] or 0
-        avail = min(1.0, (total_real_mins / total_planned_mins_day)) if total_planned_mins_day > 0 else 0
+        # CORRECCIÓN: Calcular eficiencia como Rendimiento puro (std / real)
+        # Se usa Rendimiento en lugar de OEE completo (avail*perf) porque el tiempo planificado
+        # no es confiable en este ERP (múltiples máquinas sin asignación, tiempos variables).
+        # El Rendimiento (std/real) refleja correctamente qué tan eficientemente trabajó la planta.
+        prod_mins_only = 0.0
+        std_mins_calibrated = 0.0
+        # Buscamos todos los registros (incluso paradas) para filtrar manualmente por palabras clave
+        for hrec in qs_day.values('tiempo_cotizado', 'tiempo_minutos', 'cantidad_producida', 'articulod', 'es_interrupcion'):
+            h_art = str(hrec.get('articulod') or '').upper()
+            # Heurística de Paradas (Keywords)
+            is_stop = hrec['es_interrupcion'] or any(kw in h_art for kw in ['DESCANSO', 'ASISTENCIA', 'LIMPIEZA', 'REUNION', 'CAPACITACION'])
+            
+            if is_stop:
+                continue
+
+            h_qty = hrec['cantidad_producida'] or 0.0
+            h_raw_std = hrec['tiempo_cotizado'] or 0.0
+            h_dur = hrec['tiempo_minutos'] or 0.0
+            h_is_mat = 'MATRICER' in h_art
+            
+            if h_qty > 0 and not h_is_mat:
+                h_spu = h_raw_std / h_qty
+                if h_raw_std >= 24:
+                    std_m = h_raw_std
+                else:
+                    std_m = h_raw_std * 60.0 if h_spu < 12 else h_raw_std
+            else:
+                std_m = h_raw_std * 60.0 if (h_raw_std < 24 and h_raw_std > 0) else h_raw_std
+            
+            std_mins_calibrated += std_m
+            prod_mins_only += h_dur
         
-        prod_mins_only = qs_day.filter(es_interrupcion=False).aggregate(s=Sum('tiempo_minutos'))['s'] or 0
-        # sum_std is in HOURS from ERP, convert to Minutes for perf if prod_mins is mins
-        # OR: stays as Ratio if we use (sum_std_hrs / prod_hrs)
-        perf = ((aggregation['sum_std'] or 0) / (prod_mins_only / 60.0)) if prod_mins_only > 0 else 0
-        
-        oee_day = min(100.0, (avail * perf * 100.0)) if d_loop.weekday() != 6 else 0
+        # Rendimiento = (Tiempo Estándar / Tiempo Real) * 100 — sin factor de disponibilidad
+        oee_day = min(100.0, (std_mins_calibrated / prod_mins_only * 100.0)) if (prod_mins_only > 0 and d_loop.weekday() != 6) else 0
         trend_data.append({'full_date': d_loop.strftime('%Y-%m-%d'), 'date': d_loop.strftime('%d/%m'), 'oee': round(oee_day, 1)})
 
         # --- Machine & Bottleneck Accumulation ---
@@ -2319,7 +2452,7 @@ def estadisticas_avanzadas(request):
             if not uid or uid == 'None': continue
             if uid not in operator_stats: operator_stats[uid] = {'std': 0, 'real': 0, 'qty': 0}
             operator_stats[uid]['std'] += (od['ts'] or 0)
-            operator_stats[uid]['real'] += ((od['tr'] or 0) / 60.0) 
+            operator_stats[uid]['real'] += (od['tr'] or 0)
             operator_stats[uid]['qty'] += (od['tq'] or 0)
 
     # 3. Intelligent Processing
@@ -2371,7 +2504,7 @@ def estadisticas_avanzadas(request):
     
     sector_ranking = []
     for tipo, s_data in sector_stats.items():
-        eff = (s_data['std'] / (s_data['real']/60.0)) * 100 if s_data['real'] > 0 else 0
+        eff = (s_data['std'] / s_data['real']) * 100 if s_data['real'] > 0 else 0
         sector_ranking.append({
             'sector': tipo,
             'efficiency': round(min(100, eff), 1),
@@ -2493,6 +2626,30 @@ def detalle_oee_dia(request):
         stop_mins=Sum(models.Case(models.When(es_interrupcion=True, then='tiempo_minutos'), default=0, output_field=models.FloatField()))
     )
 
+    # 2b. Fetch punches from T7_Fichada for availability cross-check
+    punches_map = {}
+    try:
+        from django.db import connections
+        query_punches = """
+            SELECT Fecha_Hora, IdTarjeta 
+            FROM dbo.T7_Fichada 
+            WHERE Fecha_Hora >= %s AND Fecha_Hora <= %s
+            ORDER BY Fecha_Hora
+        """
+        inicio_f = f"{fecha_target} 00:00:00"
+        fin_f = f"{fecha_target} 23:59:59"
+        with connections['sql_server'].cursor() as cursor:
+            cursor.execute(query_punches, [inicio_f, fin_f])
+            for row in cursor.fetchall():
+                ts, tarjeta = row
+                uid = str(tarjeta).strip()
+                if uid not in punches_map:
+                    punches_map[uid] = {'first': ts, 'last': ts}
+                else:
+                    punches_map[uid]['last'] = ts
+    except Exception as e:
+        print(f"Error fetching punches: {e}")
+
     # 3. Machine Breakdown
     machine_data = []
     machine_logs = {}
@@ -2500,7 +2657,12 @@ def detalle_oee_dia(request):
     m_configs = {m.id_maquina: {'nombre': m.nombre, 'tipo': m.tipo_maquina} for m in MaquinaConfig.objects.all()}
     all_ops_db = {o.legajo: o.nombre for o in OperarioConfig.objects.all()}
     
-    # Pre-fetch and group logs
+    # Pre-fetch and group logs — also build per-machine calibrated std accumulator
+    machine_std_calibrated = {}  # {mid: std_mins_calibrated}
+    machine_prod_mins = {}       # {mid: prod_mins (non-interruption)}
+    global_std_cal = 0.0
+    global_prod_cal = 0.0
+
     for reg in qs_day.order_by('hora_inicio'):
         mid = str(reg.id_maquina).strip()
         uid = str(reg.id_concepto).strip()
@@ -2508,15 +2670,38 @@ def detalle_oee_dia(request):
         h_ini = reg.hora_inicio.strftime('%H:%M') if reg.hora_inicio else '??'
         h_fin = reg.hora_fin.strftime('%H:%M') if reg.hora_fin else '??'
         
+        # Smart scaling for display in log
+        r_qty = reg.cantidad_producida or 0.0
+        r_raw_std = reg.tiempo_cotizado or 0.0
+        r_art = str(reg.articulod or '').upper()
+        r_is_mat = 'MATRICER' in r_art
+        if r_qty > 0 and not r_is_mat:
+            r_spu = r_raw_std / r_qty
+            # Heurística refinada: Si el total es >= 24, es casi seguro que ya son minutos.
+            if r_raw_std >= 24:
+                r_std_m = r_raw_std
+            else:
+                r_std_m = r_raw_std * 60.0 if r_spu < 12 else r_raw_std
+        else:
+            r_std_m = r_raw_std * 60.0 if (r_raw_std < 24 and r_raw_std > 0) else r_raw_std
+        
+        m_name = m_configs.get(mid, {}).get('nombre', mid)
+        op_name = all_ops_db.get(uid, uid)
+
+        # Heurística de Paradas (Keywords)
+        is_actually_stop = reg.es_interrupcion or any(kw in r_art for kw in ['DESCANSO', 'ASISTENCIA', 'LIMPIEZA', 'REUNION', 'CAPACITACION'])
+
         entry = {
             'time': f"{h_ini} - {h_fin}",
             'order': reg.id_orden or '---',
             'article': reg.articulod[:40] if reg.articulod else '---',
-            'qty': round(reg.cantidad_producida or 0, 1),
+            'qty': round(r_qty, 1),
             'mins': round(reg.tiempo_minutos or 0, 1),
-            'std': round((reg.tiempo_cotizado or 0) * 60, 1),
+            'std': round(r_std_m, 1),
             'obs': reg.observaciones or '',
-            'is_stop': reg.es_interrupcion or 'DESCANSO' in (reg.articulod or '').upper()
+            'is_stop': is_actually_stop,
+            'm_name': m_name,
+            'op_name': op_name
         }
         
         if mid not in machine_logs: machine_logs[mid] = []
@@ -2525,6 +2710,16 @@ def detalle_oee_dia(request):
         if uid and uid != 'None':
             if uid not in operator_logs: operator_logs[uid] = []
             operator_logs[uid].append(entry)
+        
+        # Accumulate calibrated std per machine (only non-interruption)
+        if not is_actually_stop:
+            if mid not in machine_std_calibrated:
+                machine_std_calibrated[mid] = 0.0
+                machine_prod_mins[mid] = 0.0
+            machine_std_calibrated[mid] += r_std_m
+            machine_prod_mins[mid] += (reg.tiempo_minutos or 0.0)
+            global_std_cal += r_std_m
+            global_prod_cal += (reg.tiempo_minutos or 0.0)
 
     m_breakdown = qs_day.values('id_maquina').annotate(
         ts=Sum('tiempo_cotizado'),
@@ -2537,13 +2732,18 @@ def detalle_oee_dia(request):
     for mb in m_breakdown:
         mid = mb['id_maquina']
         m_real = mb['tr'] or 0
-        m_std = mb['ts'] or 0
         m_stop = mb['ti'] or 0
         m_prod = mb['tp'] or 0
         
+        # Use calibrated std (smart scaling already applied above)
+        m_std_cal = machine_std_calibrated.get(mid, 0.0)
+        m_prod_cal = machine_prod_mins.get(mid, m_prod)  # fallback to tp
+        
         m_avail = (m_prod / m_real * 100) if m_real > 0 else 0
-        m_perf = (m_std / (m_prod / 60.0) * 100) if m_prod > 0 else 0
-        m_oee = (m_avail * m_perf / 100.0)
+        # Performance = std calibrado / tiempo productivo real
+        m_perf = min(100.0, (m_std_cal / m_prod_cal * 100)) if m_prod_cal > 0 else 0
+        # OEE simplificado = Rendimiento (sin disponibilidad por imprecisión del tiempo planificado)
+        m_oee = m_perf
         
         machine_data.append({
             'id': mid,
@@ -2551,7 +2751,8 @@ def detalle_oee_dia(request):
             'oee': round(min(100.0, m_oee), 1),
             'qty': mb['tq'] or 0,
             'lost_mins': round(m_stop, 0),
-            'std_mins': round((mb['ts'] or 0) * 60, 1),
+            'std_mins': round(m_std_cal, 1),
+            'prod_mins': round(m_prod_cal, 1),  # nuevo
             'avail': round(m_avail, 1),
             'perf': round(m_perf, 1),
             'logs': machine_logs.get(mid, [])
@@ -2560,53 +2761,81 @@ def detalle_oee_dia(request):
     machine_data.sort(key=lambda x: x['oee'], reverse=True)
 
     # 4. Paradas Detalladas (Pareto)
-    paradas_qs = qs_day.filter(Q(es_interrupcion=True) | Q(articulod__icontains='DESCANSO'))
     paradas_dict = {}
-    for p in paradas_qs:
-        reason = (p.observaciones or p.articulod or "OTRO").strip().upper()[:40]
-        paradas_dict[reason] = paradas_dict.get(reason, 0) + (p.tiempo_minutos or 0)
+    total_stop_mins_sum = 0
+    
+    # Recorremos todos los logs procesados para detectar paradas manuales también
+    for mid, logs in machine_logs.items():
+        for l in logs:
+            if l['is_stop']:
+                reason = (l['obs'] or l['article'] or "OTRO").strip().upper()[:40]
+                paradas_dict[reason] = paradas_dict.get(reason, 0) + l['mins']
+                total_stop_mins_sum += l['mins']
     
     paradas_list = sorted([{'reason': k, 'mins': round(v, 1)} for k, v in paradas_dict.items()], key=lambda x: x['mins'], reverse=True)
     
-    # 5. Operarios Top
-    ops_breakdown = qs_day.values('id_concepto').annotate(
-        ts=Sum('tiempo_cotizado'),
-        tr=Sum('tiempo_minutos'),
-        tq=Sum('cantidad_producida')
-    )
+    # 5. Operarios Top — usar std calibrado y cruzar con fichadas
     ops_list = []
-    for ob in ops_breakdown:
-        uid = str(ob['id_concepto']).strip()
+    for uid, logs in operator_logs.items():
         if not uid or uid == 'None': continue
-        o_real = ob['tr'] or 0
-        o_std = ob['ts'] or 0
-        o_perf = (o_std / (o_real/60.0) * 100) if o_real > 0 else 0
+        o_std_cal = sum(l['std'] for l in logs if not l.get('is_stop'))
+        o_real = sum(l['mins'] for l in logs if not l.get('is_stop'))
+        o_qty = sum(l['qty'] for l in logs)
         
+        # Rendimiento (Efficiency)
+        o_perf = min(100.0, (o_std_cal / o_real * 100)) if o_real > 0 else 0
+        
+        # Disponibilidad (Punches)
+        p_data = punches_map.get(uid)
+        presence_mins = 0
+        p_in = '--:--'
+        p_out = '--:--'
+        if p_data:
+            diff = p_data['last'] - p_data['first']
+            presence_mins = diff.total_seconds() / 60.0
+            p_in = p_data['first'].strftime('%H:%M')
+            p_out = p_data['last'].strftime('%H:%M')
+        
+        o_avail = min(100.0, (o_real / presence_mins * 100)) if presence_mins > 0 else 0
+        
+        # OEE Operario = Disponibilidad * Rendimiento
+        # Si no hay fichadas, mostramos solo rendimiento como fallback (100% avail)
+        o_oee = (o_avail * o_perf / 100.0) if presence_mins > 0 else o_perf
+
         ops_list.append({
             'uid': uid,
             'name': all_ops_db.get(uid, uid),
+            'oee': round(o_oee, 1),
             'perf': round(o_perf, 1),
-            'qty': ob['tq'] or 0,
-            'logs': operator_logs.get(uid, [])
+            'avail': round(o_avail, 1),
+            'qty': round(o_qty, 1),
+            'std_mins': round(o_std_cal, 1),
+            'prod_mins': round(o_real, 1),
+            'presence_mins': round(presence_mins, 1),
+            'p_entrada': p_in,
+            'p_salida': p_out,
+            'logs': logs
         })
-    ops_list.sort(key=lambda x: x['perf'], reverse=True)
+    ops_list.sort(key=lambda x: x['oee'], reverse=True)
 
-    # 6. Global KPIs calculation (Same logic as trend)
-    active_machines_count = len(m_breakdown) or 1
-    total_planned_mins = active_machines_count * 540 # 9hs
-    global_avail = min(1.0, (agg['total_real'] or 0) / total_planned_mins) if total_planned_mins > 0 else 0
-    global_perf = ((agg['total_std'] or 0) / (agg['prod_mins'] / 60.0)) if agg['prod_mins'] and agg['prod_mins'] > 0 else 0
-    global_oee = (global_avail * global_perf * 100) if fecha_target.weekday() != 6 else 0
+    # 6. Global KPIs — usar rendimiento calibrado (std_mins / prod_mins)
+    global_perf_pct = min(100.0, (global_std_cal / global_prod_cal * 100)) if global_prod_cal > 0 else 0
+    global_oee = global_perf_pct if fecha_target.weekday() != 6 else 0
+    # Disponibilidad: tiempo productivo real / tiempo disponible por máquinas (máx 100%)
+    total_planned_mins = (len(m_breakdown) or 1) * 540.0  # 9 hs por máquina
+    global_avail_pct = min(100.0, (global_prod_cal / total_planned_mins * 100)) if total_planned_mins > 0 else 100.0
 
     response_data = {
         'date': fecha_target.strftime('%d/%m/%Y'),
         'global': {
-            'oee': round(min(100, global_oee), 1),
-            'availability': round(global_avail * 100, 1),
-            'performance': round(global_perf * 100, 1),
-            'quality': 100.0, # Placeholder or calculate if possible
+            'oee': round(min(100.0, global_oee), 1),
+            'availability': round(global_avail_pct, 1),      # ya en %
+            'performance': round(global_perf_pct, 1),         # ya en %
+            'quality': 100.0,
             'units': agg['total_qty'] or 0,
-            'stopped_mins': round(agg['stop_mins'] or 0, 1)
+            'stopped_mins': round(total_stop_mins_sum, 1), # Usar la suma refinada
+            'std_mins': round(global_std_cal, 1),
+            'prod_mins': round(global_prod_cal, 1)
         },
         'machines': machine_data,
         'downtime': paradas_list[:10],
@@ -2837,13 +3066,22 @@ def plant_map(request):
 
         if data:
             # Procesar active_operators primero
+            # Procesar active_operators primero
             active_ops_raw = data.get('active_operators', [])
-            if active_ops_raw and isinstance(active_ops_raw, list) and isinstance(active_ops_raw[0], (tuple, list)):
+            if active_ops_raw and isinstance(active_ops_raw, list):
+                # Si es una lista de tuplas [(name, info), ...], lo convertimos a lista de dicts para JS
+                active_ops_list = []
+                for name, info in active_ops_raw:
+                    info_copy = info.copy()
+                    info_copy['name'] = name # Asegurar que el nombre esté para JS
+                    active_ops_list.append(info_copy)
                 active_ops_dict = dict(active_ops_raw)
             elif isinstance(active_ops_raw, dict):
                 active_ops_dict = active_ops_raw
+                active_ops_list = list(active_ops_raw.values())
             else:
                 active_ops_dict = {}
+                active_ops_list = []
 
             # VÍNCULO DIRECTO CON EL TABLERO DE TARJETAS
             # Relaxed Logic: Consider 'Online' if active session OR recent activity (< 20 mins)
@@ -2864,8 +3102,6 @@ def plant_map(request):
             wait_keywords = ['HERRAMIENTA', 'AJUST', 'TENSI', 'CAPACI', 'CAPACIT', 'ESPERA', 'SET-UP', 'SETUP', 'LIMPIEZA', 'MATERIAL', 'ENSAYO', 'INSPEC', 'ASIST', 'AUXILIO']
             break_keywords = ['DESCANSO', 'ALMUERZO', 'PAUSA', 'REUNION', 'REUNIÓN', 'PERSONAL']
             
-            # Convertir a lista de valores para JSON
-            active_ops_list = list(active_ops_dict.values())
             has_active_ops = len(active_ops_list) > 0
 
             # --- NUEVA LÓGICA DE PRIORIDAD DE ESTADOS ---
@@ -2933,6 +3169,7 @@ def plant_map(request):
             'active_operators_js': json.dumps(active_ops_list),  # Para JavaScript
             'proceso': proceso,
             'detalle': detalle,
+            'current_order': data.get('current_order', '---') if data else '---',
             'oee': data.get('oee', 0) if data else 0,
             'performance': data.get('performance', 0) if data else 0,
             'availability': data.get('availability', 0) if data else 0,
@@ -2990,7 +3227,7 @@ def plant_map(request):
         'machines': machine_data,
         'global_stats': global_stats,
         'total_count': machines_config.count(),
-        'active_count': sum(1 for m in machine_data if m['status'] != 'OFFLINE'),
+        'active_count': sum(1 for m in machine_data if m['status'] not in ['OFFLINE', 'STOPPED']),
         'unassigned_operators': unassigned_operators,
         'unassigned_count': len(unassigned_operators),
         'mst_list': mst_list,
@@ -3285,13 +3522,13 @@ def gestionar_alertas(request):
     if audit_days:
         try:
             days = int(audit_days)
-            from django.contrib import messages
             # Llamamos a una función interna de auditoría para no duplicar código
             result = run_data_audit(request, days_back=days)
             messages.info(request, f"Auditoría finalizada: Se revisaron {days} días y se generaron {result} nuevas alertas.")
             return redirect('gestionar_alertas')
         except Exception as e:
-            messages.error(request, f"Error en auditoría: {str(e)}")
+            if 'messages' in locals() or 'messages' in globals():
+                messages.error(request, f"Error en auditoría: {str(e)}")
 
     if request.method == 'POST':
         # Telegram

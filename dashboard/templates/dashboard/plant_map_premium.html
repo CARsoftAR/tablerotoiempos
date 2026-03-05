@@ -1413,11 +1413,146 @@
             transition: width 0.1s linear;
         }
 
+        /* TOOLTIP PREMIUM STYLE */
+        .tooltip {
+            position: fixed;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 0;
+            border-radius: 12px;
+            font-size: 13px;
+            z-index: 9000;
+            pointer-events: none;
+            display: none;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            min-width: 200px;
+            max-width: 300px;
+            overflow: hidden;
+            border-left: 3px solid var(--premium-gold);
+            animation: tooltipAppear 0.2s ease-out;
+        }
+
+        @keyframes tooltipAppear {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .tooltip-header {
+            background: rgba(0,0,0,0.3);
+            padding: 10px 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .tooltip-title {
+            font-weight: 800;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--premium-gold);
+        }
+
+        .tooltip-status {
+            font-size: 9px;
+            font-weight: 900;
+            padding: 2px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+
+        .tooltip-body {
+            padding: 15px;
+            line-height: 1.5;
+        }
+
+        .tooltip-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            gap: 20px;
+        }
+
+        .tooltip-label {
+            color: #94a3b8;
+            font-weight: 600;
+            font-size: 11px;
+        }
+
+        .tooltip-value {
+            font-weight: 700;
+            text-align: right;
+        }
+
+        .tooltip-kpi-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .tooltip-kpi-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .tooltip-kpi-label {
+            font-size: 9px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        .tooltip-kpi-value {
+            font-size: 15px;
+            font-weight: 800;
+        }
+
+        .tooltip-footer {
+            background: rgba(0,0,0,0.2);
+            padding: 10px 15px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .kpi-item .kpi-label { font-size: 8px; color: #94a3b8; font-weight: 800; margin-bottom: 2px; }
+        .kpi-item .kpi-value { font-size: 14px; font-weight: 900; }
+
         @keyframes fadeIn {
             from { opacity: 0; transform: scale(1.05); }
             to { opacity: 1; transform: scale(1); }
         }
-    
+
+        /* Explanatory Tooltip Specifics */
+        .explanation-text {
+            color: #e2e8f0;
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+
+        .explanation-calc {
+            background: rgba(0,0,0,0.3);
+            padding: 8px 10px;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--premium-gold);
+            border: 1px solid rgba(251, 191, 36, 0.2);
+        }
+
+        .explanation-highlight {
+            color: #3b82f6;
+            font-weight: 700;
+        }
     </style>
 </head>
 <body class="{% if show_tv_mode %}tv-mode-active{% endif %}">
@@ -1494,6 +1629,7 @@
                      data-status="{{ m.status }}"
                      data-reason="{{ m.proceso }}"
                      data-type="{{ m.type }}"
+                     data-id-orden="{{ m.current_order|default:'---' }}"
                      data-operario="{{ m.operario|default:'S/A' }}"
                      data-detalle="{{ m.detalle|default:'---' }}"
                      data-oee="{{ m.oee|default:0 }}"
@@ -1614,21 +1750,29 @@
         <!-- SECCIÓN 1: ESTADÍSTICAS HOY -->
         <div id="sec-stats" class="sidebar-section">
             <h3 class="section-title">ESTADÍSTICAS HOY</h3>
-            <div class="kpi-card">
+            <div class="kpi-card" 
+                 onmouseenter="showExplanatoryTooltip(event, 'OEE GLOBAL', 'Es el puntaje final de la planta. Mide la eficacia general cruzando disponibilidad, rendimiento y calidad.', 'Disp x Rend x Cal = OEE %', 'Qué tanto de la capacidad total se está aprovechando hoy.')"
+                 onmouseleave="hideTooltip()">
                 <div class="kpi-title">OEE GLOBAL</div>
-                <div class="kpi-value" style="color:#059669; font-size: 24px;">{{ global_stats.oee_global|default:"0" }}%</div>
+                <div class="kpi-value" style="color:#059669; font-size: 24px;">{{ global_stats.promedio_oee|default:"0" }}%</div>
             </div>
             <div style="display:flex; gap:12px;">
-                <div class="kpi-card" style="flex:1;">
+                <div class="kpi-card" style="flex:1;" 
+                     onmouseenter="showExplanatoryTooltip(event, 'DISPONIBILIDAD', '¿Cuánto tiempo del turno se usó realmente para producir?', 'Tiempo Activo vs Tiempo Total (desde 07:00 AM)', 'El resto se perdió en paradas, descansos o falta de actividad.')"
+                     onmouseleave="hideTooltip()">
                     <div class="kpi-title">DISP.</div>
-                    <div class="kpi-value" style="font-size: 18px;">{{ global_stats.disponibilidad_global|default:"0" }}%</div>
+                    <div class="kpi-value" style="font-size: 18px;">{{ global_stats.avg_availability|default:"0" }}%</div>
                 </div>
-                <div class="kpi-card" style="flex:1;">
+                <div class="kpi-card" style="flex:1;" 
+                     onmouseenter="showExplanatoryTooltip(event, 'RENDIMIENTO', '¿Qué tan rápido va la producción respecto al estándar del ERP?', 'Tiempo Estándar vs Tiempo Real', '100% es ir exacto al estándar. >100% es más rápido.')"
+                     onmouseleave="hideTooltip()">
                     <div class="kpi-title">REND.</div>
-                    <div class="kpi-value" style="font-size: 18px;">{{ global_stats.rendimiento_global|default:"0" }}%</div>
+                    <div class="kpi-value" style="font-size: 18px;">{{ global_stats.avg_performance|default:"0" }}%</div>
                 </div>
             </div>
-            <div class="kpi-card">
+            <div class="kpi-card" 
+                 onmouseenter="showExplanatoryTooltip(event, 'MÁQUINAS ACTIVAS', 'Total de máquinas con sesión abierta o actividad real en este momento.', 'Contador en tiempo real', 'Asegura que todos los puestos de trabajo estén cubiertos.')"
+                 onmouseleave="hideTooltip()">
                 <div class="kpi-title">MÁQUINAS ACTIVAS</div>
                 <div class="kpi-value" style="font-size:20px;"><span style="color:#3b82f6">{{ active_count }}</span> <span style="font-size:14px; color:#94a3b8;">/ {{ total_count }}</span></div>
             </div>
@@ -2163,26 +2307,32 @@
                         <div class="tooltip-title">${name}</div>
                         <div class="tooltip-status" style="background:${getBgColor(status)}; color: ${status === 'WAIT' ? '#000' : '#fff'}">${displayStatus}</div>
                     </div>
-                    <div class="tooltip-row">
-                        <span class="tooltip-label">Operario:</span>
-                        <span class="tooltip-value">${operator}</span>
-                    </div>
-                    <div class="tooltip-row">
-                        <span class="tooltip-label">Proceso:</span>
-                        <span class="tooltip-value">${reason}</span>
-                    </div>
-                    <div class="tooltip-row">
-                        <span class="tooltip-label">Artículo:</span>
-                        <span class="tooltip-value" style="font-size: 11px;">${detail}</span>
-                    </div>
-                    <div class="tooltip-kpi-grid">
-                        <div class="tooltip-kpi-item">
-                            <span class="tooltip-kpi-label">Rendimiento</span>
-                            <span class="tooltip-kpi-value" style="color:${getKPIColor(perf)}">${perf}%</span>
+                    <div class="tooltip-body">
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Operario:</span>
+                            <span class="tooltip-value">${operator}</span>
                         </div>
-                        <div class="tooltip-kpi-item">
-                            <span class="tooltip-kpi-label">Disponibilidad</span>
-                            <span class="tooltip-kpi-value" style="color:${getKPIColor(avail)}">${avail}%</span>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Proceso:</span>
+                            <span class="tooltip-value">${reason}</span>
+                        </div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Nro. OP:</span>
+                            <span class="tooltip-value" style="color: var(--premium-gold); font-weight: 800;">${marker.getAttribute('data-id-orden') || '---'}</span>
+                        </div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Artículo:</span>
+                            <span class="tooltip-value" style="font-size: 11px;">${detail}</span>
+                        </div>
+                        <div class="tooltip-kpi-grid">
+                            <div class="tooltip-kpi-item">
+                                <span class="tooltip-kpi-label">Rendimiento</span>
+                                <span class="tooltip-kpi-value" style="color:${getKPIColor(perf)}">${parseFloat(perf).toFixed(2)}%</span>
+                            </div>
+                            <div class="tooltip-kpi-item">
+                                <span class="tooltip-kpi-label">Disponibilidad</span>
+                                <span class="tooltip-kpi-value" style="color:${getKPIColor(avail)}">${parseFloat(avail).toFixed(2)}%</span>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -2235,27 +2385,29 @@
                     <div class="tooltip-title">${name}</div>
                     <div class="tooltip-status" style="background:${statusColor}; color:${statusText === 'WAIT' ? '#000' : '#fff'}">${statusText}</div>
                 </div>
-                <div class="tooltip-row">
-                     <span class="tooltip-label">Proceso:</span>
-                     <span class="tooltip-value description-truncate">${process || '---'}</span>
-                </div>
-                <div class="tooltip-row">
-                     <span class="tooltip-label">Artículo:</span>
-                     <span class="tooltip-value description-truncate">${article || '---'}</span>
-                </div>
-                <div class="tooltip-row">
-                     <span class="tooltip-label">Nro. OP:</span>
-                     <span class="tooltip-value" style="color: var(--premium-gold); font-weight: 800;">${opNumber || '---'}</span>
-                </div>
-                <!-- Footer with Stats (from Machine) -->
-                <div class="tooltip-footer">
-                    <div class="kpi-item">
-                        <div class="kpi-label">RENDIMIENTO</div>
-                        <div class="kpi-value" style="color: ${getKPIColor(perf)}">${perf}%</div>
+                <div class="tooltip-body">
+                    <div class="tooltip-row">
+                         <span class="tooltip-label">Proceso:</span>
+                         <span class="tooltip-value description-truncate">${process || '---'}</span>
                     </div>
-                    <div class="kpi-item">
-                        <div class="kpi-label">DISPONIBILIDAD</div>
-                        <div class="kpi-value" style="color: ${getKPIColor(avail)}">${avail}%</div>
+                    <div class="tooltip-row">
+                         <span class="tooltip-label">Artículo:</span>
+                         <span class="tooltip-value description-truncate">${article || '---'}</span>
+                    </div>
+                    <div class="tooltip-row">
+                         <span class="tooltip-label">Nro. OP:</span>
+                         <span class="tooltip-value" style="color: var(--premium-gold); font-weight: 800;">${opNumber || '---'}</span>
+                    </div>
+                    <!-- Footer with Stats (from Machine) -->
+                    <div class="tooltip-footer">
+                        <div class="kpi-item">
+                            <div class="kpi-label">RENDIMIENTO</div>
+                            <div class="kpi-value" style="color: ${getKPIColor(perf)}">${parseFloat(perf).toFixed(2)}%</div>
+                        </div>
+                        <div class="kpi-item">
+                            <div class="kpi-label">DISPONIBILIDAD</div>
+                            <div class="kpi-value" style="color: ${getKPIColor(avail)}">${parseFloat(avail).toFixed(2)}%</div>
+                        </div>
                     </div>
                 </div>
             `;
@@ -2264,6 +2416,33 @@
         function hideTooltip(e) {
              if(e) e.stopPropagation();
              tooltip.style.display = 'none';
+        }
+
+        function showExplanatoryTooltip(e, title, desc, calc, note) {
+            tooltip.style.display = 'block';
+            tooltip.style.left = (e.clientX - 320) + 'px'; // Left of sidebar
+            tooltip.style.top = (e.clientY - 20) + 'px';
+            
+            // Boundary checks
+            const rect = tooltip.getBoundingClientRect();
+            if (e.clientX + rect.width + 20 > window.innerWidth) tooltip.style.left = (e.clientX - rect.width - 20) + 'px';
+            if (e.clientY + rect.height + 20 > window.innerHeight) tooltip.style.top = (e.clientY - rect.height - 20) + 'px';
+            if (parseInt(tooltip.style.left) < 0) tooltip.style.left = '20px';
+
+            tooltip.innerHTML = `
+                <div class="tooltip-header">
+                    <div class="tooltip-title">AYUDA: ${title}</div>
+                    <div class="tooltip-status" style="background:#3b82f6; color:#fff">INFO</div>
+                </div>
+                <div class="tooltip-body">
+                    <div class="explanation-text">${desc}</div>
+                    <div class="tooltip-label" style="margin-bottom: 5px;">CÁLCULO:</div>
+                    <div class="explanation-calc">${calc}</div>
+                    <div style="margin-top:12px; font-size: 11px; color: #94a3b8; font-style: italic;">
+                        ${note}
+                    </div>
+                </div>
+            `;
         }
 
         function getKPIColor(val) {

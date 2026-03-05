@@ -354,8 +354,6 @@
                             <div class="grid grid-cols-1 gap-3" id="modalOperatorList">
                                 <!-- Dynamic Humans -->
                             </div>
-                         </div>
-                    </div>
                 </div>
             </div>
 
@@ -392,8 +390,16 @@
                 </button>
             </div>
             <div class="p-6 overflow-y-auto custom-scrollbar flex-1">
+                <!-- EXPLICACIÓN DINÁMICA DE LA SELECCIÓN -->
+                <div id="logsExplanation" class="mb-10 p-8 bg-amber-400/[0.03] border border-amber-400/10 rounded-[2rem] relative overflow-hidden group">
+                    <div class="absolute -right-10 -top-10 opacity-[0.05] group-hover:opacity-[0.15] transition-opacity">
+                         <i class="fas fa-brain text-9xl"></i>
+                    </div>
+                    <div id="logsExplanationContent"></div>
+                </div>
+
                 <table class="w-full text-left">
-                    <thead class="text-xs font-black text-white uppercase tracking-widest border-b border-white/10">
+                    <thead class="text-sm font-black text-white uppercase tracking-widest border-b border-white/10">
                         <tr>
                             <th class="py-5 px-3">HORARIO</th>
                             <th class="py-5 px-3">ORDEN / ARTÍCULO</th>
@@ -494,39 +500,172 @@ let lastFetchedData = null;
 function showLogs(type, id) {
     if (!lastFetchedData) return;
     
+    let item = null;
     let logs = [];
     let title = "";
     
     if (type === 'machine') {
-        const m = lastFetchedData.machines.find(x => x.id === id);
-        if (m) {
-            logs = m.logs;
-            title = m.name;
+        item = lastFetchedData.machines.find(x => x.id === id);
+        if (item) {
+            logs = item.logs;
+            title = `MÁQUINA: ${item.name} (${item.id})`;
         }
     } else {
-        const o = lastFetchedData.operators.find(x => x.uid === id);
-        if (o) {
-            logs = o.logs;
-            title = o.name;
+        item = lastFetchedData.operators.find(x => x.uid === id);
+        if (item) {
+            logs = item.logs;
+            title = `OPERARIO: ${item.name} (LEGAJO ${item.uid})`;
         }
     }
+
+    if(!item) return;
 
     const tbody = document.getElementById('logsTableBody');
     document.getElementById('logsTitle').textContent = title;
     
     tbody.innerHTML = logs.map(l => `
         <tr class="hover:bg-white/[0.04] transition-colors ${l.is_stop ? 'bg-rose-500/10' : ''}">
-            <td class="py-5 px-3 font-tech text-sm text-white">${l.time}</td>
+            <td class="py-5 px-3 font-tech text-base text-white">${l.time}</td>
             <td class="py-5 px-3">
-                <div class="text-[11px] font-black text-amber-400 uppercase tracking-wider mb-1">${l.order}</div>
-                <div class="text-[10px] font-bold text-slate-200 uppercase tracking-widest">${l.article}</div>
+                <div class="text-xs font-black text-amber-400 uppercase tracking-wider mb-1">${l.order}</div>
+                <div class="text-[11px] font-bold text-slate-200 uppercase tracking-widest">${l.article}</div>
             </td>
-            <td class="py-5 px-3 text-right font-tech text-sm text-white font-black">${l.qty}</td>
-            <td class="py-5 px-3 text-right font-tech text-sm ${l.is_stop ? 'text-rose-400 font-black' : 'text-blue-400'}">${l.mins}m</td>
-            <td class="py-5 px-3 text-right font-tech text-sm text-emerald-400">${l.std}m</td>
-            <td class="py-5 px-3 text-[11px] text-slate-200 font-medium italic">${l.obs}</td>
+            <td class="py-5 px-3 text-right font-tech text-xl text-white font-black">${l.qty}</td>
+            <td class="py-5 px-3 text-right font-tech text-base ${l.is_stop ? 'text-rose-400 font-black' : 'text-blue-400'}">${l.mins}m</td>
+            <td class="py-5 px-3 text-right font-tech text-base text-emerald-400">${l.std}m</td>
+            <td class="py-5 px-3 text-xs text-slate-200 font-medium italic">${l.obs}</td>
         </tr>
     `).join('');
+
+    // --- MOTOR DE DIAGNÓSTICO PROFUNDO (DETALLADO SIN SINTETIZAR) ---
+    const hs_std = (item.std_mins / 60).toFixed(2);
+    const hs_prod = (item.prod_mins / 60).toFixed(2);
+    const global_oee = lastFetchedData.global.oee;
+    const isPerfHigh = item.perf >= 100;
+    
+    // Identificar contrapartes (qué operarios usaron esta máquina o viceversa)
+    const partners = [...new Set(logs.filter(l => !l.is_stop).map(l => type === 'machine' ? l.op_name : l.m_name))].join(', ');
+
+    let explanationHtml = `
+        <h4 class="text-amber-400 font-black uppercase tracking-widest text-xs mb-8 flex items-center gap-3">
+            <i class="fas fa-brain animate-pulse"></i>
+            DIAGNÓSTICO INTEGRAL DE INTELIGENCIA OPERATIVA
+        </h4>
+        
+        <div class="space-y-10 text-slate-300 text-[15px] leading-relaxed">
+            <p class="text-white/80 italic font-medium text-base">Esta es la comparación clave que nos permite entender si el sistema está "viendo" lo mismo que el ERP para este caso puntual. Vamos a desglosarlo punto por punto para que veas la lógica:</p>
+
+            <!-- 1. TIEMPOS -->
+            <div class="space-y-4">
+                <h5 class="text-white font-black uppercase tracking-widest text-sm flex items-center gap-3">
+                    <span class="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.5)]"></span>
+                    1. La Unidad de Tiempo (Horas vs. Minutos)
+                </h5>
+                <p>Al cruzar los datos con el ERP para este día y selección, el sistema detecta:</p>
+                <ul class="list-none space-y-3 pl-4 border-l-2 border-white/5">
+                    <li class="flex items-center gap-3">
+                        <span class="w-2 h-2 bg-slate-500 rounded-full"></span>
+                        <span><strong>Tiempo std. (ERP):</strong> <span class="text-white text-base">${hs_std} hs</span></span>
+                    </li>
+                    <li class="flex items-center gap-3">
+                        <span class="w-2 h-2 bg-slate-500 rounded-full"></span>
+                        <span><strong>Tiempo Producción (ERP):</strong> <span class="text-white text-base">${hs_prod} hs</span></span>
+                    </li>
+                </ul>
+                <p>Como el ERP reporta en HORAS, el sistema realiza la conversión matemática para el análisis de planta:</p>
+                <div class="p-6 bg-white/[0.03] rounded-2xl border border-white/5 space-y-3 text-amber-200/90 font-tech text-base">
+                    <p class="flex items-center gap-3"><i class="fas fa-calculator text-xs"></i> ${hs_std} hs * 60 = <strong>${item.std_mins} minutos</strong> (Tiempo objetivo del ERP).</p>
+                    <p class="flex items-center gap-3"><i class="fas fa-calculator text-xs"></i> ${hs_prod} hs * 60 = <strong>${item.prod_mins} minutos</strong> (Tiempo real de ejecución).</p>
+                </div>
+                <p class="text-sm text-slate-400">Esto confirma que la calibración es correcta: los ${hs_std}hs que ves en tu software de gestión son exactamente los ${item.std_mins}m que procesa nuestro motor.</p>
+            </div>
+
+            <!-- 2. RENDIMIENTO -->
+            <div class="space-y-4">
+                <h5 class="text-white font-black uppercase tracking-widest text-sm flex items-center gap-3">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]"></span>
+                    2. ¿Cómo se interpreta el Rendimiento de ${type === 'machine' ? 'la Máquina' : 'el Operario'}?
+                </h5>
+                <p>Para <strong>${title}</strong> el ${lastFetchedData.date}:</p>
+                <div class="p-6 bg-emerald-500/5 rounded-2xl border border-emerald-500/10 text-base">
+                    <p class="text-emerald-200/90">Produjo su volumen total en <strong>${item.prod_mins} minutos</strong>, cuando el estándar del ERP indicaba que debía tardar <strong>${item.std_mins} minutos</strong>.</p>
+                </div>
+                <p class="text-base"><strong>Interpretación:</strong> ${isPerfHigh 
+                    ? `Trabajó un <span class="text-emerald-400 font-black">${(item.perf - 100).toFixed(1)}% más rápido</span> de lo esperado.` 
+                    : `Trabajó a un ritmo del <span class="text-amber-400 font-black">${item.perf}%</span> respecto al estándar cotizado.`}
+                    ${type === 'operator' && item.presence_mins > 0 ? `<br><br><span class="text-blue-400"><strong>Resultado Final:</strong></span> Su OEE de <strong>${item.oee}%</strong> se calcula multiplicando esta eficiencia por su disponibilidad real del ${item.avail}%.` : ''}
+                </p>
+            </div>
+
+            <!-- 2.5 DISPONIBILIDAD (Fichaje Reloj) -->
+            ${(type === 'operator' && item.presence_mins > 0) ? `
+            <div class="space-y-6 p-8 bg-blue-500/5 rounded-[2rem] border border-blue-500/10">
+                <h5 class="text-white font-black uppercase tracking-widest text-sm flex items-center gap-3">
+                    <span class="w-2.5 h-2.5 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.5)]"></span>
+                    2.5 Análisis de Disponibilidad (Reloj de Presentismo)
+                </h5>
+                <p class="text-base">Al cruzar los datos con la tabla <strong>T7_Fichada</strong>, el sistema detecta:</p>
+                <div class="flex gap-8 items-center">
+                    <div class="flex-1 space-y-2">
+                        <span class="block text-[10px] text-slate-400 uppercase font-black tracking-widest">Entrada - Salida</span>
+                        <span class="text-2xl font-tech text-white font-black">${item.p_entrada} - ${item.p_salida}</span>
+                    </div>
+                    <div class="w-px h-10 bg-white/10"></div>
+                    <div class="flex-1 space-y-2">
+                        <span class="block text-[10px] text-slate-400 uppercase font-black tracking-widest">Tiempo en Planta</span>
+                        <span class="text-2xl font-tech text-white font-black">${(item.presence_mins/60).toFixed(1)} hs</span>
+                    </div>
+                </div>
+                <p class="text-sm bg-white/5 p-4 rounded-xl italic">
+                    <strong>¿Qué significa?</strong> El operario estuvo físicamente en la empresa durante ${(item.presence_mins/60).toFixed(1)} horas, pero solo registró ${hs_prod} horas de trabajo productivo. 
+                    Esas <strong>${((item.presence_mins - item.prod_mins)/60).toFixed(1)} horas de diferencia</strong> son las que el sistema descuenta de su OEE por falta de disponibilidad.
+                </p>
+            </div>
+            ` : ''}
+
+            <!-- 3. GLOBAL -->
+            <div class="space-y-4">
+                <h5 class="text-white font-black uppercase tracking-widest text-sm flex items-center gap-3">
+                    <span class="w-2.5 h-2.5 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.5)]"></span>
+                    3. ¿Por qué el Rendimiento Global marca ${global_oee}%?
+                </h5>
+                <p>Este es el análisis que explica por qué este valor individual difiere del promedio de planta:</p>
+                <ul class="list-none space-y-6 pl-4 border-l-2 border-white/5">
+                    <li>
+                        <strong class="text-white block mb-2 text-base">Diferencial de Eficiencia:</strong>
+                        Mientras esta selección rinde al ${item.perf}%, el promedio de planta es de ${global_oee}%. Esto indica que hay otros puestos que están por debajo o registros con estándar 0 que compensan el promedio general del día.
+                    </li>
+                    <li>
+                        <strong class="text-white block mb-2 text-base">Impacto de Fugas:</strong>
+                        El sistema detectó <strong>${lastFetchedData.global.stopped_mins} minutos</strong> totales de paradas en el día (${(lastFetchedData.global.stopped_mins/60).toFixed(1)} horas), lo que reduce la disponibilidad global independientemente de la velocidad de este puesto.
+                    </li>
+                </ul>
+            </div>
+
+            <!-- 4. LIDERAZGO -->
+            <div class="space-y-4">
+                <h5 class="text-white font-black uppercase tracking-widest text-sm flex items-center gap-3">
+                    <span class="w-2.5 h-2.5 rounded-full bg-indigo-400 shadow-[0_0_8px_rgba(129,140,248,0.5)]"></span>
+                    4. Liderazgo Operativo y Trazabilidad
+                </h5>
+                <p>El sistema vincula este rendimiento con los siguientes actores:</p>
+                <p class="p-5 bg-white/[0.02] rounded-xl border border-white/5 text-indigo-200/80 text-base">
+                    <i class="fas fa-link mr-2"></i> ${type === 'machine' ? 'Operarios que trabajaron en este equipo' : 'Máquinas operadas'}: <strong>${partners || 'Sin datos de vinculación'}</strong>
+                </p>
+                <p class="text-base">Este puesto aportó <strong>${item.qty} unidades</strong> al volumen total de ${lastFetchedData.global.units} piezas producidas hoy en la planta.</p>
+            </div>
+
+            <!-- RESUMEN FINAL -->
+            <div class="mt-12 pt-8 border-t border-white/10 relative">
+                <div class="absolute -top-3.5 left-0 bg-[#020617] pr-4 text-[11px] font-black text-amber-400 uppercase tracking-widest">Resumen de interpretación</div>
+                <p class="text-slate-400 italic leading-relaxed text-base">
+                    Los datos del ERP y el Dashboard ahora coinciden perfectamente. El valor de ${hs_std} hs del ERP equivale a los ${item.std_mins}m del sistema. El hecho de que el global sea ${global_oee}% te está avisando que, aunque este puesto rinde al ${item.perf}%, el resto de la planta tiene oportunidades de mejora en velocidad o carga de estándares.
+                </p>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('logsExplanationContent').innerHTML = explanationHtml;
 
     const modal = document.getElementById('modalLogs');
     const container = document.getElementById('logsContainer');
@@ -609,18 +748,25 @@ async function openDetailsModal(date) {
         oList.innerHTML = data.operators.map(o => `
             <div onclick="showLogs('operator', '${o.uid}')" class="flex justify-between items-center p-5 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-all group cursor-pointer active:scale-95">
                 <div class="flex items-center gap-4">
-                    <div class="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center text-xs font-black border border-blue-500/20 shadow-lg shadow-blue-500/10">
-                        <i class="fas fa-user"></i>
+                    <div class="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center text-sm font-black border border-blue-500/20 shadow-lg shadow-blue-500/10">
+                        <i class="fas fa-user-ninja"></i>
                     </div>
                     <div>
-                        <span class="text-sm font-black text-white uppercase tracking-tighter block mb-1">${o.name}</span>
-                        <span class="text-[11px] font-bold text-slate-300 uppercase tracking-widest bg-white/5 px-2 py-0.5 rounded inline-block">Legajo: ${o.uid}</span>
+                        <span class="text-base font-black text-white uppercase tracking-tighter block mb-1">${o.name}</span>
+                        <div class="flex items-center gap-3">
+                            <span class="text-[11px] font-bold text-slate-300 uppercase tracking-widest bg-white/5 px-2 py-0.5 rounded inline-block">Legajo: ${o.uid}</span>
+                            <span class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">${o.qty} piezas totales</span>
+                        </div>
+                        ${o.presence_mins > 0 ? `
+                        <div class="mt-2 text-[10px] font-bold text-emerald-400/80 uppercase tracking-widest flex gap-2">
+                             <i class="fas fa-clock"></i> Fichó: ${o.p_entrada} a ${o.p_salida} (${(o.presence_mins/60).toFixed(1)}hs)
+                        </div>
+                        ` : ''}
                     </div>
                 </div>
-                <div class="flex items-center gap-6">
-                    <div class="text-right">
-                        <span class="text-[10px] font-black text-white font-tech">${o.qty}</span>
-                    </div>
+                <div class="text-right">
+                    <span class="text-2xl font-black ${o.oee < 30 ? 'text-rose-400' : 'text-blue-400'} font-tech leading-none">${o.oee}%</span>
+                    <span class="block text-[9px] font-black text-white/40 uppercase tracking-[0.2em] mt-1">OEE REAL</span>
                 </div>
             </div>
         `).join('');

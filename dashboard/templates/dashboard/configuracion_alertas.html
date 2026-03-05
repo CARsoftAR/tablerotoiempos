@@ -46,12 +46,14 @@
         margin: 0;
         background: linear-gradient(to bottom, #fff 0%, #aaa 100%);
         -webkit-background-clip: text;
+        background-clip: text;
         -webkit-text-fill-color: transparent;
     }
 
     .alert-header h1 span {
         background: linear-gradient(to bottom, var(--gold-bright), var(--premium-gold));
         -webkit-background-clip: text;
+        background-clip: text;
         -webkit-text-fill-color: transparent;
     }
 
@@ -165,6 +167,86 @@
     input:checked + .slider { background-color: rgba(212, 175, 55, 0.2); border-color: var(--premium-gold); }
     input:checked + .slider:before { transform: translateX(28px); background-color: var(--premium-gold); }
 
+    /* Estilos para Guía de Ayuda */
+    .btn-help {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--glass-border);
+        color: var(--premium-gold);
+        padding: 5px 12px;
+        border-radius: 10px;
+        font-size: 10px;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        cursor: pointer;
+        transition: all 0.3s;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .btn-help:hover {
+        background: var(--premium-gold);
+        color: #000;
+    }
+
+    .guide-box {
+        display: none;
+        background: rgba(0, 0, 0, 0.6);
+        border: 1px solid rgba(212, 175, 55, 0.3);
+        border-radius: 25px;
+        padding: 30px;
+        margin-top: 20px;
+        font-size: 13px;
+        line-height: 1.8;
+        color: #ddd;
+        animation: slideDown 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+        box-shadow: inset 0 0 30px rgba(0,0,0,0.5);
+    }
+
+    .guide-box.active {
+        display: block;
+    }
+
+    @keyframes slideDown {
+        from { opacity: 0; transform: translateY(-20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .step-item {
+        position: relative;
+        padding-left: 45px;
+        margin-bottom: 25px;
+        border-left: 1px solid rgba(255,255,255,0.1);
+        padding-bottom: 10px;
+    }
+
+    .step-badge {
+        position: absolute;
+        left: -12px;
+        top: 0;
+        background: var(--premium-gold);
+        color: #000;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        font-weight: 900;
+        font-size: 11px;
+        box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
+    }
+
+    .guide-tip {
+        background: rgba(212, 175, 55, 0.1);
+        border-radius: 12px;
+        padding: 12px 15px;
+        margin-top: 10px;
+        border-left: 3px solid var(--premium-gold);
+        font-size: 11px;
+        color: var(--premium-gold);
+    }
 </style>
 
 <div class="premium-container animate-in fade-in duration-1000">
@@ -199,10 +281,58 @@
                             <p class="text-xs text-slate-500 font-bold">Protocolo Seguro de Bot de Planta</p>
                         </div>
                     </div>
-                    <label class="switch">
-                        <input type="checkbox" name="activar_telegram" {% if config.activar_telegram %}checked{% endif %}>
-                        <span class="slider"></span>
-                    </label>
+                    <div class="flex items-center gap-4">
+                        <button type="button" class="btn-help" onclick="toggleGuide('guide-telegram')">
+                            <i class="fas fa-info-circle"></i> Guía
+                        </button>
+                        <label class="switch">
+                            <input type="checkbox" name="activar_telegram" {% if config.activar_telegram %}checked{% endif %}>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Guía Telegram Detallada -->
+                <div id="guide-telegram" class="guide-box mb-8">
+                    <h4 class="text-amber-500 font-black uppercase tracking-[0.2em] mb-8 flex items-center gap-3 text-lg">
+                        <i class="fas fa-graduation-cap"></i> Guía Maestra: Configuración de Telegram
+                    </h4>
+                    
+                    <div class="space-y-2">
+                        <div class="step-item">
+                            <span class="step-badge">1</span>
+                            <p class="font-bold text-white mb-1">Buscar al "Padre" de los Bots</p>
+                            <p class="opacity-70">Abrí tu Telegram y en el buscador (la lupa) escribí: <b class="text-sky-400">@BotFather</b>. Debe tener un tilde azul de cuenta verifcada. Entrá y dale clic al botón azul grande que dice <b>"INICIAR"</b>.</p>
+                        </div>
+
+                        <div class="step-item">
+                            <span class="step-badge">2</span>
+                            <p class="font-bold text-white mb-1">Crear tu propio Bot de Planta</p>
+                            <p class="opacity-70">Escribile el mensaje: <b class="text-sky-400">/newbot</b>. Te va a preguntar por un nombre (ej: <i>Alertas ABBAMAT</i>) y luego por un usuario único que debe terminar en "bot" (ej: <i>mi_empresa_alertas_bot</i>).</p>
+                        </div>
+
+                        <div class="step-item">
+                            <span class="step-badge">3</span>
+                            <p class="font-bold text-white mb-1">Copiar la "Llave Maestra" (Token)</p>
+                            <p class="opacity-70">BotFather te va a dar un código largo (ej: <code class="bg-black/40 px-2 py-1 rounded text-amber-500">85743397:AAHjr...</code>). Ese código es el que tenés que pegar abajo en <b>"Bot Token ID"</b>. Guardalo bien, es tu acceso privado.</p>
+                        </div>
+
+                        <div class="step-item">
+                            <span class="step-badge">4</span>
+                            <p class="font-bold text-white mb-1">¡PASO CRÍTICO!: Despertar a tu Bot</p>
+                            <p class="opacity-70 text-amber-500">Buscá a <u>tu propio bot</u> (el que creaste recién) por su nombre y dale clic a <b>INICIAR</b>. Si no hacés esto, el bot no tendrá permiso para enviarte mensajes y las alarmas nunca llegarán.</p>
+                        </div>
+
+                        <div class="step-item !border-none">
+                            <span class="step-badge">5</span>
+                            <p class="font-bold text-white mb-1">Saber quién sos (Chat ID)</p>
+                            <p class="opacity-70">Buscá en Telegram a <b class="text-sky-400">@userinfobot</b> y dale a <b>INICIAR</b>. Te va a responder con un número (ej: <i>8538718216</i>). Ese es tu número de identidad para recibir las alertas. Pegalo abajo en <b>"Chat ID"</b>.</p>
+                        </div>
+                    </div>
+
+                    <div class="guide-tip">
+                        <i class="fas fa-lightbulb"></i> <b>CONSEJO:</b> Si querés que las alertas lleguen a un grupo de socios, agregá a tu Bot al grupo y usá el bot @getidsbot dentro del grupo para saber el ID del grupo (suele empezar con un signo menos, ej: -10012345).
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -228,14 +358,61 @@
                             <i class="fab fa-whatsapp"></i>
                         </div>
                         <div>
-                            <h3 class="text-xl font-black text-white uppercase tracking-tight">WhatsApp Business</h3>
+                            <h3 class="text-xl font-black text-white uppercase tracking-tight">WhatsApp común</h3>
                             <p class="text-xs text-slate-500 font-bold">Gateway CallMeBot Integrado</p>
                         </div>
                     </div>
-                    <label class="switch">
-                        <input type="checkbox" name="activar_whatsapp" {% if config.activar_whatsapp %}checked{% endif %}>
-                        <span class="slider"></span>
-                    </label>
+                    <div class="flex items-center gap-4">
+                        <button type="button" class="btn-help" onclick="toggleGuide('guide-whatsapp')">
+                            <i class="fas fa-info-circle"></i> Guía
+                        </button>
+                        <label class="switch">
+                            <input type="checkbox" name="activar_whatsapp" {% if config.activar_whatsapp %}checked{% endif %}>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Guía WhatsApp Detallada -->
+                <div id="guide-whatsapp" class="guide-box mb-8" style="border-color: #25d366;">
+                    <h4 style="color: #25d366;" class="font-black uppercase tracking-[0.2em] mb-8 flex items-center gap-3 text-lg">
+                        <i class="fas fa-graduation-cap"></i> Guía Maestra: Configuración de WhatsApp
+                    </h4>
+                    
+                    <div class="space-y-2">
+                        <div class="step-item">
+                            <span class="step-badge" style="background: #25d366;">1</span>
+                            <p class="font-bold text-white mb-1">Agendar al Robot de Alertas</p>
+                            <p class="opacity-70 text-white">Cargá en tus contactos del celular este número: <b class="text-emerald-400">+34 644 10 33 23</b>. Ponelo como "Robot Alertas ABBAMAT". Es de España, por eso el prefijo +34.</p>
+                        </div>
+
+                        <div class="step-item">
+                            <span class="step-badge" style="background: #25d366;">2</span>
+                            <p class="font-bold text-white mb-1">Dar permiso de envío (Mensaje Mágico)</p>
+                            <p class="opacity-70">Abrí un chat con ese número y enviale exactamente la siguiente frase: <br>
+                               <b class="text-emerald-400 bg-black/40 px-2 py-1 rounded select-all mt-2 inline-block">I allow callmebot to send me messages</b>
+                            </p>
+                        </div>
+
+                        <div class="step-item">
+                            <span class="step-badge" style="background: #25d366;">3</span>
+                            <p class="font-bold text-white mb-1">Recibir tu Clave API</p>
+                            <p class="opacity-70">El robot te va a responder dándote la bienvenida y te dará una <b>APIKey</b> (un número de 6 o más dígitos). Copiá ese número y pegalo abajo en el campo <b>"Credential API Key"</b>.</p>
+                        </div>
+
+                        <div class="step-item !border-none">
+                            <span class="step-badge" style="background: #25d366;">4</span>
+                            <p class="font-bold text-white mb-1">Configurar tu número de recepción</p>
+                            <p class="opacity-70">En el campo "Número Teléfono", poné tu propio celular. <br>
+                               <b class="text-amber-500">FORMATO OBLIGATORIO:</b> Debe empezar con <b class="text-white">+54 9</b> y después el código de área sin el 0 y sin el 15. <br>
+                               <i>Ejemplo: +5491156651458</i>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="guide-tip" style="border-left-color: #25d366; background: rgba(37, 211, 102, 0.1); color: #25d366;">
+                        <i class="fas fa-check-double"></i> <b>DATO ÚTIL:</b> No necesitás que tu cuenta de WhatsApp sea Business o de empresa. Esta conexión funciona perfectamente con el WhatsApp común de cualquier celular.
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -328,4 +505,11 @@
         </div>
     </form>
 </div>
+
+<script>
+function toggleGuide(id) {
+    const guide = document.getElementById(id);
+    guide.classList.toggle('active');
+}
+</script>
 {% endblock %}
