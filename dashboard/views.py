@@ -226,6 +226,7 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 'active_operators': {}, # Dict {Nombre: Tarea} to prevent duplicates
                 'stats_per_op': {},     # Dict {Nombre: {real: 0.0, std: 0.0}}
                 'has_matriceria': False,
+                'tiempo_excluido_mat': 0.0, # Mins
                 'audit_log': []
             }
 
@@ -242,12 +243,23 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
     global_actual_qty = 0.0 # Piezas Buenas
     global_rejected_qty = 0.0 # Reprocesos/Scrap
     global_repro_time = 0.0 # Horas de reproceso
+    global_excluded_mat_time = 0.0 # Mins to subtract from global availability
 
     machine_orders = {} 
     kpi_por_personal = {}
     active_unassigned_ops = {} # Para mostrar detalle en tarjeta "Sin Asignar"
     
-    # Acumuladores Globales
+    # Acumuladores Globales (Solo para MÁQUINAS REGISTRADAS)
+    global_actual_qty_reg = 0.0
+    global_planned_time_reg = 0.0 # En MINUTOS
+    global_actual_time_reg = 0.0 # En MINUTOS
+    global_total_rejected_qty_reg = 0.0
+    total_horas_disp_reg = 0.0     # Para la base del OEE Maquinas
+    total_horas_prod_reg_capped = 0.0  # Tiempo real capeado al turno (para Disponibilidad <= 100%)
+
+    # Para evitar sumar el estandar de registros ONLINE (en progreso):
+    # La condicion qty>0 es el gate natural - registros en progreso tienen qty=0 y std=0.
+    # NO necesitamos de-duplicacion por orden porque el ERP ya lo maneja.
 
     for reg in registros_data:
         mid = str(reg['id_maquina']).strip() if reg.get('id_maquina') else None
@@ -255,19 +267,14 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         qty = reg['cantidad_producida'] or 0.0
         raw_std = reg['tiempo_cotizado'] or 0.0
         
-        # SMART TIME SCALING: Detect if ERP provides hours or minutes
-        # Rule: If qty > 0 and raw_std/qty < 12, it's likely hours (e.g. 0.42 hrs vs 25 mins)
-        # Exception: Special cases like matricería often already come in minutes (large values)
-        is_matriceria_row = 'MATRICER' in str(reg.get('articulod') or '').upper() or 'MATRICER' in str(reg.get('observaciones') or '').upper()
-        
-        if qty > 0 and not is_matriceria_row:
-            std_per_unit = raw_std / qty
-            if std_per_unit < 12: # Threshold to distinguish hours (e.g. 0.5) from minutes (e.g. 30)
-                std_mins = raw_std * 60.0
-            else:
-                std_mins = raw_std
-        else:
-            std_mins = raw_std * 60.0 if raw_std < 12 and raw_std > 0 else raw_std
+        # CONFIRMADO POR DIAGNÓSTICO: tiempo_cotizado SIEMPRE está en HORAS en la DB.
+        # MAC40: raw=4.136 hs -> 248 min (ERP dice 4.14 hs = 248 min) ✓
+        # MAC18: raw=6.300 hs -> 378 min (ERP dice 6.00 hs)            ✓
+        # MAC38: raw en hs, multiplicar siempre por 60 para convertir a minutos.
+        raw_art_d = str(reg.get('articulod') or '').upper()
+        raw_op_d = str(reg.get('operacion') or '').upper()
+        raw_obs = str(reg.get('observaciones') or '').upper()
+        std_mins = raw_std * 60.0  # SIEMPRE en horas → convertir a minutos
 
         
         # Identificar Reproceso o tareas que no deben sumar a Cantidad Real
@@ -281,8 +288,9 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         descanso_keywords = ['DESCANSO', 'ALMUERZO', 'PAUSA', 'VACACIONES', 'LICENCIA']
         
         # Estas tareas son laborales pero no tienen estándar productivo, usamos Regla 1:1
+        # NOTA: MATRICERIA se maneja por separado ahora para EXCLUIRLA del OEE
         special_keywords = [
-            'MATRICER', 'TAREAS GENERALES', 'AJUSTES', 'REBABADO', 'GRABADO', 'ARMADO',
+            'TAREAS GENERALES', 'AJUSTES', 'REBABADO', 'GRABADO', 'ARMADO', 'ACCESORIOS',
             'CAPACI', 'CAPACIT', 'TENSI', 'TENSION', 'HERRAMIENTA', 'MANTEN', 'REPAR',
             'CORRECTIVO', 'PREVENTIVO', 'AJUST', 'SET-UP', 'SETUP', 'LIMPIEZA', 
             'REUNION', 'REUNIÓN', 'MATERIAL', 'ESPERA', 'ENSAYO', 'INSPEC', 'ASIST', 'AUXILIO'
@@ -322,8 +330,33 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             is_online_record
         )
 
-        raw_clean = f"{raw_art_d} {raw_op_d}"
-        is_matriceria = any(k in raw_clean for k in special_keywords) or any(k in raw_obs for k in special_keywords)
+        # REGLA SOLICITADA: Todo lo que sea MATRICERIA no se usa para KPIs de serie.
+        mat_kws = ['MATRIC', 'MATRIZ', 'MATR.']
+        full_text_search = f"{raw_art_d} {raw_op_d} {raw_obs} {raw_id_op}".upper()
+        is_matriceria = any(k in full_text_search for k in mat_kws)
+        should_exclude_mat = is_matriceria
+        is_valid_machine_prod = not (is_descanso or reg.get('es_interrupcion'))
+        
+        if is_matriceria:
+            # Matricería fuera de todo: solo reduce el denominador (Disponibilidad)
+            global_excluded_mat_time += duracion
+            # Si era una máquina asignada, también lo guardamos para su descuento individual
+            if mid and mid not in maquinas_inactivas_ids:
+                if mid not in kpi_por_maquina:
+                    kpi_por_maquina[mid] = {
+                        'id_maquina': mid,
+                        'nombre_maquina': nombres_maquinas.get(mid, mid),
+                        'tiempo_operativo': 0.0, 'tiempo_paradas': 0.0, 'tiempo_cotizado': 0.0, 
+                        'cantidad_producida': 0.0, 'cantidad_rechazada': 0.0, 'latest_obs': '', 
+                        'latest_date': None, 'latest_activity_time': None, 'latest_operator': 'S/A', 
+                        'latest_article': '---', 'current_order': '---', 'is_found_online': False, 
+                        'is_producing_now': False, 'active_operators': {}, 'stats_per_op': {}, 
+                        'has_matriceria': True, 'tiempo_excluido_mat': 0.0, 'audit_log': []
+                    }
+                kpi_por_maquina[mid]['tiempo_excluido_mat'] += duracion
+            continue # EXCLUSIÓN TOTAL: no suma piezas, no suma estándar, no suma tiempo real
+            
+        is_other_neutral = any(k in full_text_search for k in special_keywords) or any(k in raw_obs for k in special_keywords)
         is_armado = False # Ya incluido en special_keywords
         
         id_orden = reg.get('id_orden')
@@ -338,6 +371,8 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             is_unassigned = False
         
         if is_unassigned:
+            # Dado que la matricería ya se manejó arriba (con continue), 
+            # aquí solo llega producción de serie sin asignar.
             unassigned_time += duracion
             if reg['es_proceso']:
                 unassigned_process_time += duracion
@@ -351,6 +386,10 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 unassigned_qty += qty
                 global_actual_qty += qty
             if add_std_global:
+                # REGLA AUDITORÍA: Si es neutro o no tiene piezas aún, tratamos como 1:1
+                if is_other_neutral or (std_mins == 0 and qty == 0):
+                    unassigned_std += duracion
+                else:
                     unassigned_std += std_mins
             
             # Detalle para tarjeta "Sin Asignar": Quiénes están trabajando aquí AHORA
@@ -391,6 +430,7 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                     'active_operators': {}, # Dict {Nombre: Tarea}
                     'stats_per_op': {},     # Dict {Nombre: {real: 0.0, std: 0.0}}
                     'has_matriceria': False,
+                    'tiempo_excluido_mat': 0.0,
                     'audit_log': []
                 }
 
@@ -471,35 +511,46 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 # El descanso NO suma cantidad ni tiempo cotizado
                 pass
             else:
-                # REGLA ACTUALIZADA: Sumamos cantidad incluso si es ONLINE para coincidir con el ERP (Total 40 vs 38)
-                data['cantidad_producida'] += qty
-                global_actual_qty += qty
-                
-                # persistencia de estado matriceria para registros incompletos (ONLINE)
-                if is_matriceria:
-                    data['has_matriceria'] = True
-                
-                # Sumamos estándar para MÁQUINA
-                # Solo si es produccion valida (para no inflar cotizado durante descansos)
-                is_valid_machine_prod = not (is_descanso or reg['es_interrupcion'])
-                
-                if is_valid_machine_prod:
-                    # Si es matriceria EXPLICITA o IMPLICITA (por el historial reciente de la maquina)
-                    # Esto evita que los registros ONLINE vacios bajen el rendimiento.
-                    should_treat_as_matriceria = is_matriceria or (data['has_matriceria'] and is_online_record)
+                # REGLA SOLICITADA: EXCLUSIÓN DE MATRICERÍA
+                if should_exclude_mat:
+                    data['tiempo_excluido_mat'] += duracion
+                    global_excluded_mat_time += duracion
+                    # NO SUMA NADA A PRODUCCIÓN NI ESTÁNDAR
+                else:
+                    # REGLA ACTUALIZADA: Sumamos cantidad incluso si es ONLINE para coincidir con el ERP (Total 40 vs 38)
+                    data['cantidad_producida'] += qty
+                    global_actual_qty += qty
                     
-                    if should_treat_as_matriceria:
-                        # REGLA OEE MATRICERÍA: En trabajos de larga duración, tratamos la matricería como 100% eficiente (Estándar = Real).
-                        data['tiempo_cotizado'] += duracion
-                        global_planned_time += duracion
-                    elif (qty > 0 or (is_armado and std_mins > 0)):
-                        # Para trabajos de SERIE (incluido ARMADO): Sumamos el estándar del ERP.
-                        data['tiempo_cotizado'] += std_mins
-                        global_planned_time += std_mins
-                    elif is_session_active and qty == 0:
-                        # FIX: Rendimiento Neutro para máquinas empezando la pieza (evita 0% al inicio)
-                        data['tiempo_cotizado'] += duracion
-                        global_planned_time += duracion
+                    # Sumamos estándar para MÁQUINA
+                    # Solo si es produccion valida (para no inflar cotizado durante descansos)
+                    
+                    if is_valid_machine_prod:
+                        # REGLA AUDITORÍA: Si tiene estándar confiable en ERP, lo usamos.
+                        if qty > 0 and std_mins > 0:
+                            data['tiempo_cotizado'] += std_mins
+                            global_planned_time += std_mins
+                            global_planned_time_reg += std_mins
+                        
+                        # REGLA AUDITORÍA FALLBACK: Si es tarea neutra (ARMADO, SETUP) 
+                        # O si reportó piezas pero el ERP no tiene estándar (.00), usamos 1:1.
+                        # Esto evita que el rendimiento caiga a 0% por falta de datos en el ERP.
+                        elif is_other_neutral or (qty > 0 and std_mins == 0):
+                            data['tiempo_cotizado'] += duracion
+                            global_planned_time += duracion
+                            global_planned_time_reg += duracion
+                        
+                        elif qty == 0 and not is_other_neutral:
+                            # Producción activa sin piezas y sin keyword: no suma estándar aún
+                            pass
+                    
+                    # Actualizar acumuladores registrados (tiempo real sin capear aun;
+                    # el capeo se aplica en el loop de KPIs por maquina mas abajo)
+                    global_actual_qty_reg += qty
+                    global_actual_time_reg += duracion
+                    
+                    # Si no es matriceria ni parada, se considera tiempo operativo real de serie
+                    data['tiempo_operativo'] += duracion
+                    global_actual_time += duracion
                     
                 # Acumulamos tiempos para el operario (si existe) para cálculo individual
                 # Acumulamos tiempos para el operario (si existe) para cálculo individual
@@ -592,15 +643,10 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                         'op_number': final_op_num
                     }
             
-            # Cálculo de Tiempos
             if is_descanso or reg['es_interrupcion']:
                 # El descanso y las interrupciones declaradas se cuentan como Parada
                 data['tiempo_paradas'] += duracion
                 global_downtime += duracion
-            else:
-                # Si no es parada explícita, se considera tiempo operativo de máquina
-                data['tiempo_operativo'] += duracion
-                global_actual_time += duracion
 
         # --- Lógica por Personal ---
         # ATENCIÓN: En este ERP, el ID de la persona (legajo) viene en 'id_concepto',
@@ -626,6 +672,7 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 'descanso_qty': 0.0,
                 'latest_article': '---',
                 'has_matriceria': False,
+                'tiempo_excluido_mat': 0.0,
                 'has_any_obs': False,
                 'audit_log': []
             }
@@ -640,7 +687,17 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 per['max_time'] = reg_time
                 per['latest_obs'] = (obs_val or "ONLINE").strip().upper()
                 per['latest_machine'] = mid or per.get('latest_machine', '')
-                
+        
+        if is_descanso or reg['es_interrupcion']:
+            per['tiempo_paradas'] += duracion
+            if is_descanso: per['descanso_mins'] += duracion
+        else:
+            # Personal: Excluir Matricería del tiempo operativo productivo
+            # (El 'continue' global ya debería atraparlo, pero reforzamos aquí)
+            per['tiempo_operativo'] += duracion
+            per['cantidad_producida'] += qty
+            if is_valid_machine_prod and qty > 0:
+                per['tiempo_cotizado'] += std_mins
                 # Sticky for Personal order
                 new_p_order = reg.get('id_orden')
                 if new_p_order and str(new_p_order).strip() not in ['', 'None', '0']:
@@ -658,11 +715,6 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 if art_d:
                     per['latest_article'] = art_d
                 per['current_order'] = reg['id_orden']
-        elif not per.get('latest_obs'):
-            # Si solo hay descansos por ahora, guardamos uno como fallback pero seguimos buscando
-            per['latest_obs'] = (obs_val or str(reg['articulod'] or "")).strip().upper()
-            per['latest_machine'] = mid
-            per['current_order'] = reg['id_orden']
         
         if obs_val:
             per['has_any_obs'] = True
@@ -697,14 +749,17 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         elif is_descanso:
             # No suma cantidad
             pass
+        elif should_exclude_mat:
+            # REGLA SOLICITADA: EXCLUSIÓN DE MATRICERÍA
+            upers['tiempo_excluido_mat'] += duracion
+            upers['has_matriceria'] = True
         else:
             # Se permite sumar piezas aun en registros ONLINE si vienen con data
             upers['cantidad_producida'] += qty
             
-            # REGLA OEE MATRICERÍA para Personal (Sincronizada)
+            # REGLA OEE Neutral para Personal
             added_row_std_p = False
-            if is_matriceria:
-                upers['has_matriceria'] = True
+            if is_other_neutral:
                 upers['tiempo_cotizado'] += duracion
                 added_row_std_p = True
             else:
@@ -723,6 +778,9 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             upers['descanso_qty'] += qty
         elif reg['es_interrupcion']:
             upers['tiempo_paradas'] += duracion
+        elif should_exclude_mat:
+            # Se cuenta por separado, no es operativo de serie ni parada
+            pass
         else:
             # Es TIEMPO OPERATIVO (Proceso o similar que no es parada)
             upers['tiempo_operativo'] += duracion
@@ -734,7 +792,7 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             
             # Agregamos al desglose solo lo que sumó al KPI para que sea consistente
             if added_row_std_p:
-                if is_matriceria:
+                if is_other_neutral:
                     upers['articulos'][art_name]['std'] += duracion
                 else:
                     upers['articulos'][art_name]['std'] += std_mins
@@ -853,14 +911,20 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 else:
                     t_disp_periodo += full_shift_hrs
 
-        if t_disp_periodo < t_op_hrs:
-            t_disp_periodo = t_op_hrs
-        if t_disp_periodo < 0.01:
-            t_disp_periodo = 0.01
+        # NOTA: h_excl_mat ya NO se resta del t_disp_periodo para que el TURNO sea la base.
+        # t_disp_periodo = max(0.01, t_disp_periodo - h_excl_mat)
+        
+        # Tiempo SERIE = ya viene filtrado en el loop principal (no incluye matricería)
+        series_t_op_hrs = t_op_hrs
+        
+        # Capeo al turno: ninguna máquina puede estar "más disponible" que su turno
+        t_op_hrs_capped = min(series_t_op_hrs, t_disp_periodo)
 
-        # KPIs de la MÁQUINA (independientes de los operarios)
-        availability = (t_op_hrs / t_disp_periodo) * 100.0
-        performance = (t_std_hrs / t_op_hrs) * 100.0 if t_op_hrs > 0 else 0.0
+        # KPIs de la MÁQUINA
+        availability = (t_op_hrs_capped / t_disp_periodo) * 100.0 if t_disp_periodo > 0 else 0.0
+        # RENDIMIENTO REAL: Productividad de las horas trabajadas (incluyendo extras) 
+        # std_tot / real_serie_tot (49hs en el ejemplo)
+        performance = (t_std_hrs / series_t_op_hrs) * 100.0 if series_t_op_hrs > 0 else 0.0
         
         total_p = qty + data['cantidad_rechazada']
         quality = (qty / total_p * 100.0) if total_p > 0 else 100.0
@@ -949,18 +1013,16 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             'audit_log': json.dumps(clean_log),
             'audit_log_list': clean_log # For backend scripts
         })
-        
-        # DEBUG: Print para Banco Trabajo
-        if 'BANCO' in data['nombre_maquina'].upper():
-            print(f"\nDEBUG LISTA_KPIS: {data['nombre_maquina']}")
-            print(f"  Máquina - Perf: {performance:.2f}%, Avail: {availability:.2f}%")
-            for op_name, op_info in data.get('active_operators', {}).items():
-                print(f"  {op_name}: perf={op_info.get('perf')}, avail={op_info.get('avail')}")
+                
+        # Disponibilidad Dinámica: Solo sumamos al "Esperado" global si la máquina tuvo actividad
+        if t_op_hrs > 0 or data.get('tiempo_paradas', 0) > 0:
+            total_horas_disp_reg += t_disp_periodo
         
         total_horas_std += t_std_hrs
-        total_horas_prod += t_op_hrs
-        total_horas_disp += t_disp_periodo 
-        global_downtime += max(0, (t_disp_periodo - t_op_hrs) * 60)
+        total_horas_prod += series_t_op_hrs  # Tiempo REAL de serie para el global de Rendimiento
+        total_horas_prod_reg_capped += t_op_hrs_capped  # Tiempo CAPEADO para el global de Disponibilidad
+        total_horas_disp += t_disp_periodo
+        global_downtime += max(0, (t_disp_periodo - t_op_hrs_capped) * 60)
         
         # DEBUG LOG: Acumulación por máquina
         if t_std_hrs > 0.01:
@@ -997,6 +1059,11 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 t_disp_p += (end_h - start_h)
         
         if t_disp_p < t_op_hrs: t_disp_p = t_op_hrs
+        
+        # RESTAR TIEMPO EXCLUIDO (MATRICERÍA)
+        h_excl_mat_p = data.get('tiempo_excluido_mat', 0.0) / 60.0
+        t_disp_p = max(0.01, t_disp_p - h_excl_mat_p)
+
         if t_disp_p < 0.01: t_disp_p = 0.01
         
         availability = (t_op_hrs / t_disp_p) * 100.0 if t_disp_p > 0 else 0.0
@@ -1153,6 +1220,10 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
     total_horas_std += h_unassigned_std
     total_horas_prod += h_unassigned_prod
     
+    # RESTAR MATRICERÍA GLOBAL DEL DISPONIBLE (Comentado para mantener TURNO como base)
+    h_excl_global_mat = global_excluded_mat_time / 60.0
+    # total_horas_disp = max(0.01, total_horas_disp - h_excl_global_mat)
+
     # CORRECCIÓN DE LÓGICA OEE (NORMALIZACIÓN AL 100%):
     # Si hay producción en máquinas "Sin Asignar" (Inactivas o Viejas), debemos
     # sumar ese tiempo al DISPONIBLE también. De lo contrario, tenemos más horas
@@ -1162,38 +1233,62 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         total_horas_disp += h_unassigned_prod
     
     # DEBUG LOG: Después de sumar unassigned y normalizar disp
-    print(f"total_horas_std (final): {total_horas_std:.2f} hs")
-    print(f"total_horas_prod (final): {total_horas_prod:.2f} hs")
-    print(f"total_horas_disp (final ajustado): {total_horas_disp:.2f} hs")
+    # print(f"total_horas_std (final): {total_horas_std:.2f} hs")
+    # print(f"total_horas_prod (final): {total_horas_prod:.2f} hs")
+    # print(f"total_horas_disp (final ajustado): {total_horas_disp:.2f} hs")
 
-    if total_horas_disp > 0:
-        promedio_oee = (total_horas_std / total_horas_disp) * 100.0
-        avg_availability = (total_horas_prod / total_horas_disp) * 100.0 
+    # RESTORE MISSING DEFINITIONS
+    maquinas_activas = sum(1 for m in lista_kpis if m.get('is_online'))
+    total_maquinas = len(lista_kpis)
+
+    def fmt_mins_global(m_raw):
+        if time_format == 'decimal':
+            return f"{m_raw/60.0:.2f}"
+        h, mins = divmod(int(round(m_raw)), 60)
+        return f"{h} hs {mins} min" if h > 0 else f"{mins} min"
+
+    # --- CORRECCIÓN FINAL: RESÚMENES LIMPIOS ---
+    # 1. Resumen para la Pestaña MÁQUNAS (Solo Máquinas Configuradas y Activas + Sin Asignar unificado)
+    total_horas_std_maquinas = (global_planned_time_reg + unassigned_std) / 60.0 
+    total_horas_prod_real_mq = max(0.01, (global_actual_time_reg + unassigned_time) / 60.0) 
+    total_base_capacidad = max(total_horas_disp_reg, total_horas_prod_real_mq)
+    
+    if total_base_capacidad > 0:
+        # OEE: Cuántas horas estándar salieron de la capacidad total disponible/usada
+        maquinas_oee = (total_horas_std_maquinas / total_base_capacidad) * 100.0
+        # Disponibilidad: Si se trabajó, la disponibilidad es el % de ocupación de esa capacidad
+        maquinas_availability = (total_horas_prod_real_mq / total_base_capacidad) * 100.0
     else:
-        promedio_oee = avg_availability = 0.0
-        
-    avg_performance = (total_horas_std / total_horas_prod) * 100.0 if total_horas_prod > 0 else 0.0
-    
-    # DEBUG LOG: KPIs calculados
-    print(f"\n=== KPIs CALCULADOS ===")
-    print(f"promedio_oee: {promedio_oee:.2f}%")
-    print(f"avg_availability: {avg_availability:.2f}%")
-    print(f"avg_performance: {avg_performance:.2f}%")
-    print(f"Fórmula OEE: {total_horas_std:.2f} / {total_horas_disp:.2f} * 100 = {promedio_oee:.2f}%")
-    print(f"Fórmula Disp: {total_horas_prod:.2f} / {total_horas_disp:.2f} * 100 = {avg_availability:.2f}%")
-    print(f"Fórmula Rend: {total_horas_std:.2f} / {total_horas_prod:.2f} * 100 = {avg_performance:.2f}%")
-    
-    # CALIDAD: (Aceptadas / Totales) * 100
-    total_piezas_real = global_actual_qty + global_rejected_qty
-    avg_quality = (global_actual_qty / total_piezas_real * 100.0) if total_piezas_real > 0 else 100.0
-    
-    # avg_downtime para gráfico: porcentaje de tiempo perdido respecto al disponible
-    res_avg_downtime = (global_downtime / (total_horas_disp * 60) * 100.0) if total_horas_disp > 0 else 0.0
-    
-    # Nuevo: Tiempo Estándar Total (Yellow ERP)
-    global_standard_time = total_horas_std
+        maquinas_oee = maquinas_availability = 0.0
 
-    # Globales Personal
+    # Rendimiento Real (Productividad): Std / Real total trabajado
+    # Importante: total_horas_prod_real_mq ya incluye unassigned_time unificado
+    maquinas_performance = (total_horas_std_maquinas / total_horas_prod_real_mq) * 100.0 if total_horas_prod_real_mq > 0 else 0.0
+    
+    # Cantidad total unificada (87 de serie + 17 sin asignar + rechazo)
+    total_piezas_produccion = global_actual_qty_reg + unassigned_qty
+    total_piezas_mq = total_piezas_produccion + global_rejected_qty
+    maquinas_quality = (total_piezas_produccion / total_piezas_mq * 100.0) if total_piezas_mq > 0 else 100.0
+
+    resumen_maquinas = {
+        'promedio_oee': round(maquinas_oee, 2),
+        'avg_availability': round(maquinas_availability, 2),
+        'avg_performance': round(maquinas_performance, 2),
+        'avg_quality': round(maquinas_quality, 2),
+        'active_count': maquinas_activas,
+        'total_maquinas': total_maquinas,
+        'global_planned_formatted': fmt_mins_global(total_horas_disp_reg * 60),
+        'global_actual_formatted': fmt_mins_global(total_horas_prod_real_mq * 60),
+        'global_standard_formatted': fmt_mins_global(total_horas_std_maquinas * 60),
+        'global_actual_qty': round(total_piezas_produccion, 1),
+        'global_rejected_qty': round(global_rejected_qty, 1),
+        'global_total_qty': round(total_piezas_mq, 1),
+        'unassigned_qty': 0, # HIDDEN: Unificado arriba
+        'unassigned_time_formatted': "0 min",
+        'active_unassigned_list': [], # LIMPIAR para ocultar en template
+    }
+
+    # 2. Resumen para la Pestaña PERSONAL (Solo Personal Configurado)
     if total_hrs_disp_p > 0:
         oee_p = (total_hrs_std_p / total_hrs_disp_p) * 100.0
         avail_p = (total_hrs_prod_p / total_hrs_disp_p) * 100.0
@@ -1201,64 +1296,20 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         oee_p = avail_p = 0.0
     
     perf_p = (total_hrs_std_p / total_hrs_prod_p) * 100.0 if total_hrs_prod_p > 0 else 0.0
-    qual_p = avg_quality # Usamos la misma global de calidad por ahora
-
-    for kpi in lista_kpis:
-        kpi['is_active_production'] = kpi['horas_prod'] > 0.001
-    
-    lista_kpis.sort(key=lambda x: (not x['is_online'], not x['is_active_production'], x['id']))
-
-    maquinas_activas = sum(1 for m in lista_kpis if m['is_online'])
-    total_maquinas = len(lista_kpis)
-
-    def fmt_mins_global(m_raw):
-        # m_raw está en minutos
-        if time_format == 'decimal':
-            return f"{m_raw/60.0:.2f}"
-        
-        h, mins = divmod(int(round(m_raw)), 60)
-        return f"{h} hs {mins} min" if h > 0 else f"{mins} min"
-
-    resumen_maquinas = {
-        'promedio_oee': round(promedio_oee, 2),
-        'avg_availability': round(avg_availability, 2),
-        'avg_performance': round(avg_performance, 2),
-        'avg_quality': round(avg_quality, 2),
-        'avg_rejected': round(100.0 - avg_quality, 2) if total_piezas_real > 0 else 0.0,
-        'avg_downtime': round(res_avg_downtime, 2),
-        'perf_multiplier': round(avg_performance / 100.0, 1) if avg_performance > 0 else 0.0,
-        'active_count': maquinas_activas,
-        'total_maquinas': total_maquinas,
-        'global_planned_formatted': fmt_mins_global(total_horas_disp * 60),
-        'global_actual_formatted': fmt_mins_global(total_horas_prod * 60),
-        'global_standard_formatted': fmt_mins_global(total_horas_std * 60),
-        'global_downtime_formatted': fmt_mins_global(global_downtime),
-        'global_planned_qty': round(global_actual_qty / (avg_performance/100)) if avg_performance > 0 else 0,
-        'global_actual_qty': round(global_actual_qty, 1),
-        'global_rejected_qty': round(global_rejected_qty, 1),
-        'global_total_qty': round(global_actual_qty + global_rejected_qty, 1),
-        'global_repro_time_formatted': fmt_mins_global(global_repro_time),
-        'unassigned_qty': round(unassigned_qty, 1),
-        'unassigned_time_formatted': fmt_mins_global(unassigned_time),
-        'unassigned_time_decimal': round(unassigned_time / 60.0, 2),
-        'unassigned_process_formatted': fmt_mins_global(unassigned_process_time),
-        'unassigned_interruption_formatted': fmt_mins_global(unassigned_interruption_time),
-        'unassigned_std_formatted': fmt_mins_global(unassigned_std),
-        'active_unassigned_list': list(active_unassigned_ops.values()),
-    }
+    qual_p = maquinas_quality 
 
     resumen_personal_dict = {
         'promedio_oee': round(oee_p, 2),
         'avg_availability': round(avail_p, 2),
         'avg_performance': round(perf_p, 2),
         'avg_quality': round(qual_p, 2),
-        'perf_multiplier': round(perf_p / 100.0, 1) if perf_p > 0 else 0.0,
         'global_planned_formatted': fmt_mins_global(total_hrs_disp_p * 60),
         'global_actual_formatted': fmt_mins_global(total_hrs_prod_p * 60),
         'global_standard_formatted': fmt_mins_global(total_hrs_std_p * 60),
-        'global_actual_qty': round(global_actual_qty, 1),
+        'global_actual_qty': round(total_hrs_std_p / (perf_p/100) * (qual_p/100)) if perf_p > 0 else 0, # Aproximado
+        'global_actual_qty': round(global_actual_qty_reg, 1), 
         'global_rejected_qty': round(global_rejected_qty, 1),
-        'global_total_qty': round(global_actual_qty + global_rejected_qty, 1),
+        'global_total_qty': round(total_piezas_mq, 1),
         'active_count': len(lista_kpis_personal),
     }
 
@@ -1295,16 +1346,12 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             h_art = str(hrec.get('articulod') or '').upper()
             h_is_matriceria = 'MATRICER' in h_art
             
-            # Smart scaling: identical logic to main KPI loop
-            if h_qty > 0 and not h_is_matriceria:
-                std_per_unit = h_raw_std / h_qty
-                if std_per_unit < 12:
-                    h_std_mins = h_raw_std * 60.0
-                else:
-                    h_std_mins = h_raw_std
-            else:
-                h_std_mins = h_raw_std * 60.0 if (h_raw_std < 12 and h_raw_std > 0) else h_raw_std
+            # tiempo_cotizado SIEMPRE en horas, convertir a minutos directamente
+            h_std_mins = h_raw_std * 60.0
             
+            if h_is_matriceria:
+                continue  # No contar matriceria en el OEE de serie
+
             h_std_mins_total += h_std_mins
             h_prod_mins_total += h_duracion
             
@@ -1703,6 +1750,7 @@ def obtener_auditoria(request):
     articulos_resumen = {} 
     has_mat_audit = False
     has_special_tasks = False
+    total_excluded_mat_mins = 0.0 # Nuevo: rastrear tiempo a excluir de la disponibilidad
     matriceria_std_done_audit = set()
     
     for reg_obj in registros_raw:
@@ -1733,12 +1781,13 @@ def obtener_auditoria(request):
         # Lista Unificada de Tareas Especiales (Regla 1:1 - Eficiencia Neutra)
         # Sincronizado estrictamente con dashboard_produccion
         special_audit_keywords = [
-            'MATRICER', 'TAREAS GENERALES', 'AJUSTES', 'REBABADO', 'GRABADO', 'ARMADO',
+            'MATRIC', 'MATRIZ', 'MATR.', 'TAREAS GENERALES', 'AJUSTES', 'REBABADO', 'GRABADO', 'ARMADO',
             'CAPACI', 'CAPACIT', 'TENSI', 'TENSION', 'HERRAMIENTA', 'MANTEN', 'REPAR',
             'CORRECTIVO', 'PREVENTIVO', 'AJUST', 'SET-UP', 'SETUP', 'LIMPIEZA', 
             'REUNION', 'REUNIÓN', 'MATERIAL', 'ESPERA', 'ENSAYO', 'INSPEC', 'ASIST', 'AUXILIO'
         ]
-        is_matriceria = any(k in raw_art_d or k in raw_op_d for k in special_audit_keywords) or any(k in raw_obs for k in special_audit_keywords)
+        full_audit_text = f"{raw_art_d} {raw_op_d} {raw_obs} {raw_id_op}".upper()
+        is_matriceria = any(k in full_audit_text for k in special_audit_keywords)
         id_orden = reg_obj.id_orden
         
         this_std = std_mins
@@ -1770,8 +1819,14 @@ def obtener_auditoria(request):
         elif not is_descanso:
             total_qty += qty
             if is_matriceria:
-                total_std_mins += duracion
+                # REGLA DE EXCLUSIÓN: Matricería NO suma a rendimiento de serie
+                # Pero sí se resta de la disponibilidad para no castigar el indicador
+                total_excluded_mat_mins += duracion
                 this_std = duracion # Para el visual del log
+                if 'MATRICER' in raw_art_d or 'MATRICER' in raw_op_d:
+                    has_mat_audit = True
+                else:
+                    has_special_tasks = True
             elif qty > 0:
                 total_std_mins += std_mins
                 this_std = std_mins
@@ -1793,10 +1848,16 @@ def obtener_auditoria(request):
     else:
         total_disp_mins = 9 * 60.0
 
-    if total_disp_mins < total_prod_mins: total_disp_mins = total_prod_mins
+    if total_disp_mins < (total_prod_mins - total_excluded_mat_mins): 
+        total_disp_mins = (total_prod_mins - total_excluded_mat_mins)
 
-    availability = (total_prod_mins / total_disp_mins * 100) if total_disp_mins > 0 else 0
-    performance = (total_std_mins / total_prod_mins * 100) if total_prod_mins > 0 else 0
+    # REGLA DE EXCLUSIÓN EN DISPONIBILIDAD
+    # Restamos las horas de matricería del tiempo de turno disponible
+    total_disp_mins_serie = max(0.01, total_disp_mins - total_excluded_mat_mins)
+    total_prod_mins_serie = max(0, total_prod_mins - total_excluded_mat_mins)
+
+    availability = (total_prod_mins_serie / total_disp_mins_serie * 100) if total_disp_mins_serie > 0 else 0
+    performance = (total_std_mins / total_prod_mins_serie * 100) if total_prod_mins_serie > 0 else 0
     
     total_piezas_p = total_qty + total_rejected_qty
     quality = (total_qty / total_piezas_p * 100.0) if total_piezas_p > 0 else 100.0
@@ -1816,7 +1877,7 @@ def obtener_auditoria(request):
 
     analysis_conversational = f"<span class='report-main-title'>ANÁLISIS DE DESEMPEÑO INTELIGENTE</span>\n"
     analysis_conversational += f"<div class='mb-6 p-5 bg-indigo-500/10 rounded-2xl border-l-4 border-indigo-500 shadow-inner'>\n"
-    analysis_conversational += f"  <span class='text-lg font-black text-white italic'>\"¡Sí! El valor de <span class='text-indigo-400'>{oee:.1f}%</span> que ves ahora es un valor muy real y correcto para la situación actual de {nombre_display}.\"</span>\n"
+    analysis_conversational += f"  <span class='text-lg font-black text-white italic'>\"¡Sí! El valor de <span class='text-indigo-400'>{oee:.1f}%</span> que ves ahora es un valor real para la situación de {nombre_display}.\"</span>\n"
     analysis_conversational += f"</div>\n\n"
 
     analysis_conversational += "<span class='text-indigo-400 font-black text-xl uppercase tracking-tighter'>¿POR QUÉ ESE VALOR ES EL CORRECTO?</span>\n"
@@ -3604,7 +3665,6 @@ from django.views.decorators.csrf import csrf_exempt
 import json
 
 @csrf_exempt
-@csrf_exempt
 def chat_ia_api(request):
     """ API para interacción con el Auditor de IA de Planta """
     if request.method == 'POST':
@@ -3613,9 +3673,16 @@ def chat_ia_api(request):
             data = json.loads(request.body)
             query = data.get('query', '')
             context_url = data.get('context', '')
-            image_data = data.get('image', None) # Base64 Image
             
-            response = get_ai_analysis(query, context_url=context_url, image_data=image_data)
+            # Soporte múltiples imágenes
+            images_data = data.get('images', [])
+            single_image = data.get('image', None)
+            
+            # Si solo mandó una en el campo viejo, la metemos en la lista
+            if single_image and not images_data:
+                images_data = [single_image]
+            
+            response = get_ai_analysis(query, context_url=context_url, images_data=images_data)
             return JsonResponse({'status': 'success', 'response': response})
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

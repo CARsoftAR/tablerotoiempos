@@ -8,40 +8,35 @@ from .models import VTMan, MaquinaConfig, OperarioConfig
 
 # --- CONFIGURACION GEMINI ---
 GEMINI_API_KEY = "AIzaSyDzCZm2WEnKKfdqUtNy2iA1J7K2a3kRPWA"
-# --- CONFIGURACION GEMINI ---
-GEMINI_API_KEY = "AIzaSyDzCZm2WEnKKfdqUtNy2iA1J7K2a3kRPWA"
-# --- CONFIGURACION GEMINI ---
-GEMINI_API_KEY = "AIzaSyDzCZm2WEnKKfdqUtNy2iA1J7K2a3kRPWA"
-# --- CONFIGURACION GEMINI ---
-GEMINI_API_KEY = "AIzaSyDzCZm2WEnKKfdqUtNy2iA1J7K2a3kRPWA"
-# --- CONFIGURACION GEMINI ---
-GEMINI_API_KEY = "AIzaSyDzCZm2WEnKKfdqUtNy2iA1J7K2a3kRPWA"
-# --- CONFIGURACION GEMINI ---
-GEMINI_API_KEY = "AIzaSyDzCZm2WEnKKfdqUtNy2iA1J7K2a3kRPWA"
-# --- CONFIGURACION GEMINI ---
-GEMINI_API_KEY = "AIzaSyDzCZm2WEnKKfdqUtNy2iA1J7K2a3kRPWA"
-# --- CONFIGURACION GEMINI ---
-GEMINI_API_KEY = "AIzaSyDzCZm2WEnKKfdqUtNy2iA1J7K2a3kRPWA"
-# MODELO LISTADO DISPONIBLE: gemini-flash-latest (Alias para la versión Flash actual)
+
+# MODELO LISTADO DISPONIBLE: gemini-flash-latest
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={GEMINI_API_KEY}"
 
-def call_gemini(prompt, image_b64=None):
+def call_gemini(prompt, images_b64=None):
     """
-    Llama a la API REST de Gemini 1.5 Flash.
+    Llama a la API REST de Gemini 1.5 Flash con lógica de reintento.
+    Soporta múltiples imágenes.
     """
+    import time
     parts = [{"text": prompt}]
     
-    if image_b64:
-        # Extraer header si existe (e.g. "data:image/png;base64,")
-        if "base64," in image_b64:
-            image_b64 = image_b64.split("base64,")[1]
+    if images_b64:
+        if not isinstance(images_b64, list):
+            images_b64 = [images_b64]
             
-        parts.append({
-            "inline_data": {
-                "mime_type": "image/jpeg", # Asumimos jpeg o png, Gemini es flexible
-                "data": image_b64
-            }
-        })
+        for img_b64 in images_b64:
+            if not img_b64: continue
+            
+            clean_b64 = img_b64
+            if "base64," in clean_b64:
+                clean_b64 = clean_b64.split("base64,")[1]
+                
+            parts.append({
+                "inline_data": {
+                    "mime_type": "image/jpeg",
+                    "data": clean_b64
+                }
+            })
 
     payload = {
         "contents": [{
@@ -53,32 +48,47 @@ def call_gemini(prompt, image_b64=None):
         }
     }
     
-    try:
-        response = requests.post(GEMINI_URL, headers={'Content-Type': 'application/json'}, json=payload, timeout=20)
-        
-        if response.status_code == 200:
-            result = response.json()
-            try:
-                # Intentar ruta estándar
-                if 'candidates' in result and len(result['candidates']) > 0:
-                    candidate = result['candidates'][0]
-                    if 'content' in candidate and 'parts' in candidate['content']:
-                        return candidate['content']['parts'][0]['text']
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = requests.post(GEMINI_URL, headers={'Content-Type': 'application/json'}, json=payload, timeout=25)
+            
+            if response.status_code == 200:
+                result = response.json()
+                try:
+                    if 'candidates' in result and len(result['candidates']) > 0:
+                        candidate = result['candidates'][0]
+                        if 'content' in candidate and 'parts' in candidate['content']:
+                            return candidate['content']['parts'][0]['text']
+                        
+                        if 'finishReason' in candidate:
+                            return f"Gemini se detuvo por: {candidate['finishReason']}."
                     
-                    # Si no hay contenido, revisar finishReason
-                    if 'finishReason' in candidate:
-                        return f"Gemini se detuvo por: {candidate['finishReason']} (Posible bloqueo de seguridad o filtro)."
+                    return "Respuesta vacía de la IA."
+                except Exception as e:
+                    return f"Error procesando respuesta: {str(e)}"
+            
+            elif response.status_code in [429, 503]:
+                # Error de saturación o temporal - reintentar con espera
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 2  # 2s, 4s...
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    return "La IA de Google está saturada en este momento. Por favor, reintenta en unos segundos."
+            
+            else:
+                return f"Error en el servicio de IA (HTTP {response.status_code})"
                 
-                # Si llegamos aquí, la estructura es válida pero vacía o inesperada
-                return f"Respuesta vacía o inesperada de Gemini: <br><pre>{json.dumps(result, indent=2)}</pre>"
-            except Exception as e:
-                return f"Error procesando JSON: {str(e)} <br>Raw: {json.dumps(result)}"
-        else:
-            return f"Error HTTP {response.status_code}: {response.text}"
-    except Exception as e:
-        return f"Error de conexión: {str(e)}"
+        except Exception as e:
+            if attempt < max_retries - 1:
+                time.sleep(1)
+                continue
+            return f"Error de conexión con el Auditor de IA: {str(e)}"
+    
+    return "No se pudo obtener respuesta de la IA después de varios intentos."
 
-def get_ai_analysis(query, context_url="", image_data=None):
+def get_ai_analysis(query, context_url="", images_data=None):
     """
     Cerebro Híbrido:
     1. Calcula métricas duras ("Hard Data") usando los algoritmos locales (analyze_day) para garantizar precisión 100%.
@@ -152,7 +162,7 @@ def get_ai_analysis(query, context_url="", image_data=None):
         """
         
         # Feedback visual de que está pensando (manejado en frontend, aquí solo procesamos)
-        gemini_response = call_gemini(system_prompt, image_data)
+        gemini_response = call_gemini(system_prompt, images_data)
         
         # Post-procesamiento ligero para convertir Markdown a HTML básico si es necesario, 
         # o confiamos en que el frontend renderice markdown (idealmente).
@@ -221,8 +231,9 @@ def analyze_day(date_target):
 
     # 3. Datos Reales de VTMAN con lógica de Auditoría (Matricería y Descansos)
     descanso_keywords = ['DESCANSO', 'ALMUERZO', 'PAUSA', 'VACACIONES', 'LICENCIA']
+    mat_kws = ['MATRIC', 'MATRIZ', 'MATR.']
     special_keywords = [
-        'MATRICER', 'TAREAS GENERALES', 'AJUSTES', 'REBABADO', 'GRABADO', 'ARMADO',
+        'TAREAS GENERALES', 'AJUSTES', 'REBABADO', 'GRABADO', 'ARMADO',
         'CAPACI', 'CAPACIT', 'TENSI', 'TENSION', 'HERRAMIENTA', 'MANTEN', 'REPAR',
         'CORRECTIVO', 'PREVENTIVO', 'AJUST', 'SET-UP', 'SETUP', 'LIMPIEZA', 
         'REUNION', 'REUNIÓN', 'MATERIAL', 'ESPERA', 'ENSAYO', 'INSPEC', 'ASIST', 'AUXILIO'
@@ -258,48 +269,35 @@ def analyze_day(date_target):
         
         is_online_record = (obs == 'ONLINE')
         
-        # Detectar si es "Sin Asignar"
-        # views.py: is_unassigned = (not mid or mid in maquinas_inactivas_ids)
+        # 1. Definir Atributos
         is_unassigned = (not mid or mid in maquinas_inactivas_ids)
-        if mid == 'MAC40': is_unassigned = False # NLX siempre asignada exception
+        if mid == 'MAC40': is_unassigned = False 
+        
+        full_text = f"{art} {oper} {obs}".upper()
+        
+        # 2. Exclusión Estricta de Matricería (User Order: No sumar nunca)
+        is_matriceria = any(k in full_text for k in mat_kws)
+        if is_matriceria:
+            continue
+            
+        # 3. Tareas Neutras de Serie (Setup, Armado, etc.)
+        is_serie_neutral = any(k in full_text for k in special_keywords)
         
         if is_unassigned:
-            # Lógica Sin Asignar (views.py)
-            # views.py suma TODO el tiempo a unassigned_time y TODO el std a unassigned_std
             unassigned_time += dur
-            unassigned_std += std
-                
+            if is_serie_neutral: unassigned_std += dur
+            else: unassigned_std += std
         else:
-            # Lógica Máquina Asignada
             if mid not in machine_state:
-                # Si llega una maquina que no estaba en active_configs (pero no esta en inactivas? raro)
-                # o si la logica de inactivas falló. Asumimos nueva entrada.
-                machine_state[mid] = {
-                    'prod_mins': 0.0,
-                    'std_mins': 0.0,
-                    'has_matriceria': False,
-                    'latest_obs': ''
-                }
-            
+                machine_state[mid] = {'prod_mins': 0.0, 'std_mins': 0.0, 'has_matriceria': False}
             data = machine_state[mid]
-            
-            # Actualizar flag matriceria persistente
-            if is_ma:
-                data['has_matriceria'] = True
-            
-            # Filtro de Validez (views.py):
-            # is_valid_machine_prod = not (is_descanso or reg['es_interrupcion'])
-            # if is_valid_machine_prod...
             if not (is_descanso or r.es_interrupcion):
                 data['prod_mins'] += dur
-                
-                # Std Logic
-                should_treat_as_matriceria = is_ma or (data['has_matriceria'] and is_online_record)
-                
-                if should_treat_as_matriceria:
-                    data['std_mins'] += dur # Std = Real
+                # Regla 1:1 para Neutros (Armado, Setup, etc.) o si no hay piezas
+                if is_serie_neutral or (std == 0 and r.cantidad_producida == 0):
+                    data['std_mins'] += dur
                 else:
-                    data['std_mins'] += std # Std = ERP
+                    data['std_mins'] += std
 
     # 4. Consolidación Final de KPIs
     
@@ -365,8 +363,9 @@ def analyze_machine(m, date_target):
 
     # Lógica de Auditoría (Matricería y Descansos)
     descanso_keywords = ['DESCANSO', 'ALMUERZO', 'PAUSA', 'VACACIONES', 'LICENCIA']
+    mat_kws = ['MATRIC', 'MATRIZ', 'MATR.']
     special_keywords = [
-        'MATRICER', 'TAREAS GENERALES', 'AJUSTES', 'REBABADO', 'GRABADO', 'ARMADO',
+        'TAREAS GENERALES', 'AJUSTES', 'REBABADO', 'GRABADO', 'ARMADO',
         'CAPACI', 'CAPACIT', 'TENSI', 'TENSION', 'HERRAMIENTA', 'MANTEN', 'REPAR',
         'CORRECTIVO', 'PREVENTIVO', 'AJUST', 'SET-UP', 'SETUP', 'LIMPIEZA', 
         'REUNION', 'REUNIÓN', 'MATERIAL', 'ESPERA', 'ENSAYO', 'INSPEC', 'ASIST', 'AUXILIO'
@@ -374,7 +373,7 @@ def analyze_machine(m, date_target):
 
     total_std_mins = 0.0
     total_prod_mins = 0.0
-    
+
     for r in qs:
         dur = r.tiempo_minutos or 0.0
         std = (r.tiempo_cotizado or 0.0) * 60.0
@@ -382,12 +381,17 @@ def analyze_machine(m, date_target):
         art_r = str(r.articulod or "").upper()
         oper_r = str(r.operacion or "").upper()
         
-        is_desc = any(k in obs_r for k in descanso_keywords) or any(k in art_r for k in descanso_keywords) or any(k in oper_r for k in descanso_keywords)
-        is_ma = any(k in obs_r for k in special_keywords) or any(k in art_r for k in special_keywords) or any(k in oper_r for k in special_keywords)
+        is_desc_r = any(k in obs_r for k in descanso_keywords) or any(k in art_r for k in descanso_keywords) or any(k in oper_r for k in descanso_keywords)
+        full_text = f"{art_r} {oper_r} {obs_r}".upper()
         
-        if not (is_desc or r.es_interrupcion):
+        if any(k in full_text for k in mat_kws):
+            continue
+            
+        is_serie_neutral = any(k in full_text for k in special_keywords)
+        
+        if not (is_desc_r or r.es_interrupcion):
             total_prod_mins += dur
-            if is_ma:
+            if is_serie_neutral or (std == 0 and r.cantidad_producida == 0):
                 total_std_mins += dur
             else:
                 total_std_mins += std

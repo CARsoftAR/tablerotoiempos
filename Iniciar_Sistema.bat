@@ -45,7 +45,7 @@ echo  [3/3] Iniciando servidor Django...
 echo.
 echo  ------------------------------------------------------------
 echo   IMPORTANTE: 
-echo   - Si ves otra ventana de "Control de Vacaciones" abierta, cierrala.
+echo   - Si ves otra ventana de "Tablero Online" abierta, cierrala.
 echo   - Este sistema usa el puerto 8000.
 echo   - No cierres esta ventana.
 echo  ------------------------------------------------------------

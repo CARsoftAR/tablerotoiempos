@@ -381,8 +381,8 @@
             </div>
         </div>
 
-        <!-- Unassigned Card (Solo en vista máquinas para ver qué falta configurar) -->
-        {% if view_type == 'machines' %}
+        <!-- Unassigned Card (Solo si hay datos sin agrupar) -->
+        {% if view_type == 'machines' and resumen.unassigned_qty > 0 %}
         <div class="bg-slate-800 rounded-lg overflow-hidden border border-slate-700 shadow-xl border-t-amber-500/50 border-t-2">
             <div class="bg-amber-600/20 px-4 py-2 font-bold text-amber-500 tracking-wide flex justify-between items-center text-sm">
                 <span>Sin Asignar</span>
@@ -938,20 +938,24 @@
             new ApexCharts(document.getElementById('chart-trend'), {
                 series: [{ name: 'OEE Global', data: trendData.map(i => i.oee) }],
                 chart: { 
-                    height: '100%', 
+                    height: 220, 
                     type: 'line', 
                     toolbar: { show: false }, 
                     foreColor: '#94a3b8',
-                    padding: { top: 0, right: 0, bottom: 0, left: 0 }
+                    sparkline: { enabled: false }
                 },
                 stroke: { curve: 'smooth', width: 4 },
                 xaxis: { 
                     categories: trendData.map(i => i.day),
                     labels: {
-                        style: { fontSize: '10px' },
+                        show: true,
+                        style: { fontSize: '10px', fontWeight: 600 },
                         rotate: -45,
-                        rotateAlways: false
-                    }
+                        hideOverlappingLabels: false,
+                        maxHeight: 60
+                    },
+                    axisBorder: { show: true, color: '#334155' },
+                    axisTicks: { show: true, color: '#334155' }
                 },
                 yaxis: { 
                     min: 0,

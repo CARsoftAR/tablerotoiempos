@@ -754,14 +754,8 @@
             </div>
 
             <!-- Preview Area -->
-            <div id="image-preview" class="hidden px-4 pt-4 bg-white/5 border-t border-white/5 flex gap-2 overflow-x-auto">
-                <div class="relative group">
-                    <img id="preview-img" src="" class="h-16 rounded-lg border border-white/10 object-cover">
-                    <button onclick="clearImage()" class="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] hover:bg-red-600 transition-colors shadow-lg">
-                        <i class="fas fa-times"></i>
-                    </button>
-                    <div class="absolute inset-0 rounded-lg ring-1 ring-amber-400/50 pointer-events-none"></div>
-                </div>
+            <div id="image-preview" class="hidden px-4 pt-4 pb-2 bg-white/5 border-t border-white/5 flex gap-3 overflow-x-auto custom-scrollbar-h">
+                <!-- Thumbnails will be injected here -->
             </div>
 
             <!-- Input Area -->
@@ -803,7 +797,7 @@
     </div>
 
     <script>
-        let currentImageBase64 = null;
+        let currentImagesBase64 = [];
 
         // Image Handling Logic
         const chatWindow = document.getElementById('ai-chat-window');
@@ -829,8 +823,10 @@
             dragOverlay.classList.add('hidden');
             dragOverlay.classList.remove('flex');
             
-            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                processFile(e.dataTransfer.files[0]);
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                for (let file of e.dataTransfer.files) {
+                    processFile(file);
+                }
             }
         });
 
@@ -858,20 +854,50 @@
 
         function processFile(file) {
             if (!file.type.match('image.*')) return;
+            if (currentImagesBase64.length >= 5) {
+                alert("Máximo 5 imágenes por pregunta.");
+                return;
+            }
 
             const reader = new FileReader();
             reader.onload = function(e) {
-                currentImageBase64 = e.target.result;
-                document.getElementById('preview-img').src = currentImageBase64;
-                document.getElementById('image-preview').classList.remove('hidden');
+                currentImagesBase64.push(e.target.result);
+                renderImagePreviews();
                 textInput.focus();
             };
             reader.readAsDataURL(file);
         }
 
+        function renderImagePreviews() {
+            const container = document.getElementById('image-preview');
+            if (currentImagesBase64.length === 0) {
+                container.classList.add('hidden');
+                return;
+            }
+
+            container.classList.remove('hidden');
+            let html = '';
+            currentImagesBase64.forEach((img, index) => {
+                html += `
+                <div class="relative group flex-shrink-0">
+                    <img src="${img}" class="h-16 w-16 rounded-lg border border-white/10 object-cover shadow-lg">
+                    <button onclick="removeImage(${index})" class="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] hover:bg-red-600 transition-all shadow-xl z-20">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <div class="absolute inset-0 rounded-lg ring-1 ring-amber-400/30 group-hover:ring-amber-400 pointer-events-none transition-all"></div>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function removeImage(index) {
+            currentImagesBase64.splice(index, 1);
+            renderImagePreviews();
+        }
+
         function clearImage() {
-            currentImageBase64 = null;
-            document.getElementById('image-preview').classList.add('hidden');
+            currentImagesBase64 = [];
+            renderImagePreviews();
             document.getElementById('image-upload').value = '';
         }
 
@@ -900,17 +926,21 @@
             const input = document.getElementById('ai-chat-input');
             const query = input.value.trim();
             
-            if (!query && !currentImageBase64) return;
+            if (!query && currentImagesBase64.length === 0) return;
 
             // 1. Add User Message
             let userHtml = `<div>${query}</div>`;
-            if (currentImageBase64) {
-                userHtml += `<img src="${currentImageBase64}" class="mt-2 rounded-lg border border-white/20 max-h-32">`;
+            if (currentImagesBase64.length > 0) {
+                userHtml += `<div class="flex flex-wrap gap-2 mt-2">`;
+                currentImagesBase64.forEach(img => {
+                    userHtml += `<img src="${img}" class="rounded-lg border border-white/20 max-h-32 object-contain bg-black/20">`;
+                });
+                userHtml += `</div>`;
             }
             appendMessage('user', userHtml);
             
             input.value = '';
-            const sentImage = currentImageBase64; // Store for request
+            const sentImages = [...currentImagesBase64]; // Clone array
             clearImage(); // Clear UI
 
             // 2. Add Loading Indicator
@@ -928,7 +958,7 @@
                     body: JSON.stringify({ 
                         query: query, 
                         context: window.location.href,
-                        image: sentImage 
+                        images: sentImages 
                     })
                 });
                 
