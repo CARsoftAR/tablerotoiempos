@@ -160,6 +160,48 @@ class Mantenimiento(models.Model):
         db_table = 'mantenimiento_incidencias'
         verbose_name = 'Incidencia de Mantenimiento'
 
+    @property
+    def duracion_segundos(self):
+        """
+        Calcula la duración en segundos excluyendo Sábados y Domingos.
+        """
+        if not self.fecha_reporte or not self.fecha_fin:
+            return 0
+            
+        start = timezone.localtime(self.fecha_reporte)
+        end = timezone.localtime(self.fecha_fin)
+        
+        if start > end:
+            return 0
+
+        total_seconds = 0
+        curr = start
+        from datetime import timedelta
+
+        # Si el reporte y el cierre son en días distintos
+        while curr.date() < end.date():
+            if curr.weekday() < 5:  # 0=Lunes, 4=Viernes
+                next_day = (curr + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+                total_seconds += (next_day - curr).total_seconds()
+            curr = (curr + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # Procesamos el último día
+        if curr.weekday() < 5:
+            start_of_last_day = curr.replace(hour=0, minute=0, second=0, microsecond=0)
+            calc_start = max(start, start_of_last_day)
+            total_seconds += (end - calc_start).total_seconds()
+
+        return int(total_seconds)
+
+    @property
+    def duracion_hhmm(self):
+        total_seconds = self.duracion_segundos
+        if total_seconds == 0 and (not self.fecha_reporte or not self.fecha_fin):
+            return "N/A"
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        return f"{hours:02d}:{minutes:02d} hs"
+
     def __str__(self):
         return f"{self.maquina} - {self.fecha_reporte}"
 

@@ -22,15 +22,29 @@
                 </div>
             </button>
 
+            <!-- Active Incidents Header -->
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-xl bg-orange-600/20 text-orange-500 flex items-center justify-center border border-orange-500/20">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div>
+                    <h2 class="text-xl font-black text-white uppercase tracking-tighter leading-none">Incidencias <span class="text-orange-500">Activas</span></h2>
+                    <p class="text-[9px] text-slate-500 font-black uppercase tracking-widest mt-1">Gabinete de Crisis / Reparaciones en curso</p>
+                </div>
+            </div>
+
             <!-- Machine Status List -->
-            <div id="section-incidencias" class="space-y-6">
+            <div id="section-incidencias" class="space-y-4">
                 {% for inc in incidencias %}
                     {% if inc.estado != 'CERRADO' %}
-                        <div class="relative group cursor-pointer" onclick="openCloseModal('{{ inc.pk }}', '{{ inc.maquina.nombre }}')">
+                        <div class="relative group cursor-pointer" onclick="openCloseModal('{{ inc.pk }}', '{{ inc.maquina.nombre|escapejs }}', '{{ inc.tipo|escapejs }}', '{{ inc.estado|escapejs }}', '{{ inc.detalle_resolucion|default_if_none:""|escapejs }}', '{{ inc.tecnico_asignado|default_if_none:""|escapejs }}')">
                             <!-- Neon Border & Glow -->
                             <div class="absolute -inset-0.5 rounded-2xl opacity-75 group-hover:opacity-100 transition duration-500 blur
-                                {% if inc.estado == 'ABIERTO' %}bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]
-                                {% else %}bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.4)]{% endif %}"></div>
+                                {% if inc.estado == 'ABIERTO' %}
+                                    {% if inc.tipo == 'CORRECTIVO' %}bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]
+                                    {% elif inc.tipo == 'PREVENTIVO' %}bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.4)]
+                                    {% else %}bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.4)]{% endif %}
+                                {% else %}bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.4)]{% endif %}"></div>
                             
                             <div class="relative flex items-center justify-between bg-slate-900 rounded-2xl p-4 border border-white/10">
                                 <div class="flex items-center gap-5">
@@ -47,8 +61,16 @@
                                     <i class="fas fa-cog"></i>
                                 {% endif %}
                             </div>
-                            <div>
-                                <h3 class="text-xl font-black text-white uppercase tracking-tight">{{ inc.maquina.nombre }}</h3>
+                                    <div>
+                                        <div class="flex items-center gap-2">
+                                            <h3 class="text-xl font-black text-white uppercase tracking-tight">{{ inc.maquina.nombre }}</h3>
+                                            <span class="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border
+                                                {% if inc.tipo == 'CORRECTIVO' %}bg-red-500/10 text-red-500 border-red-500/20
+                                                {% elif inc.tipo == 'PREVENTIVO' %}bg-amber-500/10 text-amber-500 border-amber-500/20
+                                                {% else %}bg-blue-500/10 text-blue-500 border-blue-500/20{% endif %}">
+                                                {{ inc.tipo }}
+                                            </span>
+                                        </div>
                                         <p class="text-slate-500 text-[10px] font-bold uppercase tracking-widest">{{ inc.maquina.id_maquina }}</p>
                                     </div>
                                 </div>
@@ -60,7 +82,8 @@
                                     </div>
                                     <div class="px-5 py-2 rounded-full border border-white/20 font-black text-[9px] uppercase tracking-widest
                                         {% if inc.estado == 'ABIERTO' %}text-red-500 bg-red-500/5
-                                        {% else %}text-amber-500 bg-amber-500/5{% endif %}">
+                                        {% elif inc.estado == 'PROCESO' %}text-amber-500 bg-amber-500/5
+                                        {% else %}text-emerald-500 bg-emerald-500/5{% endif %}">
                                         {{ inc.get_estado_display }}
                                     </div>
                                 </div>
@@ -83,7 +106,7 @@
             <!-- Preventivos List (Horizontal cards) -->
             <div id="section-preventivos" class="pt-6">
                 <h2 class="text-lg font-black text-white flex items-center gap-3 mb-4 uppercase tracking-tighter font-brand">
-                    <i class="fas fa-hourglass-half text-amber-400 animate-pulse"></i> Mantenimiento <span>Preventivo</span>
+                    <i class="fas fa-heartbeat text-emerald-400 animate-pulse"></i> Salud Mecánica / <span>Estado de Uso</span>
                 </h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {% for p in preventivos %}
@@ -163,7 +186,7 @@
                     <!-- Avg Repair Time -->
                     <div>
                         <p class="text-slate-500 text-xs font-bold uppercase tracking-widest mb-4">Tiempo Medio de Reparación:</p>
-                        <h3 class="text-5xl font-black text-white mb-6">4.2h</h3>
+                        <h3 class="text-3xl lg:text-5xl font-black text-white mb-6 tracking-tighter">{{ counts.tiempo_medio }}</h3>
                         <!-- Another Mini Chart -->
                         <div class="flex items-end gap-2 h-16 opacity-50">
                             <div class="flex-1 bg-white/20 rounded-md h-[20%]"></div>
@@ -207,34 +230,74 @@
                 <tbody>
                     {% for inc in incidencias %}
                     {% if inc.estado == 'CERRADO' %}
-                    <tr class="border-b border-white/[0.02] hover:bg-white/5 transition-colors group/row">
-                        <td class="px-8 py-6">
+                    <tr class="hover:bg-white/5 transition-colors group/row text-xs {% if inc.fecha_fin >= last_30_days %}bg-orange-500/5 shadow-[inset_4px_0_0_0_rgba(249,115,22,1)] border-b border-orange-500/20{% else %}border-b border-white/[0.02]{% endif %}">
+                        <!-- Máquina -->
+                        <td class="px-6 py-5">
                             <div class="flex items-center gap-3">
                                 <div class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-amber-500">
                                     <i class="fas fa-cog"></i>
                                 </div>
                                 <div>
-                                    <p class="text-sm font-bold text-white leading-none">{{ inc.maquina.nombre }}</p>
-                                    <p class="text-[11px] text-slate-400 font-black uppercase tracking-widest mt-1.5">{{ inc.maquina.id_maquina }}</p>
+                                    <p class="font-bold text-white leading-none">{{ inc.maquina.nombre }}</p>
+                                    <p class="text-[9px] text-slate-500 font-black uppercase tracking-widest mt-1">{{ inc.maquina.id_maquina }}</p>
                                 </div>
                             </div>
                         </td>
-                        <td class="px-8 py-6">
-                            <p class="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1">Motivo</p>
-                            <p class="text-xs text-white font-bold">{{ inc.descripcion_falla|truncatechars:100 }}</p>
-                            <p class="text-[11px] text-slate-400 mt-2 font-black uppercase tracking-tight">{{ inc.fecha_reporte|date:"d M, H:i" }}hs</p>
+
+                        <!-- Motivo -->
+                        <td class="px-6 py-5 max-w-xs">
+                            <p class="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1.5 leading-none">Descripción</p>
+                            <p class="text-white font-medium italic overflow-hidden text-ellipsis whitespace-nowrap">{{ inc.descripcion_falla|truncatechars:50 }}</p>
                         </td>
-                        <td class="px-8 py-6 text-right">
-                            <div class="flex flex-col items-end gap-1">
-                                <span class="text-[10px] font-tech text-amber-500 font-bold">{{ inc.duracion_hhmm }}</span>
-                                <span class="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-500 text-[9px] font-black uppercase tracking-widest border border-emerald-500/20">CERRADO</span>
+
+                        <!-- Inicio (Reporte) -->
+                        <td class="px-6 py-5">
+                            <p class="text-[9px] text-red-500/60 font-black uppercase tracking-widest mb-1.5 leading-none italic">Reporte / Inicio</p>
+                            <div class="flex flex-col">
+                                <span class="text-white font-bold">{{ inc.fecha_reporte|date:"d/m/Y" }}</span>
+                                <span class="text-slate-400 font-tech text-[10px]">{{ inc.fecha_reporte|date:"H:i" }} hs</span>
                             </div>
                         </td>
-                        <td class="px-8 py-6 text-right w-20">
-                            <button type="button" onclick="confirmDelete('{{ inc.pk }}', '{{ inc.maquina.nombre }}')"
-                                   class="text-white/10 hover:text-red-500 transition-all p-2">
-                                <i class="fas fa-trash-alt text-xs"></i>
-                            </button>
+
+                        <!-- Cierre -->
+                        <td class="px-6 py-5">
+                            <p class="text-[9px] text-emerald-500/60 font-black uppercase tracking-widest mb-1.5 leading-none italic">Cierre / Fin</p>
+                            <div class="flex flex-col">
+                                <span class="text-white font-bold">{% if inc.fecha_fin %}{{ inc.fecha_fin|date:"d/m/Y" }}{% else %}---{% endif %}</span>
+                                <span class="text-slate-400 font-tech text-[10px]">{% if inc.fecha_fin %}{{ inc.fecha_fin|date:"H:i" }} hs{% else %}---{% endif %}</span>
+                            </div>
+                        </td>
+
+                        <!-- Duración & Estado -->
+                        <td class="px-6 py-5 text-right">
+                            <div class="flex flex-col items-end gap-1.5">
+                                <div class="flex items-center gap-2">
+                                    <p class="text-[8px] text-slate-500 font-black uppercase tracking-widest">Fuera de Uso:</p>
+                                    <span class="font-tech text-amber-400 font-black text-sm">{{ inc.duracion_hhmm }}</span>
+                                </div>
+                                <span class="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-500 text-[8px] font-black uppercase tracking-widest border border-emerald-500/20">OPERATIVA</span>
+                            </div>
+                        </td>
+
+                        <!-- Acciones -->
+                        <td class="px-6 py-5 text-right w-20">
+                            <div class="flex items-center gap-1 justify-end">
+                                <button type="button" onclick="editClosedIncident('{{ inc.pk }}', '{{ inc.maquina.nombre|escapejs }}', '{{ inc.tipo }}', '{{ inc.detalle_resolucion|escapejs }}', '{{ inc.tecnico_asignado|escapejs }}', '{{ inc.fecha_fin|date:'Y-m-d' }}T{{ inc.fecha_fin|date:'H:i' }}')"
+                                       title="Editar Detalles"
+                                       class="text-slate-600 hover:text-amber-500 transition-all p-2">
+                                    <i class="fas fa-edit text-[10px]"></i>
+                                </button>
+                                <button type="button" onclick="reopenIncident('{{ inc.pk }}', '{{ inc.maquina.nombre|escapejs }}')"
+                                       title="Reabrir Incidencia"
+                                       class="text-slate-600 hover:text-emerald-500 transition-all p-2">
+                                    <i class="fas fa-undo-alt text-[10px]"></i>
+                                </button>
+                                <button type="button" onclick="confirmDelete('{{ inc.pk }}', '{{ inc.maquina.nombre|escapejs }}')"
+                                       title="Eliminar Permanente"
+                                       class="text-slate-600 hover:text-red-500 transition-all p-2">
+                                    <i class="fas fa-trash-alt text-[10px]"></i>
+                                </button>
+                            </div>
                         </td>
                     </tr>
                     {% endif %}
@@ -321,19 +384,42 @@
         </div>
         <form id="form-cerrar" action="" method="POST" class="p-8 space-y-6">
             {% csrf_token %}
-            <input type="hidden" name="accion" value="cerrar">
             <div class="bg-emerald-500/5 border border-emerald-500/10 rounded-2xl p-6 mb-2">
-                <p class="text-emerald-400/80 text-xs font-semibold leading-relaxed">Confirmando finalización de trabajos en: <span id="nombre-maquina-cerrar" class="text-white font-black underline decoration-emerald-500/30"></span>.</p>
+                <p class="text-emerald-400/80 text-xs font-semibold leading-relaxed">Gestionando trabajos en: <span id="nombre-maquina-cerrar" class="text-white font-black underline decoration-emerald-500/30"></span>.</p>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <div class="space-y-3">
+                    <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Tipo de Incidencia</label>
+                    <select name="tipo_incidencia" id="select-tipo-incidencia-modal" class="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 outline-none focus:border-amber-500/50 transition-all font-bold text-white text-sm cursor-pointer">
+                        <option value="CORRECTIVO" class="bg-slate-900">Correctivo / Rotura</option>
+                        <option value="PREVENTIVO" class="bg-slate-900">Preventivo</option>
+                        <option value="MEJORA" class="bg-slate-900">Mejora / Ajuste</option>
+                    </select>
+                </div>
+                <div class="space-y-3">
+                    <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Técnico</label>
+                    <input type="text" name="tecnico" id="input-tecnico-modal" placeholder="Nombre..." class="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 outline-none focus:border-amber-500/50 transition-all font-bold text-white text-sm">
+                </div>
+            </div>
+
+            <div id="div-editar-fecha-fin" class="space-y-3 hidden">
+                <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Fecha y Hora de Cierre</label>
+                <input type="datetime-local" name="fecha_fin_edit" id="input-fecha-fin-modal" class="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 outline-none focus:border-amber-500/50 transition-all font-bold text-white text-sm">
             </div>
             
             <div class="space-y-3">
                 <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Observaciones Técnicas / Resolución</label>
-                <textarea name="observaciones" rows="4" required placeholder="¿Qué se intervino? ¿Se reemplazaron componentes?..." 
+                <textarea name="observaciones" id="textarea-observaciones-modal" rows="4" placeholder="¿Qué se intervino? ¿Se reemplazaron componentes?..." 
                     class="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 outline-none focus:border-emerald-500/50 transition-all font-bold text-white text-sm"></textarea>
             </div>
 
-            <div class="pt-6">
-                <button type="submit" class="w-full bg-emerald-500 hover:bg-white text-black px-8 py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl transition-all transform hover:-translate-y-1">Confirmar protocolización & Cierre</button>
+            <div class="pt-6 grid grid-cols-2 gap-4">
+                <button type="submit" name="accion" value="actualizar" class="w-full bg-white/10 hover:bg-white/20 text-white px-4 py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all transform hover:-translate-y-1">Guardar Cambios</button>
+                <button type="submit" id="btn-cerrar-submit" name="accion" value="cerrar" class="w-full bg-emerald-500 hover:bg-emerald-400 text-black px-4 py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl transition-all transform hover:-translate-y-1">Protocolizar & Cierre</button>
+            </div>
+            <div id="div-iniciar-reparacion" class="pt-4 hidden">
+                 <button type="submit" name="accion" value="iniciar" class="w-full bg-blue-500 hover:bg-blue-400 text-white px-4 py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl transition-all transform hover:-translate-y-1">Iniciar Trabajo (Técnico en Sitio)</button>
             </div>
         </form>
     </div>
@@ -444,9 +530,54 @@
         chart.render();
     }
 
-    function openCloseModal(pk, nombre) {
+    function openCloseModal(pk, nombre, tipo, estado, observaciones, tecnico) {
         document.getElementById('nombre-maquina-cerrar').textContent = nombre;
         document.getElementById('form-cerrar').action = `/dashboard/mantenimiento/gestionar/${pk}/`;
+        
+        // Mostrar siempre el botón de cierre para incidentes no cerrados
+        const btnCerrar = document.getElementById('btn-cerrar-submit');
+        if (btnCerrar) btnCerrar.classList.remove('hidden');
+
+        // Cargar tipo actual
+        if (tipo) {
+            document.getElementById('select-tipo-incidencia-modal').value = tipo;
+        }
+
+        // Cargar observaciones y técnico
+        document.getElementById('textarea-observaciones-modal').value = observaciones || '';
+        document.getElementById('input-tecnico-modal').value = tecnico || '';
+
+        // Mostrar u ocultar botón de iniciar según estado
+        if (estado === 'ABIERTO') {
+            document.getElementById('div-iniciar-reparacion').classList.remove('hidden');
+        } else {
+            document.getElementById('div-iniciar-reparacion').classList.add('hidden');
+        }
+
+        // Esconder siempre el campo de edición de fecha si no es el modo editor del historial
+        document.getElementById('div-editar-fecha-fin').classList.add('hidden');
+
+        document.getElementById('modal-cerrar').classList.remove('hidden');
+    }
+
+    function editClosedIncident(pk, nombre, tipo, observaciones, tecnico, fecha_fin) {
+        // Usa el mismo modal pero oculta el botón de 'Cerrar' y 'Iniciar' para solo permitir 'Guardar Cambios'
+        document.getElementById('nombre-maquina-cerrar').textContent = nombre + " (Edición)";
+        document.getElementById('form-cerrar').action = `/dashboard/mantenimiento/gestionar/${pk}/`;
+        
+        // Hide Cierre options
+        const btnCerrar = document.getElementById('btn-cerrar-submit');
+        if (btnCerrar) btnCerrar.classList.add('hidden');
+        document.getElementById('div-iniciar-reparacion').classList.add('hidden');
+
+        if (tipo) document.getElementById('select-tipo-incidencia-modal').value = tipo;
+        document.getElementById('textarea-observaciones-modal').value = observaciones || '';
+        document.getElementById('input-tecnico-modal').value = tecnico || '';
+
+        // Fechas
+        document.getElementById('div-editar-fecha-fin').classList.remove('hidden');
+        document.getElementById('input-fecha-fin-modal').value = fecha_fin || '';
+
         document.getElementById('modal-cerrar').classList.remove('hidden');
     }
 
@@ -454,6 +585,29 @@
         document.getElementById('nombre-maquina-eliminar').textContent = nombre;
         document.getElementById('btn-confirmar-eliminar').href = `/dashboard/mantenimiento/eliminar/${pk}/`;
         document.getElementById('modal-eliminar').classList.remove('hidden');
+    }
+
+    function reopenIncident(pk, nombre) {
+        if (confirm(`¿Estás seguro de que deseas REABRIR la incidencia de ${nombre}? Se mantendrá la fecha original del reporte.`)) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = `/dashboard/mantenimiento/gestionar/${pk}/`;
+            
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrfmiddlewaretoken';
+            csrfInput.value = '{{ csrf_token }}';
+            
+            const actionInput = document.createElement('input');
+            actionInput.type = 'hidden';
+            actionInput.name = 'accion';
+            actionInput.value = 'reabrir';
+            
+            form.appendChild(csrfInput);
+            form.appendChild(actionInput);
+            document.body.appendChild(form);
+            form.submit();
+        }
     }
 
     // --- MODAL DE AYUDA PREDICTIVA ---
