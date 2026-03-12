@@ -333,44 +333,34 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         )
 
         # REGLA SOLICITADA: Todo lo que sea MATRICERIA no se usa para KPIs de serie.
-        mat_kws = ['MATRIC', 'MATRIZ', 'MATR.']
+        mat_kws = ['MATRIC', 'MATRIZ', 'MATR.', 'MATR']
         full_text_search = f"{raw_art_d} {raw_op_d} {raw_obs} {raw_id_op}".upper()
         is_matriceria = any(k in full_text_search for k in mat_kws)
         should_exclude_mat = is_matriceria
         is_valid_machine_prod = not (is_descanso or reg.get('es_interrupcion'))
         
+        # REGLA 1:1 para tareas neutrales (si no es matricería ni descanso)
+        if not is_matriceria and not is_descanso:
+            is_neutral = any(k in full_text_search for k in special_keywords)
+            if is_neutral:
+                std_mins = duracion
+
         if is_matriceria:
-            # Matricería fuera de todo: solo reduce el denominador (Disponibilidad)
+            # Matricería fuera de todo: NO SUMA TIEMPO NI PIEZAS.
             global_excluded_mat_time += duracion
-            # Si era una máquina asignada, también lo guardamos para su descuento individual
-            if mid and mid not in maquinas_inactivas_ids:
-                if mid not in kpi_por_maquina:
-                    kpi_por_maquina[mid] = {
-                        'id_maquina': mid,
-                        'nombre_maquina': nombres_maquinas.get(mid, mid),
-                        'tiempo_operativo': 0.0, 'tiempo_paradas': 0.0, 'tiempo_cotizado': 0.0, 
-                        'cantidad_producida': 0.0, 'cantidad_rechazada': 0.0, 'latest_obs': '', 
-                        'latest_date': None, 'latest_activity_time': None, 'latest_operator': 'S/A', 
-                        'latest_article': '---', 'current_order': '---', 'is_found_online': False, 
-                        'latest_is_active': False,
-                        'is_producing_now': False, 'active_operators': {}, 'stats_per_op': {}, 
-                        'has_matriceria': True, 'tiempo_excluido_mat': 0.0, 'audit_log': []
-                    }
-                kpi_por_maquina[mid]['tiempo_excluido_mat'] += duracion
+            
+            # Solo actualizamos el estado visual para que el mapa sepa que la máquina está "ocupada"
+            # pero no procesamos KPIs.
+            if mid and mid in kpi_por_maquina:
                 kpi_por_maquina[mid]['has_matriceria'] = True
+                kpi_por_maquina[mid]['tiempo_excluido_mat'] += duracion
                 if is_session_active:
                     kpi_por_maquina[mid]['is_found_online'] = True
                     kpi_por_maquina[mid]['latest_is_active'] = True
-            # No hacemos 'continue' aquí para permitir que se actualice el estado online/operario
-            # El filtrado se hará más abajo al sumar KPIs.
+                    kpi_por_maquina[mid]['latest_obs'] = "MATRICERIA"
             
-        is_other_neutral = any(k in full_text_search for k in special_keywords) or any(k in raw_obs for k in special_keywords)
-        is_armado = False # Ya incluido en special_keywords
-        
-        if is_matriceria:
-            # Matricería: solo para reducción de disponibilidad si se configurara así,
-            # pero para el tablero personal/ERP se cuenta como producción neutral.
-            global_excluded_mat_time += duracion
+            # SALTO CRÍTICO: No procesar para OEE ni para Personal
+            continue
         
         # 1. Caso: Sin Asignar (Máquina vacía o inactiva o MAC40 forzada)
         is_unassigned = (not mid or mid in maquinas_inactivas_ids)
@@ -986,9 +976,11 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
     total_horas_std += h_unassigned_std
     total_horas_prod += h_unassigned_prod
     
-    # RESTAR MATRICERÍA GLOBAL DEL DISPONIBLE (Comentado para mantener TURNO como base)
+    # RESTAR MATRICERÍA GLOBAL DEL DISPONIBLE para que el denominador sea coherente
+    # con la exclusión del numerador (tiempo real y estándar ya excluidos).
     h_excl_global_mat = global_excluded_mat_time / 60.0
-    # total_horas_disp = max(0.01, total_horas_disp - h_excl_global_mat)
+    total_horas_disp = max(0.01, total_horas_disp - h_excl_global_mat)
+    total_horas_disp_reg = max(0.01, total_horas_disp_reg - h_excl_global_mat)
 
     # CORRECCIÓN DE LÓGICA OEE (NORMALIZACIÓN AL 100%):
     # Si hay producción en máquinas "Sin Asignar" (Inactivas o Viejas), debemos
