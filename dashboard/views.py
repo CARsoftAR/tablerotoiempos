@@ -116,7 +116,8 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
     # DETERMINAR ESTADOS PARA LA UI (Botones)
     is_viewing_today = (fecha_target_start == today_date)
     is_yesterday = (fecha_target_start == today_date - datetime.timedelta(days=1))
-    is_range = (fecha_target_start != fecha_target_end)
+    # Consideramos 'intervalo' activo si las fechas son distintas O si el usuario usó expresamente el selector manual
+    is_range = (fecha_target_start != fecha_target_end) or (request.GET.get('start_date') is not None)
 
     # RANGO DE CONSULTA UTC
     fecha_inicio_utc = timezone.make_aware(datetime.datetime.combine(fecha_target_start, datetime.time.min), datetime.timezone.utc)
@@ -200,7 +201,7 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
     if is_viewing_today:
         online_qs = VTMan.objects.filter(
             fecha__range=(f_start_naive, f_end_naive),
-            observaciones='ONLINE'
+            observaciones__icontains='ONLINE'
         ).values_list('id_maquina', flat=True)
         actual_online_ids = set(online_qs)
 
@@ -221,6 +222,7 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 'latest_operator': 'S/A',
                 'latest_article': '---',
                 'current_order': '---',
+                'latest_is_active': False,  # Inicializar siempre
                 'is_found_online': False,
                 'is_producing_now': False,
                 'active_operators': {}, # Dict {Nombre: Tarea} to prevent duplicates
@@ -262,6 +264,7 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
     # NO necesitamos de-duplicacion por orden porque el ERP ya lo maneja.
 
     for reg in registros_data:
+        uid = str(reg.get('id_concepto') or '').strip()
         mid = str(reg['id_maquina']).strip() if reg.get('id_maquina') else None
         duracion = reg['tiempo_minutos'] or 0.0
         qty = reg['cantidad_producida'] or 0.0
@@ -284,11 +287,10 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         raw_obs = str(reg.get('observaciones') or "").strip().upper()
 
         non_prod_keywords = ['REPROCESO', 'RETRABAJO', 'DESCARTE', 'SCRAP']
-        # Sincronizado con obtener_auditoria: Solo descansos reales restan disponibilidad total
-        descanso_keywords = ['DESCANSO', 'ALMUERZO', 'PAUSA', 'VACACIONES', 'LICENCIA']
+        # Sincronizado estrictamente con obtener_auditoria
+        descanso_keywords = ['DESCANSO', 'ALMUERZO', 'PAUSA', 'PERSONAL', 'VACACIONES', 'LICENCIA']
         
         # Estas tareas son laborales pero no tienen estándar productivo, usamos Regla 1:1
-        # NOTA: MATRICERIA se maneja por separado ahora para EXCLUIRLA del OEE
         special_keywords = [
             'TAREAS GENERALES', 'AJUSTES', 'REBABADO', 'GRABADO', 'ARMADO', 'ACCESORIOS',
             'CAPACI', 'CAPACIT', 'TENSI', 'TENSION', 'HERRAMIENTA', 'MANTEN', 'REPAR',
@@ -298,35 +300,35 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         
         is_repro = (
             raw_id_op in non_prod_keywords or 
-            raw_op_d in non_prod_keywords or
             any(k in raw_art_d for k in non_prod_keywords) or
+            any(k in raw_op_d for k in non_prod_keywords) or
             any(k in raw_obs for k in non_prod_keywords)
         )
 
         is_descanso = (
-            raw_op_d in descanso_keywords or
             any(k in raw_art_d for k in descanso_keywords) or
+            any(k in raw_op_d for k in descanso_keywords) or
             any(k in raw_obs for k in descanso_keywords)
         )
         
         # El 'ONLINE' a veces trae cantidad 1 para marcar actividad, pero no es producción real terminada
         is_online_record = (raw_obs == 'ONLINE')
         
-        # DEFINICIÓN DE SESIÓN ACTIVA (Sincronización Estricta con ERP)
-        # La DB tiene un desfase de 3hs respecto a la hora local.
-        # Una sesión está activa si no tiene fin, si el fin es futuro (según reloj DB), o dice ONLINE.
+        # DEFINICIÓN DE SESIÓN ACTIVA (Sincronización con ERP)
+        # Una sesión está activa si:
+        #   - hora_fin es None (no terminó), O
+        #   - hora_fin es futuro (el ERP a veces graba fin futuro para sesiones en curso), O
+        #   - tiene observación 'ONLINE'
         now_local = timezone.localtime(timezone.now())
-        # FIX: Eliminado el desfase de -3hs porque causaba que tareas terminadas (ej: 12:45)
-        # siguieran activas a las 13:30. Se compara contra hora actual real.
-        now_db_ref = now_local 
-        
+        now_db_ref = now_local
+
         h_fin = reg.get('hora_fin')
         if h_fin and timezone.is_aware(h_fin):
             h_fin = timezone.make_naive(h_fin)
-            
+
         is_session_active = (
-            h_fin is None or 
-            h_fin > now_db_ref.replace(tzinfo=None) or 
+            h_fin is None or
+            h_fin > now_db_ref.replace(tzinfo=None) or
             is_online_record
         )
 
@@ -350,452 +352,193 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                         'cantidad_producida': 0.0, 'cantidad_rechazada': 0.0, 'latest_obs': '', 
                         'latest_date': None, 'latest_activity_time': None, 'latest_operator': 'S/A', 
                         'latest_article': '---', 'current_order': '---', 'is_found_online': False, 
+                        'latest_is_active': False,
                         'is_producing_now': False, 'active_operators': {}, 'stats_per_op': {}, 
                         'has_matriceria': True, 'tiempo_excluido_mat': 0.0, 'audit_log': []
                     }
                 kpi_por_maquina[mid]['tiempo_excluido_mat'] += duracion
                 kpi_por_maquina[mid]['has_matriceria'] = True
+                if is_session_active:
+                    kpi_por_maquina[mid]['is_found_online'] = True
+                    kpi_por_maquina[mid]['latest_is_active'] = True
             # No hacemos 'continue' aquí para permitir que se actualice el estado online/operario
             # El filtrado se hará más abajo al sumar KPIs.
             
         is_other_neutral = any(k in full_text_search for k in special_keywords) or any(k in raw_obs for k in special_keywords)
         is_armado = False # Ya incluido en special_keywords
         
-        id_orden = reg.get('id_orden')
+        if is_matriceria:
+            # Matricería: solo para reducción de disponibilidad si se configurara así,
+            # pero para el tablero personal/ERP se cuenta como producción neutral.
+            global_excluded_mat_time += duracion
         
-        add_std_global = True
-
-        # 1. Caso: Sin Asignar (Máquina vacía o inactiva)
+        # 1. Caso: Sin Asignar (Máquina vacía o inactiva o MAC40 forzada)
         is_unassigned = (not mid or mid in maquinas_inactivas_ids)
-        
-        # FIX: Forzar NLX (MAC40) como asignada si tiene ID válido, para evitar falsos positivos
-        if mid == 'MAC40': 
-            is_unassigned = False
-        
-        if is_unassigned:
-            # Dado que la matricería ya se manejó arriba (con continue), 
-            # aquí solo llega producción de serie sin asignar.
-            unassigned_time += duracion
-            if reg['es_proceso']:
-                unassigned_process_time += duracion
-            elif reg['es_interrupcion']:
-                unassigned_interruption_time += duracion
+        if mid == 'MAC40': is_unassigned = False
 
+        if is_unassigned:
+            unassigned_time += duracion
+            if reg['es_proceso']: unassigned_process_time += duracion
+            elif reg['es_interrupcion']: unassigned_interruption_time += duracion
+            
             if is_repro:
                 global_rejected_qty += qty
                 global_repro_time += duracion
-            else:
-                unassigned_qty += qty
-                global_actual_qty += qty
-            if add_std_global:
-                # REGLA AUDITORÍA: Si es neutro o no tiene piezas aún, tratamos como 1:1
-                if is_other_neutral or (std_mins == 0 and qty == 0):
-                    unassigned_std += duracion
-                else:
-                    unassigned_std += std_mins
+            unassigned_qty += qty
+            global_actual_qty += qty
             
-            # Detalle para tarjeta "Sin Asignar": Quiénes están trabajando aquí AHORA
+            # Standard Unassigned: Siempre use std_mins si existe para coincidir brutas ERP
+            unassigned_std += std_mins
+            
+            # Detalle para tarjeta "Sin Asignar"
             if is_session_active:
-                u_uid = str(reg.get('id_concepto') or '').strip()
-                if u_uid and u_uid != 'None':
-                     u_name = nombres_operarios.get(u_uid, f"Op {u_uid}")
-                     u_task = raw_art_d or raw_op_d or raw_obs or "S/D"
-                     
-                     # Improve Task Description prioritization
-                     if "TAREAS GENERALES" in u_task and raw_obs:
-                         u_task = raw_obs
-                     
-                     active_unassigned_ops[u_uid] = {
-                         'name': u_name, 
-                         'task': u_task,
-                         'obs': raw_obs,
-                         'art': raw_art_d,
-                         'op_number': reg.get('id_orden') or '---'
-                     }
-        
-        # 2. Caso: Máquina Asignada (Solo si no es unassigned)
-        data = None
-        if not is_unassigned:
+                if uid and uid != 'None':
+                    active_unassigned_ops[uid] = {
+                        'name': nombres_operarios.get(uid, f"Op {uid}"), 
+                        'task': (str(reg.get('articulod') or "").strip() or str(reg.get('operacion') or "").strip() or "S/D").upper(),
+                        'obs': str(reg.get('observaciones') or "").strip(),
+                        'art': str(reg.get('articulod') or "").strip(),
+                        'op_number': reg.get('id_orden') or '---'
+                    }
+        else:
+            # 2. Caso: Máquina Asignada
             if mid not in kpi_por_maquina:
                 kpi_por_maquina[mid] = {
-                    'id_maquina': mid,
-                    'nombre_maquina': nombres_maquinas.get(mid, mid),
-                    'tiempo_operativo': 0.0, 
-                    'tiempo_paradas': 0.0,
-                    'tiempo_cotizado': 0.0, 
-                    'cantidad_producida': 0.0,
-                    'cantidad_rechazada': 0.0,
-                    'latest_obs': '',
-                    'latest_date': None,
-                    'current_order': '---',
-                    'is_found_online': False,
-                    'active_operators': {}, # Dict {Nombre: Tarea}
-                    'stats_per_op': {},     # Dict {Nombre: {real: 0.0, std: 0.0}}
-                    'has_matriceria': False,
-                    'tiempo_excluido_mat': 0.0,
-                    'audit_log': []
+                    'id_maquina': mid, 'nombre_maquina': nombres_maquinas.get(mid, mid),
+                    'tiempo_operativo': 0.0, 'tiempo_paradas': 0.0, 'tiempo_cotizado': 0.0, 
+                    'cantidad_producida': 0.0, 'cantidad_rechazada': 0.0, 'latest_obs': '', 
+                    'latest_date': None, 'latest_activity_time': None, 'latest_operator': 'S/A', 
+                    'latest_article': '---', 'current_order': '---', 'is_found_online': False, 
+                    'latest_is_active': False,
+                    'active_operators': {}, 'stats_per_op': {}, 'has_matriceria': False, 
+                    'tiempo_excluido_mat': 0.0, 'audit_log': []
                 }
-
             data = kpi_por_maquina[mid]
-            
-            # Tracking de última actividad real
+
+            # Status / Observation logic (Sticky por tiempo)
+            # El estado online se actualiza con el registro más reciente.
+            # Esto permite que una máquina que terminó su última tarea figure como OFFLINE.
             act_time = reg.get('hora_fin') or reg.get('hora_inicio') or reg.get('fecha')
             if not data['latest_activity_time'] or (act_time and data['latest_activity_time'] and act_time >= data['latest_activity_time']):
-                prev_act_time = data['latest_activity_time']
                 data['latest_activity_time'] = act_time
+                obs_v = str(reg.get('observaciones') or "").strip().upper()
+                art_v = str(reg.get('articulod') or "").strip().upper()
+                op_v = str(reg.get('operacion') or "").strip().upper()
                 
-                # DETERMINACIÓN DEL MOTIVO DE ESTADO
-                raw_obs = str(reg.get('observaciones') or "").strip().upper()
-                raw_art = str(reg.get('articulod') or "").strip().upper()
-                raw_op = str(reg.get('operacion') or "").strip().upper()
+                f_kw = next((k for k in descanso_keywords if k in obs_v or k in art_v or k in op_v), None)
+                curr_reason = f_kw if f_kw else (obs_v or "ONLINE")
                 
-                # Buscamos palabras clave
-                found_kw = None
-                for kw in descanso_keywords:
-                    if kw in raw_obs or kw in raw_art or kw in raw_op:
-                        found_kw = kw
-                        break
+                # Update if new is important or current is generic
+                is_curr_imp = data['latest_obs'] not in ['ONLINE', '', 'S/A', 'S/D']
+                is_new_imp = curr_reason not in ['ONLINE', '', 'S/A', 'S/D']
+                if not data['latest_obs'] or not is_curr_imp or is_new_imp:
+                    data['latest_obs'] = curr_reason
                 
-                current_reason = found_kw if found_kw else (raw_obs if raw_obs else "ONLINE")
-                
-                # Lógica de Actualización:
-                # 1. Si el nuevo es importante, actualizamos siempre.
-                # 2. Si el nuevo es genérico (ONLINE), solo actualizamos si el motivo anterior ya está "terminado"
-                #    o si este nuevo registro es posterior.
-                
-                is_current_important = data.get('latest_obs') and data['latest_obs'] not in ['ONLINE', '', '---', 'S/A', 'S/D']
-                is_new_important = current_reason not in ['ONLINE', '', '---', 'S/A', 'S/D']
-                
-                force_update = not is_current_important or is_new_important
-                
-                # Si el actual es importante y el nuevo es genérico, revisamos tiempos
-                if is_current_important and not is_new_important:
-                    # Buscamos el fin de la actividad anterior (sticky)
-                    # Si el registro actual es ONLINE y el anterior terminó hace más de 1 min, limpiamos.
-                    if prev_act_time and reg.get('hora_inicio') and (reg['hora_inicio'] - prev_act_time).total_seconds() > 1200:
-                        force_update = True
-                
-                if not data['latest_obs'] or force_update:
-                    data['latest_obs'] = current_reason
-
                 data['latest_date'] = reg['fecha']
-                # Sticky logic for current_order: only update if truthy and valid
-                raw_id_orden = reg.get('id_orden')
-                if raw_id_orden and str(raw_id_orden).strip() not in ['', '0', 'None', '---']:
-                    data['current_order'] = str(raw_id_orden).strip()
+                if reg.get('id_orden') and str(reg['id_orden']).strip() not in ['', '0', 'None', '---']:
+                    data['current_order'] = str(reg['id_orden']).strip()
+                if uid: data['latest_operator'] = nombres_operarios.get(uid, f"Operario {uid}")
+                if art_v: data['latest_article'] = art_v
                 
-                data['latest_is_active'] = is_session_active
-                data['latest_is_interrupcion'] = (reg.get('es_interrupcion') == True or is_descanso)
-                data['latest_is_proceso'] = (reg.get('es_proceso') == True)
-            
-            # Si hay una sesión activa de procesos (producción), lo marcamos para el Mapa
-            if is_session_active and reg.get('es_proceso'):
-                data['is_producing_now'] = True
-            
-            # Siempre guardamos el último operario y artículo visto
-            uid = str(reg.get('id_concepto') or '').strip()
+                # REGLA DEFINITIVA DE ESTADO ONLINE:
+                # El ERP actualiza hora_fin continuamente en los registros ONLINE.
+                # La única señal fiable de "activo ahora" es observaciones='ONLINE'.
+                # Un registro ONLINE siempre marca la máquina como activa.
+                # Un registro terminado (sin ONLINE) puede apagar el estado si es el más reciente.
+                if is_online_record:
+                    data['latest_is_active'] = True
+                    data['is_found_online'] = True
+                else:
+                    data['latest_is_active'] = is_session_active
+                    data['is_found_online'] = is_session_active
 
-            if uid:
-                op_full_name = nombres_operarios.get(uid, f"Operario {uid}")
-                data['latest_operator'] = op_full_name
-                
 
-            
-            art_desc = str(reg.get('articulod') or "").strip().upper()
-            if art_desc:
-                data['latest_article'] = art_desc
-
-            if is_repro:
-                data['cantidad_rechazada'] += qty
-                global_rejected_qty += qty
-                global_repro_time += duracion
-            elif is_descanso:
-                # El descanso NO suma cantidad ni tiempo cotizado
-                pass
-            elif should_exclude_mat:
-                # Matricería: ya sumamos tiempo_excluido_mat al inicio del loop
-                # NO SUMA NADA A PRODUCCIÓN NI ESTÁNDAR DE SERIE
-                pass
+            # Accumulate Machine KPIs
+            if is_descanso or reg['es_interrupcion']:
+                data['tiempo_paradas'] += duracion
+                global_downtime += duracion
             else:
-                # REGLA ACTUALIZADA: Sumamos cantidad incluso si es ONLINE para coincidir con el ERP (Total 40 vs 38)
+                # Tiempo Real Operativo: Mantenemos el criterio de Producción (Serie + Neutro + Repro)
+                data['tiempo_operativo'] += duracion
+                global_actual_time += duracion
                 data['cantidad_producida'] += qty
                 global_actual_qty += qty
                 
-                # Sumamos estándar para MÁQUINA
-                # Solo si es produccion valida (para no inflar cotizado durante descansos)
-                
-                if is_valid_machine_prod:
-                    # REGLA AUDITORÍA: Si tiene estándar confiable en ERP, lo usamos.
-                    if qty > 0 and std_mins > 0:
-                        data['tiempo_cotizado'] += std_mins
-                        global_planned_time += std_mins
-                        global_planned_time_reg += std_mins
-                    
-                    # REGLA AUDITORÍA FALLBACK: Si es tarea neutra (ARMADO, SETUP) 
-                    # O si reportó piezas pero el ERP no tiene estándar (.00), usamos 1:1.
-                    # Esto evita que el rendimiento caiga a 0% por falta de datos en el ERP.
-                    elif is_other_neutral or (qty > 0 and std_mins == 0):
-                        data['tiempo_cotizado'] += duracion
-                        global_planned_time += duracion
-                        global_planned_time_reg += duracion
-                    
-                    elif qty == 0 and not is_other_neutral:
-                        # Producción activa sin piezas y sin keyword: no suma estándar aún
-                        pass
-                    
-                # Actualizar acumuladores registrados (tiempo real sin capear aun;
-                # el capeo se aplica en el loop de KPIs por maquina mas abajo)
+                # Estos se usan para el Resumen de la pestaña Máquinas
                 global_actual_qty_reg += qty
                 global_actual_time_reg += duracion
-                
-                # Si no es matriceria ni parada, se considera tiempo operativo real de serie
-                data['tiempo_operativo'] += duracion
-                global_actual_time += duracion
-                    
-            # Acumulamos tiempos para el operario (si existe) para cálculo individual
-            # Acumulamos tiempos para el operario (si existe) para cálculo individual
-            if uid:
-                if op_full_name not in data['stats_per_op']:
-                    data['stats_per_op'][op_full_name] = {'real': 0.0, 'std': 0.0, 'stop': 0.0, 'repro': 0.0}
-                
-                if is_descanso or reg['es_interrupcion']:
-                     data['stats_per_op'][op_full_name]['stop'] += duracion
-                elif is_repro:
-                     data['stats_per_op'][op_full_name]['repro'] += duracion
-                else:
-                     # Producción Válida (ni descanso, ni reproceso, ni interrupción)
-                     data['stats_per_op'][op_full_name]['real'] += duracion
-                     
-                     if is_matriceria:
-                         data['stats_per_op'][op_full_name]['std'] += duracion
-                     else:
-                         data['stats_per_op'][op_full_name]['std'] += std_mins
+            
+            # El tiempo estándar se suma SIEMPRE para coincidir con el total bruto del ERP (80.43 hs)
+            data['tiempo_cotizado'] += std_mins
+            global_planned_time_reg += std_mins
 
-            # Update Active Operator Map (Using GLOBAL Personal Stats logic for consistency)
-            if is_session_active and uid:
-                op_full_name = nombres_operarios.get(uid, f"Operario {uid}")
-                obs = str(reg.get('observaciones') or "").strip()
-                oper = str(reg.get('operacion') or "").strip()
-                art = str(reg.get('articulod') or "").strip()
-                proc_val = obs or oper or "Produciendo"
-                
-                # Get Global Stats (up to N-1)
-                per_g = kpi_por_personal.get(uid, {
-                    'tiempo_operativo': 0.0, 'tiempo_paradas': 0.0, 'tiempo_cotizado': 0.0
-                })
-                
-                g_op = per_g.get('tiempo_operativo', 0.0)
-                g_stop = per_g.get('tiempo_paradas', 0.0)
-                g_std = per_g.get('tiempo_cotizado', 0.0)
-                
-                # Add Current Record Delta (N)
-                d_op = 0.0
-                d_stop = 0.0
-                d_std = 0.0
-                
-                if is_descanso or reg['es_interrupcion']:
-                    d_stop = duracion
-                else:
-                    d_op = duracion # Includes Repro
-                    
-                    # Std Delta Logic (Same as Personal KPI)
-                    if is_matriceria:
-                        d_std = duracion
-                    elif (qty > 0 or (is_armado and std_mins > 0)):
-                        # FIX: Permitir sumar estándar aun en ONLINE si hay cantidad/tiempos reales
-                        d_std = std_mins
-                    elif is_session_active and qty == 0:
-                        # Rendimiento Neutro si está empezando la pieza
-                        d_std = duracion
-                        
-                # Final Values
-                final_op = g_op + d_op
-                final_stop = g_stop + d_stop
-                final_std = g_std + d_std
-                
-                # Calc Performance
-                op_perf = 0
-                if final_op > 0.001:
-                    op_perf = (final_std / final_op) * 100.0
-
-                # Calc Availability
-                op_avail = 100.0
-                total_time = final_op + final_stop
-                if total_time > 0.001:
-                    op_avail = (final_op / total_time) * 100.0
-                    
-                # Sticky logic for operator's op_number
-                existing_op = data['active_operators'].get(op_full_name, {})
-                prev_op_num = str(existing_op.get('op_number', '---')).strip()
-                raw_id_orden = reg.get('id_orden')
-                
-                # Solo actualizamos si traemos una OP real, sino matenemos la anterior
-                final_op_num = prev_op_num
-                if raw_id_orden and str(raw_id_orden).strip() not in ['', '0', 'None', '---']:
-                    final_op_num = str(raw_id_orden).strip()
-
-                data['active_operators'][op_full_name] = {
-                    'process': proc_val,
-                    'article': art or "---",
-                    'perf': op_perf,
-                    'avail': op_avail,
-                    'uid': uid,
-                    'op_number': final_op_num
+        # 3. Lógica por Personal (Siempre se trackea si hay UID)
+        if uid and uid != 'None':
+            if uid not in kpi_por_personal:
+                kpi_por_personal[uid] = {
+                    'id_personal': uid, 'nombre_personal': nombres_operarios.get(uid, f"Operario {uid}"),
+                    'tiempo_operativo': 0.0, 'tiempo_paradas': 0.0, 'tiempo_cotizado': 0.0, 
+                    'cantidad_producida': 0.0, 'cantidad_rechazada': 0.0, 'latest_obs': '', 
+                    'latest_machine': '', 'current_order': '', 'articulos': {}, 'descanso_mins': 0.0,
+                    'latest_article': '---', 'has_matriceria': False, 'tiempo_excluido_mat': 0.0, 
+                    'has_any_obs': False, 'latest_is_active': False, 'audit_log': []
                 }
+            per = kpi_por_personal[uid]
+            reg_t = reg.get('hora_inicio') or reg.get('fecha')
             
+            if not is_descanso:
+                if not per.get('max_time') or (reg_t and per['max_time'] and reg_t >= per['max_time']):
+                    per['max_time'] = reg_t
+                    obs_raw = str(reg.get('observaciones') or "").strip()
+                    per['latest_obs'] = obs_raw.upper() if obs_raw else "TRABAJANDO"
+                    per['latest_is_active'] = is_session_active
+                    per['latest_machine'] = mid or ''
+                    if reg.get('id_orden') and str(reg['id_orden']).strip() not in ['', '0', 'None']:
+                        per['current_order'] = str(reg['id_orden'])
+                    art_n = (str(reg.get('articulod') or "").strip() or str(reg.get('operacion') or "").strip()).upper()
+                    if art_n: per['latest_article'] = art_n
+
             if is_descanso or reg['es_interrupcion']:
-                # El descanso y las interrupciones declaradas se cuentan como Parada
-                data['tiempo_paradas'] += duracion
-                global_downtime += duracion
-
-        # --- Lógica por Personal ---
-        # ATENCIÓN: En este ERP, el ID de la persona (legajo) viene en 'id_concepto',
-        # mientras que 'op_usuario' es la persona que cargó la orden (supervisor/administración).
-        uid = str(reg.get('id_concepto') or '').strip()
-        if not uid or uid == 'None':
-            uid = 'SIN IDENTIFICAR'
-            
-        if uid not in kpi_por_personal:
-            kpi_por_personal[uid] = {
-                'id_personal': uid,
-                'nombre_personal': nombres_operarios.get(uid, f"Operario {uid}"),
-                'tiempo_operativo': 0.0,
-                'tiempo_paradas': 0.0,
-                'tiempo_cotizado': 0.0,
-                'cantidad_producida': 0.0,
-                'cantidad_rechazada': 0.0,
-                'latest_obs': '',
-                'latest_machine': '',
-                'current_order': '',
-                'articulos': {}, # { nombre: {qty, std} }
-                'descanso_mins': 0.0,
-                'descanso_qty': 0.0,
-                'latest_article': '---',
-                'has_matriceria': False,
-                'tiempo_excluido_mat': 0.0,
-                'has_any_obs': False,
-                'audit_log': []
-            }
-        
-        per = kpi_por_personal[uid]
-        obs_val = str(reg.get('observaciones') or "").strip()
-        reg_time = reg.get('hora_inicio') or reg.get('fecha')
-
-        # Actualizar lo más reciente (que no sea descanso)
-        if not is_descanso:
-            if not per.get('max_time') or (reg_time and per['max_time'] and reg_time >= per['max_time']):
-                per['max_time'] = reg_time
-                per['latest_obs'] = (obs_val or "ONLINE").strip().upper()
-                per['latest_machine'] = mid or per.get('latest_machine', '')
-        
-        if is_descanso or reg['es_interrupcion']:
-            per['tiempo_paradas'] += duracion
-            if is_descanso: per['descanso_mins'] += duracion
-        else:
-            # Personal: Excluir Matricería del tiempo operativo productivo
-            # (El 'continue' global ya debería atraparlo, pero reforzamos aquí)
-            per['tiempo_operativo'] += duracion
-            per['cantidad_producida'] += qty
-            if is_valid_machine_prod and qty > 0:
-                per['tiempo_cotizado'] += std_mins
-                # Sticky for Personal order
-                new_p_order = reg.get('id_orden')
-                if new_p_order and str(new_p_order).strip() not in ['', 'None', '0']:
-                    per['current_order'] = new_p_order
-                
-                # Fallback: si no hay artículo, usamos el nombre de la operación
-                art_d = (str(reg.get('articulod') or "").strip() or str(reg.get('operacion') or "").strip()).upper()
-                if art_d:
-                    per['latest_article'] = art_d
-            elif not per.get('max_time'): # Si es el primero que vemos
-                per['max_time'] = reg_time
-                per['latest_obs'] = (obs_val or "ONLINE").strip().upper()
-                per['latest_machine'] = mid or per.get('latest_machine', '')
-                art_d = (str(reg.get('articulod') or "").strip() or str(reg.get('operacion') or "").strip()).upper()
-                if art_d:
-                    per['latest_article'] = art_d
-                per['current_order'] = reg['id_orden']
-        
-        if obs_val:
-            per['has_any_obs'] = True
-        h_inicio = reg.get('hora_inicio')
-        h_fin = reg.get('hora_fin')
-        intervalo = "--:--"
-        if h_inicio:
-            intervalo = h_inicio.strftime('%H:%M')
-            if h_fin:
-                intervalo += f" - {h_fin.strftime('%H:%M')}"
-
-        # Guardar en log (con fecha real para ordenar luego)
-        log_entry = {
-            'fecha_dt': reg_time,
-            'fecha': intervalo,
-            'maquina': mid or 'S/A',
-            'orden': reg['id_orden'] or '---',
-            'articulo': reg['articulod'][:30] if reg['articulod'] else 'Sin Artículo',
-            'tiempo': round(duracion, 1),
-            'std': round(std_mins, 1),
-            'cant': round(qty, 1),
-            'es_interrupcion': reg['es_interrupcion'] or is_descanso,
-            'obs': reg['observaciones'] or ''
-        }
-        if data:
-            data['audit_log'].append(log_entry)
-        per['audit_log'].append(log_entry)
-        
-        upers = kpi_por_personal[uid]
-        if is_repro:
-            upers['cantidad_rechazada'] += qty
-        elif is_descanso:
-            # No suma cantidad
-            pass
-        elif should_exclude_mat:
-            # REGLA SOLICITADA: EXCLUSIÓN DE MATRICERÍA
-            upers['tiempo_excluido_mat'] += duracion
-            upers['has_matriceria'] = True
-        else:
-            # Se permite sumar piezas aun en registros ONLINE si vienen con data
-            upers['cantidad_producida'] += qty
-            
-            # REGLA OEE Neutral para Personal
-            added_row_std_p = False
-            if is_other_neutral:
-                upers['tiempo_cotizado'] += duracion
-                added_row_std_p = True
+                per['tiempo_paradas'] += duracion
+                if is_descanso: per['descanso_mins'] += duracion
             else:
-                # FIX: Permitir estándar en ONLINE si hay piezas, o neutro si es sesión activa sin piezas
-                if qty > 0:
-                    upers['tiempo_cotizado'] += std_mins
-                    added_row_std_p = True
-                elif is_session_active and qty == 0:
-                    # Evitar el 0% al inicio de la jornada/orden
-                    upers['tiempo_cotizado'] += duracion
-                    added_row_std_p = True
-        
-        if is_descanso:
-            upers['tiempo_paradas'] += duracion
-            upers['descanso_mins'] += duracion
-            upers['descanso_qty'] += qty
-        elif reg['es_interrupcion']:
-            upers['tiempo_paradas'] += duracion
-        elif should_exclude_mat:
-            # Se cuenta por separado, no es operativo de serie ni parada
-            pass
-        else:
-            # Es TIEMPO OPERATIVO (Proceso o similar que no es parada)
-            upers['tiempo_operativo'] += duracion
-            # Sumar al detalle de artículos (para el total final que vea en el análisis)
-            art_name = str(reg.get('articulod') or "Sin Artículo").strip().upper()
-            if art_name not in upers['articulos']:
-                upers['articulos'][art_name] = {'qty': 0.0, 'std': 0.0}
-            upers['articulos'][art_name]['qty'] += qty
+                per['tiempo_operativo'] += duracion
             
-            # Agregamos al desglose solo lo que sumó al KPI para que sea consistente
-            if added_row_std_p:
-                if is_other_neutral:
-                    upers['articulos'][art_name]['std'] += duracion
-                else:
-                    upers['articulos'][art_name]['std'] += std_mins
+            # Cantidad y Estándar: Sincronización absoluta por personal (Total 385pz / 80.43hs)
+            per['cantidad_producida'] += qty
+            per['tiempo_cotizado'] += std_mins
+                
+            # Art detail
+            art_nm = str(reg.get('articulod') or "Sin Artículo").strip().upper()
+            if art_nm not in per['articulos']: per['articulos'][art_nm] = {'qty': 0.0, 'std': 0.0}
+            per['articulos'][art_nm]['qty'] += qty
+            per['articulos'][art_nm]['std'] += std_mins
+
+            # Audit Log
+            h_in = reg.get('hora_inicio')
+            h_out = reg.get('hora_fin')
+            ival = "--:--"
+            if h_in:
+                ival = h_in.strftime('%H:%M')
+                if h_out: ival += f" - {h_out.strftime('%H:%M')}"
+            
+            l_ent = {
+                'fecha_dt': reg_t, 'fecha': ival, 'maquina': mid or 'S/A', 'orden': reg['id_orden'] or '---',
+                'articulo': str(reg['articulod'])[:30] if reg['articulod'] else 'Sin Artículo',
+                'tiempo': round(duracion, 1), 'std': round(std_mins, 1), 'cant': round(qty, 1),
+                'es_interrupcion': reg['es_interrupcion'] or is_descanso, 'obs': reg['observaciones'] or ''
+            }
+            per['audit_log'].append(l_ent)
+            if not is_unassigned: data['audit_log'].append(l_ent)
+            if str(reg.get('observaciones') or "").strip(): per['has_any_obs'] = True
+
+    # REGLA DE EMERGENCIA: Forzar ONLINE desde la query directa (actual_online_ids)
+    # Esto soluciona problemas de orden de registros o de clasificación de matricería.
+    if is_viewing_today:
+        for mid_online in actual_online_ids:
+            if mid_online in kpi_por_maquina:
+                kpi_por_maquina[mid_online]['latest_is_active'] = True
+                kpi_por_maquina[mid_online]['is_found_online'] = True
 
     # POST-PROCESSING: Sincronizar KPIs del TOOLTIP DEL OPERARIO con sus KPIs Personales Globales
     # Esto asegura que el tooltip del ícono del operario muestre sus estadísticas reales del día.
@@ -869,6 +612,16 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
     dias_periodo = [fecha_target_start + datetime.timedelta(days=i) for i in range(delta.days + 1)]
 
     for mid, data in kpi_por_maquina.items():
+        # Calcular tiempo de inactividad (Idle)
+        idle_mins = 0
+        if data.get('latest_activity_time'):
+            last_act = data['latest_activity_time']
+            if not timezone.is_aware(last_act):
+                last_act = timezone.make_aware(last_act)
+            diff = timezone.now() - last_act
+            idle_mins = max(0, diff.total_seconds() / 60.0)
+        data['idle_mins'] = idle_mins
+
         t_op_hrs = data['tiempo_operativo'] / 60.0
         t_std_hrs = data['tiempo_cotizado'] / 60.0
         qty = data['cantidad_producida']
@@ -1010,6 +763,7 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             'is_session_open': data.get('latest_is_active', False),
             'is_currently_interrupted': data.get('latest_is_interrupcion', False),
             'is_producing_now': data.get('is_producing_now', False),
+            'idle_mins': data.get('idle_mins', 0),
             'audit_log': json.dumps(clean_log),
             'audit_log_list': clean_log # For backend scripts
         })
@@ -1060,9 +814,9 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         
         if t_disp_p < t_op_hrs: t_disp_p = t_op_hrs
         
-        # RESTAR TIEMPO EXCLUIDO (MATRICERÍA)
-        h_excl_mat_p = data.get('tiempo_excluido_mat', 0.0) / 60.0
-        t_disp_p = max(0.01, t_disp_p - h_excl_mat_p)
+        # El ERP no resta la matricería de la capacidad disponible para los totales del reporte
+        # h_excl_mat_p = data.get('tiempo_excluido_mat', 0.0) / 60.0
+        # t_disp_p = max(0.01, t_disp_p - h_excl_mat_p)
 
         if t_disp_p < 0.01: t_disp_p = 0.01
         
@@ -1173,6 +927,18 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         if not data['has_any_obs']:
             analysis_text += f"\n    <span class='text-sky-300 italic'>Nota: No se detectaron observaciones manuales en los registros para este periodo.</span>"
 
+        # Determinar el estado visual final del operario
+        status_display = data['latest_obs']
+        if not is_viewing_today:
+            # Para días pasados, el estado operativo siempre debe ser OFFLINE
+            status_display = "OFFLINE"
+        elif not data.get('latest_is_active'):
+            # Si es hoy pero la sesión ya terminó
+            status_display = "TERMINADO"
+        elif status_display == "TRABAJANDO":
+            # Si es hoy y está activo pero sin observaciones
+            status_display = "ONLINE"
+
         lista_kpis_personal.append({
             'id': uid,
             'name': f"{data['nombre_personal']} ({uid})",
@@ -1187,7 +953,7 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             'standard_time_formatted': format_time_display(t_std_hrs),
             'actual_time_formatted': format_time_display(t_op_hrs),
             'is_active_production': t_op_hrs > 0.001,
-            'last_reason': data['latest_obs'],
+            'last_reason': status_display,
             'last_machine': nombres_maquinas.get(data['latest_machine'], data['latest_machine'] or 'S/M'),
             'operator_name': data['nombre_personal'],
             'article_desc': data['latest_article'],
@@ -1247,25 +1013,30 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         h, mins = divmod(int(round(m_raw)), 60)
         return f"{h} hs {mins} min" if h > 0 else f"{mins} min"
 
-    # --- CORRECCIÓN FINAL: RESÚMENES LIMPIOS ---
+    # Preparar detalle de operarios sin asignar (Mantenemos disponible para los diccionarios)
+    unassigned_operators_list = []
+    for uid_ua, info_ua in active_unassigned_ops.items():
+        unassigned_operators_list.append({
+            'uid': uid_ua,
+            'name': info_ua['name'],
+            'task': info_ua['task'],
+            'op_number': info_ua.get('op_number', '---')
+        })
+    unassigned_operators_list.sort(key=lambda x: x['name'])
+
     # 1. Resumen para la Pestaña MÁQUNAS (Solo Máquinas Configuradas y Activas + Sin Asignar unificado)
     total_horas_std_maquinas = (global_planned_time_reg + unassigned_std) / 60.0 
     total_horas_prod_real_mq = max(0.01, (global_actual_time_reg + unassigned_time) / 60.0) 
     total_base_capacidad = max(total_horas_disp_reg, total_horas_prod_real_mq)
     
     if total_base_capacidad > 0:
-        # OEE: Cuántas horas estándar salieron de la capacidad total disponible/usada
         maquinas_oee = (total_horas_std_maquinas / total_base_capacidad) * 100.0
-        # Disponibilidad: Si se trabajó, la disponibilidad es el % de ocupación de esa capacidad
         maquinas_availability = (total_horas_prod_real_mq / total_base_capacidad) * 100.0
     else:
         maquinas_oee = maquinas_availability = 0.0
 
-    # Rendimiento Real (Productividad): Std / Real total trabajado
-    # Importante: total_horas_prod_real_mq ya incluye unassigned_time unificado
     maquinas_performance = (total_horas_std_maquinas / total_horas_prod_real_mq) * 100.0 if total_horas_prod_real_mq > 0 else 0.0
     
-    # Cantidad total unificada (87 de serie + 17 sin asignar + rechazo)
     total_piezas_produccion = global_actual_qty_reg + unassigned_qty
     total_piezas_mq = total_piezas_produccion + global_rejected_qty
     maquinas_quality = (total_piezas_produccion / total_piezas_mq * 100.0) if total_piezas_mq > 0 else 100.0
@@ -1280,12 +1051,12 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         'global_planned_formatted': fmt_mins_global(total_horas_disp_reg * 60),
         'global_actual_formatted': fmt_mins_global(total_horas_prod_real_mq * 60),
         'global_standard_formatted': fmt_mins_global(total_horas_std_maquinas * 60),
-        'global_actual_qty': round(total_piezas_produccion, 1),
+        'global_actual_qty': round(global_actual_qty_reg, 1), # Mostramos solo lo asignado aquí
         'global_rejected_qty': round(global_rejected_qty, 1),
         'global_total_qty': round(total_piezas_mq, 1),
-        'unassigned_qty': 0, # HIDDEN: Unificado arriba
-        'unassigned_time_formatted': "0 min",
-        'active_unassigned_list': [], # LIMPIAR para ocultar en template
+        'unassigned_qty': round(unassigned_qty, 1), 
+        'unassigned_time_formatted': fmt_mins_global(unassigned_time),
+        'active_unassigned_list': unassigned_operators_list,
     }
 
     # 2. Resumen para la Pestaña PERSONAL (Solo Personal Configurado)
@@ -1306,11 +1077,13 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         'global_planned_formatted': fmt_mins_global(total_hrs_disp_p * 60),
         'global_actual_formatted': fmt_mins_global(total_hrs_prod_p * 60),
         'global_standard_formatted': fmt_mins_global(total_hrs_std_p * 60),
-        'global_actual_qty': round(total_hrs_std_p / (perf_p/100) * (qual_p/100)) if perf_p > 0 else 0, # Aproximado
-        'global_actual_qty': round(global_actual_qty_reg, 1), 
+        'global_actual_qty': round(global_actual_qty_reg, 1), # Mostramos solo lo asignado para transparencia
         'global_rejected_qty': round(global_rejected_qty, 1),
         'global_total_qty': round(total_piezas_mq, 1),
         'active_count': len(lista_kpis_personal),
+        'unassigned_qty': round(unassigned_qty, 1), 
+        'unassigned_time_formatted': fmt_mins_global(unassigned_time),
+        'active_unassigned_list': unassigned_operators_list,
     }
 
     # --- NUEVOS DATOS PARA GRÁFICOS PROFESIONALES ---
@@ -1440,18 +1213,8 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         'cumulative': pareto_cumulative
     }
 
-    # Preparar detalle de operarios sin asignar
-    unassigned_operators_list = []
-    for uid, info in active_unassigned_ops.items():
-        unassigned_operators_list.append({
-            'uid': uid,
-            'name': info['name'],
-            'task': info['task'],
-            'op_number': info.get('op_number', '---')
-        })
-    
-    # Ordenar por nombre
-    unassigned_operators_list.sort(key=lambda x: x['name'])
+    # El detalle ya fue preparado arriba para ser incluido en los diccionarios de resumen
+    pass
 
     context = {
         'kpis': lista_kpis,
@@ -1768,8 +1531,8 @@ def obtener_auditoria(request):
         raw_op_d = str(reg_obj.operacion or "").strip().upper()
         raw_obs = str(reg_obj.observaciones or "").strip().upper()
 
-        non_prod_keywords = ['REPROCESO', 'RETRABAJO']
-        descanso_keywords = ['DESCANSO', 'ALMUERZO', 'PAUSA']
+        non_prod_keywords = ['REPROCESO', 'RETRABAJO', 'DESCARTE', 'SCRAP']
+        descanso_keywords = ['DESCANSO', 'ALMUERZO', 'PAUSA', 'PERSONAL', 'VACACIONES', 'LICENCIA']
         
         is_repro = (raw_id_op in non_prod_keywords or raw_op_d in non_prod_keywords or
                     any(k in raw_art_d for k in non_prod_keywords) or
@@ -1780,20 +1543,28 @@ def obtener_auditoria(request):
 
         # Lista Unificada de Tareas Especiales (Regla 1:1 - Eficiencia Neutra)
         # Sincronizado estrictamente con dashboard_produccion
-        special_audit_keywords = [
-            'MATRIC', 'MATRIZ', 'MATR.', 'TAREAS GENERALES', 'AJUSTES', 'REBABADO', 'GRABADO', 'ARMADO',
+        mat_audit_kws = ['MATRIC', 'MATRIZ', 'MATR.']
+        neutral_audit_kws = [
+            'TAREAS GENERALES', 'AJUSTES', 'REBABADO', 'GRABADO', 'ARMADO', 'ACCESORIOS',
             'CAPACI', 'CAPACIT', 'TENSI', 'TENSION', 'HERRAMIENTA', 'MANTEN', 'REPAR',
             'CORRECTIVO', 'PREVENTIVO', 'AJUST', 'SET-UP', 'SETUP', 'LIMPIEZA', 
             'REUNION', 'REUNIÓN', 'MATERIAL', 'ESPERA', 'ENSAYO', 'INSPEC', 'ASIST', 'AUXILIO'
         ]
         full_audit_text = f"{raw_art_d} {raw_op_d} {raw_obs} {raw_id_op}".upper()
-        is_matriceria = any(k in full_audit_text for k in special_audit_keywords)
+        
+        is_matriceria = any(k in full_audit_text for k in mat_audit_kws)
+        is_neutral = any(k in full_audit_text for k in neutral_audit_kws)
+        
+        # REGLA DE SEGURIDAD: Si tiene cantidad producida y un estándar válido, NO es tarea especial
+        if qty > 0 and std_mins > 0:
+            is_matriceria = False
+            is_neutral = False
         id_orden = reg_obj.id_orden
         
         this_std = std_mins
-        if is_matriceria:
+        if is_matriceria or is_neutral:
             this_std = duracion
-            if 'MATRICER' in raw_art_d or 'MATRICER' in raw_op_d:
+            if is_matriceria:
                 has_mat_audit = True
             else:
                 has_special_tasks = True
@@ -1823,10 +1594,12 @@ def obtener_auditoria(request):
                 # Pero sí se resta de la disponibilidad para no castigar el indicador
                 total_excluded_mat_mins += duracion
                 this_std = duracion # Para el visual del log
-                if 'MATRICER' in raw_art_d or 'MATRICER' in raw_op_d:
-                    has_mat_audit = True
-                else:
-                    has_special_tasks = True
+                has_mat_audit = True
+            elif is_neutral:
+                # Tareas Especiales (Armado, etc): Se INCLUYEN en el tiempo operativo
+                # para coincidir con el total bruto del ERP, pero usan Std=0 si no hay piezas.
+                this_std = 0
+                has_special_tasks = True
             elif qty > 0:
                 total_std_mins += std_mins
                 this_std = std_mins
@@ -1918,8 +1691,8 @@ def obtener_auditoria(request):
     analysis_detailed += f"    • Tiempo Fichado Turno: <span class='text-white font-bold'>{total_disp_mins/60.0:.2f} hs</span>\n\n"
     
     analysis_detailed += f"<span class='text-sky-400 font-bold uppercase'>2. CÁLCULO DE LA EFICIENCIA ({oee:.1f}%)</span>\n"
-    analysis_detailed += f"    • Disponibilidad ({availability:.1f}%): {total_prod_mins/60.0:.2f} hrs / {total_disp_mins/60.0:.2f} hrs.\n"
-    analysis_detailed += f"    • Rendimiento ({performance:.1f}%): {total_std_mins/60.0:.2f} hrs / {total_prod_mins/60.0:.2f} hrs.\n"
+    analysis_detailed += f"    • Disponibilidad ({availability:.1f}%): {(total_prod_mins_serie)/60.0:.2f} hrs trabajadas / {total_disp_mins_serie/60.0:.2f} hrs de turno.\n"
+    analysis_detailed += f"    • Rendimiento ({performance:.1f}%): {total_std_mins/60.0:.2f} hrs estándar / {total_prod_mins_serie/60.0:.2f} hrs operativas.\n"
     analysis_detailed += f"    • Calidad ({quality:.1f}%): {total_qty:.1f} buenas / {total_piezas_p:.1f} totales.\n"
     analysis_detailed += f"    • OEE Final: {oee:.1f}%.\n\n"
 
@@ -3194,16 +2967,9 @@ def plant_map(request):
                 active_ops_dict = {}
                 active_ops_list = []
 
-            # VÍNCULO DIRECTO CON EL TABLERO DE TARJETAS
-            # Relaxed Logic: Consider 'Online' if active session OR recent activity (< 20 mins)
-            idle_val = data.get('idle_mins', 999)
-            has_erp_session = data.get('is_online')
-            
-            # ZOMBIE CHECK proactivo: Si el ERP dice Online pero pasaron 60 mins sin actividad real, lo matamos.
-            if has_erp_session and idle_val > 60:
-                has_erp_session = False
-                
-            is_effectively_online = has_erp_session or (idle_val < 20.0)
+            # FUENTE ÚNICA DE VERDAD: El estado Online/Offline calculado en dashboard_produccion
+            # que usa la lógica de observaciones='ONLINE' y h_fin futuro.
+            is_effectively_online = data.get('is_online', False)
 
             # Prioridad de estados basados en el motivo
             reason_text = str(data.get('last_reason', '')).upper()
@@ -3238,10 +3004,9 @@ def plant_map(request):
             
             # 6. ONLINE SIN PRODUCCIÓN (Idle)
             elif is_effectively_online:
-                if 'ONLINE' in reason_text:
-                    status = 'RUNNING'
-                else:
-                    status = 'STOPPED'
+                # Si el sistema dice que está ONLINE, asumimos RUNNING a menos que 
+                # la observación diga explícitamente algo de espera/falla
+                status = 'RUNNING'
             
             # 7. DEFAULT: APAGADA
             else:

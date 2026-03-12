@@ -436,7 +436,7 @@
             <i class="fab fa-github"></i>
             <div>
                 <span class="block text-[8px] font-black text-amber-500 uppercase tracking-widest mb-1">Mirror Remoto</span>
-                <a href="https://github.com/CARsoftAR/tablerotoiempos.git" target="_blank">CARsoftAR/tablerotoiempos.git</a>
+                <a href="https://github.com/informesabbamat-hue/tablerotiempos.git" target="_blank">informesabbamat-hue/tablerotiempos.git</a>
             </div>
         </div>
         <div class="github-status">
@@ -522,11 +522,16 @@
                     <td>
                         <div class="flex gap-4">
                             {% if backup.archivo_db %}
-                            <button class="text-white/40 hover:text-amber-400 transition-colors" onclick="downloadBackup({{ backup.id }}, 'db')" title="Descargar DB">
-                                <i class="fas fa-download"></i>
+                            <button class="text-white/40 hover:text-amber-400 transition-colors" onclick="downloadBackup({{ backup.id }}, 'db')" title="Descargar BD (SQL)">
+                                <i class="fas fa-database"></i>
                             </button>
-                            <button class="text-white/40 hover:text-emerald-400 transition-colors" onclick="confirmRestore({{ backup.id }})" title="Restaurar Snapshot">
+                            <button class="text-white/40 hover:text-emerald-400 transition-colors" onclick="confirmRestore({{ backup.id }})" title="Restaurar BD">
                                 <i class="fas fa-undo"></i>
+                            </button>
+                            {% endif %}
+                            {% if backup.archivo_codigo %}
+                            <button class="text-white/40 hover:text-blue-400 transition-colors" onclick="downloadBackup({{ backup.id }}, 'codigo')" title="Descargar Sistema (ZIP)">
+                                <i class="fas fa-file-archive"></i>
                             </button>
                             {% endif %}
                             <button class="text-white/40 hover:text-rose-500 transition-colors" onclick="confirmDelete({{ backup.id }})" title="Eliminar Registro">

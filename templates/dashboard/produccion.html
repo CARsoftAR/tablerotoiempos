@@ -176,11 +176,11 @@
                 <a href="?date=today" class="px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 {% if is_today and not is_range %}bg-blue-500 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)]{% else %}text-slate-400 hover:text-white hover:bg-white/5{% endif %}">
                     <i class="fas fa-calendar-day"></i> Hoy
                 </a>
-                <a href="?date=yesterday" class="px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 {% if is_yesterday %}bg-white/10 text-white shadow-lg{% else %}text-slate-400 hover:text-white hover:bg-white/5{% endif %}">
+                <a href="?date=yesterday" class="px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 {% if is_yesterday and not is_range %}bg-blue-500 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)]{% else %}text-slate-400 hover:text-white hover:bg-white/5{% endif %}">
                     <i class="fas fa-history"></i> Ayer
                 </a>
                 <div class="relative">
-                    <button onclick="document.getElementById('range-form').classList.toggle('hidden')" class="px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 {% if is_range %}bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]{% else %}text-slate-400 hover:text-white hover:bg-white/5{% endif %}">
+                    <button onclick="document.getElementById('range-form').classList.toggle('hidden')" class="px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 {% if is_range %}bg-blue-500 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)]{% else %}text-slate-400 hover:text-white hover:bg-white/5{% endif %}">
                         <i class="fas fa-calendar-alt"></i> Intervalo
                     </button>
                     <div id="range-form" class="hidden absolute right-0 mt-3 glass-panel p-5 rounded-2xl shadow-3xl border border-white/10 z-[100] w-72">
@@ -382,7 +382,7 @@
         </div>
 
         <!-- Unassigned Card (Solo si hay datos sin agrupar) -->
-        {% if view_type == 'machines' and resumen.unassigned_qty > 0 %}
+        {% if resumen.unassigned_qty > 0 %}
         <div class="bg-slate-800 rounded-lg overflow-hidden border border-slate-700 shadow-xl border-t-amber-500/50 border-t-2">
             <div class="bg-amber-600/20 px-4 py-2 font-bold text-amber-500 tracking-wide flex justify-between items-center text-sm">
                 <span>Sin Asignar</span>

@@ -375,9 +375,27 @@ def sincronizar_github(request):
             check=True
         )
         
-        # 4. Git push
+        # 4. Crear un Tag (Etiqueta) para identificar este backup sin que sea "pisado" visualmente
+        timestamp_tag = datetime.now().strftime('%Y%m%d_%H%M%S')
+        tag_name = f"backup_{timestamp_tag}"
+        subprocess.run(
+            ['git', 'tag', tag_name],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        # 5. Git push a rama actual
         push_result = subprocess.run(
             ['git', 'push'],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        # 6. Git push de los tags
+        subprocess.run(
+            ['git', 'push', '--tags'],
             capture_output=True,
             text=True,
             check=True
