@@ -494,9 +494,15 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             else:
                 per['tiempo_operativo'] += duracion
             
-            # Cantidad y Estándar: Sincronización absoluta por personal (Total 385pz / 80.43hs)
+            # Cantidad y Estándar: Sincronización absoluta por personal
             per['cantidad_producida'] += qty
-            per['tiempo_cotizado'] += std_mins
+            
+            # RESTRICCIÓN DE AISLAMIENTO: Ajuste local para la vista de empleados
+            # Replicamos la lógica matemática estricta de "Métricas Técnicas OEE"
+            if is_neutral or qty <= 0:
+                per['tiempo_cotizado'] += 0.0
+            else:
+                per['tiempo_cotizado'] += (raw_std * 60.0)
                 
             # Art detail
             art_nm = str(reg.get('articulod') or "Sin Artículo").strip().upper()
