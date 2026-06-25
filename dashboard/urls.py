@@ -26,6 +26,7 @@ urlpatterns = [
     # Reportes y Auditoría General
     path('auditoria-cambios/', views.auditoria_cambios, name='auditoria_cambios'),
     path('generar-reporte-pdf/', views.generar_reporte_pdf, name='generar_reporte_pdf'),
+    path('exportar-csv/', views.exportar_reporte_csv, name='exportar_reporte_csv'),
     path('estadisticas/', views.estadisticas_avanzadas, name='estadisticas'),
     path('api/detalle-oee-dia/', views.detalle_oee_dia, name='detalle_oee_dia'),
     

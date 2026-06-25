@@ -57,11 +57,11 @@
     </div>
 
     <div class="kpi-box">
-        <span class="kpi-label">Eficiencia Global de Equipos (OEE)</span>
+        <span class="kpi-label">{% if is_individual %}Eficiencia OEE del Operario{% else %}Eficiencia Promedio de Planta{% endif %}</span>
         <strong>{{ global_oee }}%</strong>
     </div>
 
-    <h2>Top 5 Operarios (Más Eficientes)</h2>
+    <h2>{% if is_individual %}Detalle del Operario{% else %}Listado de Operarios (Top Eficiencia){% endif %}</h2>
     <table>
         <thead>
             <tr>
@@ -89,42 +89,37 @@
         </tbody>
     </table>
 
-    <h2>Top 5 Máquinas con Mayor Impacto (Baja Disponibilidad)</h2>
-    <table>
-        <thead>
-            <tr>
-                <th width="40%">Máquina</th>
-                <th width="20%" class="text-center">Disponibilidad</th>
-                <th width="40%">Última Actividad / Observación</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for m in top_downtime_machines %}
-            <tr>
-                <td>{{ m.name }}</td>
-                <td class="text-center {% if m.availability < 85 %}status-bad{% else %}status-good{% endif %}">
-                    {{ m.availability }}%
-                </td>
-                <td>
-                    <div style="font-size: 10px; font-weight: bold; color: #1e40af;">
-                        Tiempo Operativo: {{ m.actual_time_formatted }}
-                    </div>
-                    {% if m.last_reason %}
-                    <div style="font-size: 9px; color: #64748b; margin-top: 2px;">
-                        Última Obs: {{ m.last_reason|truncatechars:40 }}
-                    </div>
-                    {% else %}
-                    <div style="font-size: 9px; color: #94a3b8; margin-top: 2px; font-style: italic;">
-                        (Sin motivos de parada registrados)
-                    </div>
-                    {% endif %}
-                </td>
-            </tr>
-            {% empty %}
-            <tr><td colspan="3" class="text-center">No hay datos de máquinas activas para este periodo.</td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    {% if is_individual and top_operators %}
+    {% with op=top_operators.0 %}
+    <h2 style="margin-top: 30px;">Métricas Técnicas de Control y Auditoría</h2>
+    <div style="width: 100%; display: table; margin-top: 10px;">
+        <!-- Columna Izquierda -->
+        <div style="display: table-cell; width: 50%; padding-right: 10px;">
+            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 5px;">
+                <h3 style="color: #1e3a8a; font-size: 12px; margin-top: 0; margin-bottom: 10px; border-bottom: 1px solid #cbd5e1; padding-bottom: 5px;">Auditoría de Tiempos</h3>
+                <p style="margin: 5px 0;"><strong>Tiempo Fichado Turno:</strong> {{ op.horas_disp|floatformat:2 }} hs</p>
+                <p style="margin: 5px 0;"><strong>Tiempo Real Operativo:</strong> {{ op.horas_prod|floatformat:2 }} hs</p>
+                <p style="margin: 5px 0;"><strong>Tiempo Estándar Computado:</strong> {{ op.horas_std|floatformat:2 }} hs</p>
+            </div>
+        </div>
+        <!-- Columna Derecha -->
+        <div style="display: table-cell; width: 50%; padding-left: 10px;">
+            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 5px;">
+                <h3 style="color: #1e3a8a; font-size: 12px; margin-top: 0; margin-bottom: 10px; border-bottom: 1px solid #cbd5e1; padding-bottom: 5px;">Control de Producción y Calidad</h3>
+                <p style="margin: 5px 0;"><strong>Producción Total:</strong> {{ op.total_pz|floatformat:0 }} PZ</p>
+                <p style="margin: 5px 0;"><strong>Piezas Buenas / Aprobadas:</strong> {{ op.actual_qty|floatformat:0 }} PZ</p>
+                <p style="margin: 5px 0;"><strong>Detalle de Rendimiento:</strong> {{ op.horas_std|floatformat:2 }} hs / {{ op.horas_prod|floatformat:2 }} hs = <strong>{{ op.performance }}%</strong></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Banner -->
+    <div style="margin-top: 30px; text-align: center; background-color: {{ op.clasificacion_color }}; color: white; padding: 15px; font-size: 16px; font-weight: bold; border-radius: 5px;">
+        CLASIFICACIÓN DE TURNO: {{ op.clasificacion }}
+    </div>
+    {% endwith %}
+    {% endif %}
+
     
     <div id="footerContent" style="text-align:center; color:#94a3b8; font-size:9px;">
         Documento generado automáticamente por sistema Tablero de Tiempos ABBAMAT.

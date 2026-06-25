@@ -2131,37 +2131,54 @@ def generar_reporte_pdf(request):
     date_param = request.GET.get('date')
     start_param = request.GET.get('start_date')
     end_param = request.GET.get('end_date')
+    # Forzamos view personnel para aislar datos solo de empleados
+    request_copy = request.GET.copy()
+    request_copy['view'] = 'personnel'
+    request.GET = request_copy
     
     context = dashboard_produccion(request, return_context=True, force_date=date_param, force_start=start_param, force_end=end_param, force_format='clock')
+    
+    operario_id = request.GET.get('operario_id')
     
     if not isinstance(context, dict):
         return HttpResponse("Error al generar datos del reporte", status=500)
 
-    machines = context.get('cards_data', [])
     operators = context.get('kpis_personal', [])
+    if operario_id:
+        operators = [op for op in operators if str(op['id']) == str(operario_id)]
     
-    # Global OEE Average (Active Machines only)
-    active_machines = [m for m in machines if m['is_active_production']]
-    total_oee = sum([m['oee'] for m in active_machines])
-    count_active = len(active_machines)
+    # Global OEE Average (basado en el promedio de los operarios activos)
+    active_operators = [op for op in operators if op['is_active_production'] or op['horas_prod'] > 0]
+    total_oee = sum([op['oee'] for op in active_operators])
+    count_active = len(active_operators)
     global_oee = total_oee / count_active if count_active > 0 else 0
     
-    # Top 5 Operators (Dashboard logic sorts them by OEE descending already)
-    # But let's make sure
+    # Listado completo de Operarios (ordenado por OEE)
     operators_sorted = sorted(operators, key=lambda x: x['oee'], reverse=True)
-    top_operators = operators_sorted[:5]
     
-    # Top 5 Downtime Machines (Lowest Availability)
-    # Filter only those that had planned time (don't count unused machines as downtime)
-    machines_with_work = [m for m in machines if m['horas_std'] > 0 or m['horas_prod'] > 0]
-    top_downtime_machines = sorted(machines_with_work, key=lambda x: x['availability'])[:5]
+    for op in operators_sorted:
+        oee_val = float(op.get('oee', 0))
+        if oee_val >= 85:
+            op['clasificacion'] = "CLASE A / EXCELENTE"
+            op['clasificacion_color'] = "#059669"
+        elif oee_val >= 60:
+            op['clasificacion'] = "ESTÁNDAR"
+            op['clasificacion_color'] = "#d97706"
+        else:
+            op['clasificacion'] = "CRÍTICO / A REVISAR"
+            op['clasificacion_color'] = "#dc2626"
+            
+        avail = op.get('availability', 0.0)
+        prod = op.get('horas_prod', 0.0)
+        op['horas_disp'] = round(prod / (avail / 100 + 0.0001), 2) if avail > 0 else 0.0
+        op['total_pz'] = op.get('actual_qty', 0) + op.get('rejected_qty', 0)
+
     
     pdf_context = {
         'fecha': context.get('fecha_target'),
         'global_oee': round(global_oee, 2),
-        'top_operators': top_operators,
-        'top_downtime_machines': top_downtime_machines,
-        'machines': machines, # Full list
+        'top_operators': operators_sorted,
+        'is_individual': bool(operario_id),
     }
     
     template_path = 'dashboard/reporte_pdf.html'
@@ -3500,4 +3517,69 @@ def chat_ia_api(request):
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
     return JsonResponse({'status': 'error', 'message': 'Solo peticiones POST'}, status=405)
+
+
+import csv
+from django.http import HttpResponse
+
+def exportar_reporte_csv(request):
+    # Forzar vista de personal para obtener kpis_personal y aislar del mapa o maquinas
+    request_copy = request.GET.copy()
+    request_copy['view'] = 'personnel'
+    request.GET = request_copy
+    
+    operario_id = request.GET.get('operario_id')
+    
+    context = dashboard_produccion(request, return_context=True)
+    cards_data = context.get('kpis_personal', [])
+    if operario_id:
+        cards_data = [op for op in cards_data if str(op['id']) == str(operario_id)]
+    
+    response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+    response['Content-Disposition'] = 'attachment; filename="reporte_tiempos_operarios.csv"'
+    
+    writer = csv.writer(response, delimiter=';')
+    writer.writerow([
+        'Legajo / ID', 'Nombre Operario', 'Puesto', 'Estado Actual',
+        'Tiempo Fichado Turno (hs)', 'Tiempo Real Operativo (hs)', 'Tiempo Estandar Computado (hs)',
+        'Disponibilidad (%)', 'Rendimiento (%)', 'Calidad (%)', 'OEE Final (%)',
+        'Produccion Total (PZ)', 'Clasificacion de Turno'
+    ])
+    
+    for item in cards_data:
+        uid = item.get('id', '')
+        nombre = item.get('operator_name', '')
+        puesto = item.get('last_machine', 'SIN ASIGNAR')
+        if not puesto or puesto == 'S/M': puesto = 'SIN ASIGNAR'
+        estado = item.get('last_reason', 'OFFLINE')
+        
+        oee = float(item.get('oee', 0))
+        clasificacion = "CRÍTICO"
+        if oee >= 85:
+            clasificacion = "ESTÁNDAR" # Wait, the user said "CRÍTICO, ESTÁNDAR, A REVISAR", maybe I use EXCELENTE too.
+            clasificacion = "CLASE A / EXCELENTE"
+        elif oee >= 60:
+            clasificacion = "ESTÁNDAR"
+        else:
+            clasificacion = "CRÍTICO / A REVISAR"
+            
+        disp = round(item.get('horas_prod', 0) / (item.get('availability', 100) / 100 + 0.0001), 2) if item.get('availability', 0) > 0 else 0.0
+            
+        writer.writerow([
+            uid,
+            nombre,
+            puesto,
+            estado,
+            disp,
+            round(item.get('horas_prod', 0.0), 2),
+            round(item.get('horas_std', 0.0), 2),
+            item.get('availability', 0.0),
+            item.get('performance', 0.0),
+            item.get('quality', 0.0),
+            item.get('oee', 0.0),
+            item.get('actual_qty', 0.0),
+            clasificacion
+        ])
+        
+    return response
 
