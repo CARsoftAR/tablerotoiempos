@@ -1,69 +1,32 @@
 @echo off
-setlocal
-:: ============================================================
-::      ABBAMAT - TABLERO DE PRODUCCION (8000)
-:: ============================================================
-:: Este archivo inicia el Tablero de Produccion en el puerto 8000
-:: ============================================================
+title Servidor Django ABBAMAT - Puerto 8005
+color 0b
 
-:: RUTA DEL PROYECTO
-set "PROJECT_DIR=C:\Sistemas ABBAMAT\tablerotoiempos"
+:: 1. Definir la ruta del proyecto
+set RUTA="C:\Sistemas ABBAMAT\planificacionProcesosProductivos EN DESARROLLO"
 
-title TABLERO PRODUCCION - ABBAMAT
-mode con: cols=100 lines=30
-color 0E
+:: 2. Entrar a la carpeta del proyecto
+cd /d %RUTA%
 
-echo.
-echo  ============================================================
-echo      SISTEMA TABLERO DE PRODUCCION - INICIO RAPIDO
-echo  ============================================================
+echo =====================================================
+echo    INICIANDO SERVIDOR Y CARGANDO SISTEMA
+echo =====================================================
 echo.
 
-:: Verificar si el directorio existe
-if not exist "%PROJECT_DIR%" (
-    echo  [!] ERROR: No se encontro la carpeta en:
-    echo      "%PROJECT_DIR%"
-    echo.
-    echo  Presiona una tecla para salir...
-    pause >nul
-    exit /b
-)
-
-:: Cambiar al directorio
-cd /d "%PROJECT_DIR%"
-
-:: 1. Intentar cerrar cualquier proceso previo en el puerto 8000
-echo  [1/3] Limpiando puerto 8000...
-for /f "tokens=5" %%a in ('netstat -aon ^| findstr :1000 ^| findstr LISTENING') do taskkill /f /pid %%a >nul 2>&1
-
-:: 2. Preparar el navegador (esperar 5 segundos antes de abrir)
-echo  [2/3] El navegador se abrira en 5 segundos...
-start /b cmd /c "timeout /t 5 /nobreak >nul && start http://localhost:8000"
-
-:: 3. Iniciar el servidor
-echo  [3/3] Iniciando servidor Django...
-echo.
-echo  ------------------------------------------------------------
-echo   IMPORTANTE: 
-echo   - Si ves otra ventana de "Tablero Online" abierta, cierrala.
-echo   - Este sistema usa el puerto 8000.
-echo   - No cierres esta ventana.
-echo  ------------------------------------------------------------
-echo.
-
-:: Verificar entorno virtual
+:: 3. Activar Entorno Virtual
 if exist "venv\Scripts\activate.bat" (
+    echo [OK] Activando entorno virtual...
     call venv\Scripts\activate.bat
 )
 
-:: Ejecutar
-python manage.py runserver 0.0.0.0:8000
+:: 4. Abrir el navegador en segundo plano (esperamos 5 segundos por seguridad)
+echo [OK] Preparando apertura en http://192.168.88.47:8005...
+start /b cmd /c "timeout /t 5 >nul && start http://192.168.88.47:8005"
 
-if %ERRORLEVEL% neq 0 (
-    echo.
-    echo  [!] ERROR CRITICO: No se pudo iniciar el servidor.
-    echo      Verifica que Python este instalado y las librerias cargadas.
-    pause
-)
+:: 5. Ejecutar el servidor de Django 
+echo [OK] Lanzando servidor en MODO RED (0.0.0.0)...
+echo Presiona Ctrl+C para detener el servidor.
+echo.
 
-pause
+:: 🛑 CAMBIO CLAVE: Agregamos 0.0.0.0: para permitir conexiones por IP de red 🛑
+python manage.py runserver 0.0.0.0:8005
