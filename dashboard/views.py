@@ -273,11 +273,17 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         # CONFIRMADO POR DIAGNÓSTICO: tiempo_cotizado SIEMPRE está en HORAS en la DB.
         # MAC40: raw=4.136 hs -> 248 min (ERP dice 4.14 hs = 248 min) ✓
         # MAC18: raw=6.300 hs -> 378 min (ERP dice 6.00 hs)            ✓
-        # MAC38: raw en hs, multiplicar siempre por 60 para convertir a minutos.
         raw_art_d = str(reg.get('articulod') or '').upper()
         raw_op_d = str(reg.get('operacion') or '').upper()
         raw_obs = str(reg.get('observaciones') or '').upper()
         std_mins = raw_std * 60.0  # SIEMPRE en horas → convertir a minutos
+
+        # PARSEO FLEXIBLE DE OPERARIO ("47 RODRIGUEZ, LUCAS")
+        raw_op_usuario = str(reg.get('op_usuario') or '').strip()
+        if raw_op_usuario and (not uid or uid == 'None' or uid not in nombres_operarios):
+            parts = raw_op_usuario.split()
+            if parts and parts[0].isdigit():
+                uid = parts[0]
 
         
         # Identificar Reproceso o tareas que no deben sumar a Cantidad Real
@@ -354,11 +360,22 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             if mid and mid in kpi_por_maquina:
                 kpi_por_maquina[mid]['has_matriceria'] = True
                 kpi_por_maquina[mid]['tiempo_excluido_mat'] += duracion
+                
                 if is_session_active:
                     kpi_por_maquina[mid]['is_found_online'] = True
                     kpi_por_maquina[mid]['latest_is_active'] = True
-                    kpi_por_maquina[mid]['latest_obs'] = "MATRICERIA"
-            
+                    
+                    # Guardar proceso real en vez de sobreescribir con MATRICERIA genérico
+                    kpi_por_maquina[mid]['latest_obs'] = raw_op_d if raw_op_d else "MATRICERIA"
+                    
+                    # Mapear operario y OP correctamente para evitar S/A
+                    if uid: 
+                        kpi_por_maquina[mid]['latest_operator'] = nombres_operarios.get(uid, raw_op_usuario if raw_op_usuario else f"Operario {uid}")
+                    if raw_art_d:
+                        kpi_por_maquina[mid]['latest_article'] = raw_art_d
+                    if reg.get('id_orden') and str(reg['id_orden']).strip() not in ['', '0', 'None', '---']:
+                        kpi_por_maquina[mid]['current_order'] = str(reg['id_orden']).strip()
+                        
             # SALTO CRÍTICO: No procesar para OEE ni para Personal
             continue
         
@@ -549,23 +566,54 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 p_par = per_stats['tiempo_paradas']
                 p_cot = per_stats['tiempo_cotizado']
                 
-                # Calcular Disponibilidad Global del Operario
-                if p_par < 0.001:
-                    p_par = per_stats.get('descanso_mins', 0.0)
+                # Calcular KPIs con las mismas fórmulas del desglose interno
+                t_op_hrs = p_op / 60.0
+                t_std_hrs = p_cot / 60.0
+                qty = per_stats.get('cantidad_producida', 0.0)
+                rech = per_stats.get('cantidad_rechazada', 0.0)
+                
+                t_disp_p = 0.0
+                current_now = timezone.now()
+                delta_p = fecha_target_end - fecha_target_start
+                dias_periodo_p = [fecha_target_start + datetime.timedelta(days=i) for i in range(delta_p.days + 1)]
+                
+                for d in dias_periodo_p:
+                    start_h = 7.0 # Default start 07:00
+                    end_h = 16.0  # Default end 16:00 (9hs shift)
+                    
+                    if is_viewing_today and d == today_date:
+                        now_local = timezone.localtime(current_now)
+                        now_dec = now_local.hour + now_local.minute/60.0
+                        if now_dec < start_h: t_disp_p += 0.0
+                        elif now_dec > end_h: t_disp_p += (end_h - start_h)
+                        else: t_disp_p += (now_dec - start_h)
+                    else:
+                        t_disp_p += (end_h - start_h)
+                
+                if t_disp_p < t_op_hrs: t_disp_p = t_op_hrs
+                if t_disp_p < 0.01: t_disp_p = 0.01
 
-                p_avail = 100.0
-                p_total = p_op + p_par
-                if p_total > 0.001:
-                    p_avail = (p_op / p_total) * 100.0
+                p_avail = (t_op_hrs / t_disp_p) * 100.0 if t_disp_p > 0 else 0.0
+                p_perf = (t_std_hrs / t_op_hrs) * 100.0 if t_op_hrs > 0 else 0.0
+                total_p = qty + rech
+                p_qual = (qty / total_p * 100.0) if total_p > 0 else 100.0
+                p_oee = (p_avail * p_perf * p_qual) / 10000.0
                 
-                # Calcular Rendimiento Global del Operario
-                p_perf = 0.0
-                if p_op > 0.001:
-                    p_perf = (p_cot / p_op) * 100.0
+                # Actualizar SOLO el diccionario del operario (para su tooltip de ícono y Card exterior)
+                op_info['avail'] = round(p_avail, 2)
+                op_info['perf'] = round(p_perf, 2)
+                op_info['oee'] = round(p_oee, 2)
+                op_info['quality'] = round(p_qual, 2)
                 
-                # Actualizar SOLO el diccionario del operario (para su tooltip de ícono)
-                op_info['avail'] = p_avail
-                op_info['perf'] = p_perf
+                # --- NUEVAS VARIABLES ESPEJO SOLICITADAS ---
+                op_info['oee_real'] = round(p_oee, 1)
+                op_info['rend_real'] = round(p_perf, 1)
+                
+                # Datos crudos para cálculo en vivo en JS
+                op_info['tiempo_estandar_computado'] = round(t_std_hrs, 4)
+                op_info['tiempo_real_operativo'] = round(t_op_hrs, 4)
+                op_info['disponibilidad'] = round(p_avail / 100.0, 4) if t_disp_p > 0 else 0
+                op_info['calidad'] = round(p_qual / 100.0, 4) if total_p > 0 else 1.0
                 
                 # Sincronizar OP: Prioridad 1 Personal, Prioridad 2 Máquina
                 op_val = str(per_stats.get('current_order', '---')).strip()
@@ -660,17 +708,18 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 else:
                     t_disp_periodo += full_shift_hrs
 
-        # NOTA: h_excl_mat ya NO se resta del t_disp_periodo para que el TURNO sea la base.
-        # t_disp_periodo = max(0.01, t_disp_periodo - h_excl_mat)
+        # REGLA DE EXCLUSIÓN EN DISPONIBILIDAD (Sincronizado con obtener_auditoria)
+        h_excl_mat = data.get('tiempo_excluido_mat', 0.0) / 60.0
+        t_disp_p_serie = max(0.01, t_disp_periodo - h_excl_mat)
         
         # Tiempo SERIE = ya viene filtrado en el loop principal (no incluye matricería)
         series_t_op_hrs = t_op_hrs
         
         # Capeo al turno: ninguna máquina puede estar "más disponible" que su turno
-        t_op_hrs_capped = min(series_t_op_hrs, t_disp_periodo)
+        t_op_hrs_capped = min(series_t_op_hrs, t_disp_p_serie)
 
         # KPIs de la MÁQUINA
-        availability = (t_op_hrs_capped / t_disp_periodo) * 100.0 if t_disp_periodo > 0 else 0.0
+        availability = (t_op_hrs_capped / t_disp_p_serie) * 100.0 if t_disp_p_serie > 0 else 0.0
         # RENDIMIENTO REAL: Productividad de las horas trabajadas (incluyendo extras) 
         # std_tot / real_serie_tot (49hs en el ejemplo)
         performance = (t_std_hrs / series_t_op_hrs) * 100.0 if series_t_op_hrs > 0 else 0.0
@@ -809,15 +858,14 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 t_disp_p += (end_h - start_h)
         
         if t_disp_p < t_op_hrs: t_disp_p = t_op_hrs
+        # REGLA DE EXCLUSIÓN EN DISPONIBILIDAD (Sincronizado con obtener_auditoria)
+        h_excl_mat_p = data.get('tiempo_excluido_mat', 0.0) / 60.0
         
-        # El ERP no resta la matricería de la capacidad disponible para los totales del reporte
-        # h_excl_mat_p = data.get('tiempo_excluido_mat', 0.0) / 60.0
-        # t_disp_p = max(0.01, t_disp_p - h_excl_mat_p)
+        t_disp_p_serie = max(0.01, t_disp_p - h_excl_mat_p)
+        t_op_hrs_serie = max(0.0, t_op_hrs - h_excl_mat_p)
 
-        if t_disp_p < 0.01: t_disp_p = 0.01
-        
-        availability = (t_op_hrs / t_disp_p) * 100.0 if t_disp_p > 0 else 0.0
-        performance = (t_std_hrs / t_op_hrs) * 100.0 if t_op_hrs > 0 else 0.0
+        availability = (t_op_hrs_serie / t_disp_p_serie) * 100.0 if t_disp_p_serie > 0 else 0.0
+        performance = (t_std_hrs / t_op_hrs_serie) * 100.0 if t_op_hrs_serie > 0 else 0.0
         total_p = qty + data['cantidad_rechazada']
         quality = (qty / total_p * 100.0) if total_p > 0 else 100.0
         oee = (availability * performance * quality) / 10000.0
@@ -942,6 +990,8 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             'availability': round(availability, 2),
             'performance': round(performance, 2),
             'quality': round(quality, 2),
+            'oee_real': round(oee, 1),
+            'rend_real': round(performance, 1),
             'horas_std': t_std_hrs,
             'horas_prod': t_op_hrs,
             'actual_qty': qty,
@@ -1012,13 +1062,19 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         return f"{h} hs {mins} min" if h > 0 else f"{mins} min"
 
     # Preparar detalle de operarios sin asignar (Mantenemos disponible para los diccionarios)
+    kpis_pers_dict = {str(item['id']): item for item in lista_kpis_personal}
+
     unassigned_operators_list = []
     for uid_ua, info_ua in active_unassigned_ops.items():
+        pers_kpi = kpis_pers_dict.get(str(uid_ua), {})
         unassigned_operators_list.append({
             'uid': uid_ua,
             'name': info_ua['name'],
             'task': info_ua['task'],
-            'op_number': info_ua.get('op_number', '---')
+            'op_number': info_ua.get('op_number', '---'),
+            'oee': pers_kpi.get('oee', 0.0),
+            'perf': pers_kpi.get('performance', 0.0),
+            'avail': pers_kpi.get('availability', 0.0)
         })
     unassigned_operators_list.sort(key=lambda x: x['name'])
 
@@ -1233,6 +1289,97 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         'pareto_data': json.dumps(pareto_data),
         'unassigned_operators': unassigned_operators_list
     }
+    # === APLICAR CÁLCULO ROBUSTO EXACTO DEL REPORTE INTERNO (D=A) ===
+    start_str = fecha_target_start.strftime('%Y-%m-%d')
+    end_str = fecha_target_end.strftime('%Y-%m-%d')
+    
+    for item in context['cards_data']:
+        uid_val = str(item['id'])
+        registros_raw = VTMan.objects.extra(
+            where=["CONVERT(date, FECHA) >= %s AND CONVERT(date, FECHA) <= %s"],
+            params=[start_str, end_str]
+        )
+        if view_type == 'personnel':
+            registros_raw = registros_raw.filter(id_concepto__contains=uid_val)
+        else:
+            registros_raw = registros_raw.filter(id_maquina=uid_val)
+            
+        total_std_mins = 0.0
+        total_prod_mins = 0.0
+        total_qty = 0.0
+        total_rejected_qty = 0.0
+        total_excluded_mat_mins = 0.0
+        
+        for reg_obj in registros_raw:
+            duracion = reg_obj.tiempo_minutos or 0.0
+            qty = reg_obj.cantidad_producida or 0.0
+            std_mins = (reg_obj.tiempo_cotizado or 0.0) * 60.0
+            
+            raw_id_op = str(reg_obj.id_operacion or "").strip().upper()
+            raw_art_d = str(reg_obj.articulod or "").upper()
+            raw_op_d = str(reg_obj.operacion or "").strip().upper()
+            raw_obs = str(reg_obj.observaciones or "").strip().upper()
+            
+            non_prod_keywords = ['REPROCESO', 'RETRABAJO', 'DESCARTE', 'SCRAP']
+            descanso_keywords = ['DESCANSO', 'ALMUERZO', 'PAUSA', 'PERSONAL', 'VACACIONES', 'LICENCIA']
+            is_repro = (raw_id_op in non_prod_keywords or raw_op_d in non_prod_keywords or any(k in raw_art_d for k in non_prod_keywords) or any(k in raw_obs for k in non_prod_keywords))
+            is_descanso = (raw_op_d in descanso_keywords or any(k in raw_art_d for k in descanso_keywords) or any(k in raw_obs for k in descanso_keywords))
+            
+            mat_audit_kws = ['MATRIC', 'MATRIZ', 'MATR.']
+            neutral_audit_kws = ['TAREAS GENERALES', 'AJUSTES', 'REBABADO', 'GRABADO', 'ARMADO', 'ACCESORIOS', 'CAPACI', 'CAPACIT', 'TENSI', 'TENSION', 'HERRAMIENTA', 'MANTEN', 'REPAR', 'CORRECTIVO', 'PREVENTIVO', 'AJUST', 'SET-UP', 'SETUP', 'LIMPIEZA', 'REUNION', 'REUNIÓN', 'MATERIAL', 'ESPERA', 'ENSAYO', 'INSPEC', 'ASIST', 'AUXILIO']
+            full_audit_text = f"{raw_art_d} {raw_op_d} {raw_obs} {raw_id_op}".upper()
+            
+            is_matriceria = any(k in full_audit_text for k in mat_audit_kws)
+            is_neutral = any(k in full_audit_text for k in neutral_audit_kws)
+            if qty > 0 and std_mins > 0:
+                is_matriceria = False
+                is_neutral = False
+                
+            if is_repro:
+                total_rejected_qty += qty
+            elif not is_descanso:
+                total_qty += qty
+                if is_matriceria:
+                    total_excluded_mat_mins += duracion
+                elif is_neutral:
+                    pass
+                elif qty > 0:
+                    total_std_mins += std_mins
+            
+            if not is_descanso and not reg_obj.es_interrupcion:
+                total_prod_mins += duracion
+                
+        now_arg = timezone.localtime(timezone.now())
+        d1 = fecha_target_start
+        is_viewing_today = (d1 == now_arg.date())
+        if is_viewing_today:
+            sh, eh = 7.0, 16.0
+            now_dec = now_arg.hour + now_arg.minute / 60.0
+            if now_dec < sh: total_disp_mins = 0.01
+            elif now_dec > eh: total_disp_mins = (eh - sh) * 60.0
+            else: total_disp_mins = (now_dec - sh) * 60.0
+        else:
+            total_disp_mins = 9 * 60.0
+            
+        if total_disp_mins < (total_prod_mins - total_excluded_mat_mins): 
+            total_disp_mins = (total_prod_mins - total_excluded_mat_mins)
+            
+        total_disp_mins_serie = max(0.01, total_disp_mins - total_excluded_mat_mins)
+        total_prod_mins_serie = max(0, total_prod_mins - total_excluded_mat_mins)
+        
+        availability_real = (total_prod_mins_serie / total_disp_mins_serie * 100) if total_disp_mins_serie > 0 else 0
+        performance_real = (total_std_mins / total_prod_mins_serie * 100) if total_prod_mins_serie > 0 else 0
+        total_piezas_p = total_qty + total_rejected_qty
+        quality_real = (total_qty / total_piezas_p * 100.0) if total_piezas_p > 0 else 100.0
+        oee_real = (availability_real * performance_real * quality_real) / 10000.0
+        
+        item['performance'] = round(performance_real, 1)
+        item['oee'] = round(oee_real, 1)
+        item['rend_real'] = round(performance_real, 1)
+        item['oee_real'] = round(oee_real, 1)
+        item['availability'] = round(availability_real, 1)
+    # =============================================================
+
     if return_context:
         return context
     return render(request, 'dashboard/produccion.html', context)
@@ -2176,6 +2323,8 @@ def generar_reporte_pdf(request):
     
     pdf_context = {
         'fecha': context.get('fecha_target'),
+        'fecha_fin': context.get('fecha_fin_target'),
+        'is_range': context.get('is_range', False),
         'global_oee': round(global_oee, 2),
         'top_operators': operators_sorted,
         'is_individual': bool(operario_id),
@@ -3093,8 +3242,9 @@ def plant_map(request):
             'process': u_op.get('task', '---'),
             'article': 'TAREA GENERAL / VARIOS',
             'op_number': u_op.get('op_number', '---'),
-            'perf': 0,
-            'avail': 0,
+            'perf': u_op.get('perf', 0.0),
+            'avail': u_op.get('avail', 0.0),
+            'oee': u_op.get('oee', 0.0),
         })
     
     # Ordenar por nombre

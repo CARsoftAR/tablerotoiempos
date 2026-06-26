@@ -1649,7 +1649,7 @@
                                 {% for op_name, op_info in m.active_operators %}
                                  <div class="operator-indicator" 
                                       style="z-index: {{ 100|add:forloop.counter0 }}; cursor: pointer;" 
-                                      onmousemove="showOperatorTooltip(event, '{{ op_name }}', '{{ op_info.process }}', '{{ op_info.article }}', '{{ op_info.perf|floatformat:2 }}', '{{ op_info.avail|floatformat:2 }}', '{{ op_info.op_number }}')"
+                                     onmousemove="showOperatorTooltip(event, '{{ op_name|escapejs }}', '{{ op_info.process|escapejs }}', '{{ op_info.article|escapejs }}', '{{ op_info.tiempo_estandar_computado|default:\'0\' }}', '{{ op_info.tiempo_real_operativo|default:\'0\' }}', '{{ op_info.disponibilidad|default:\'0\' }}', '{{ op_info.calidad|default:\'1\' }}', '{{ op_info.op_number|escapejs }}')"
                                       onmouseleave="hideTooltip(event)"
                                       onclick="copyToClipboard('{{ op_info.op_number }}', event)">
                                     <i class="fa-solid fa-user-check"></i>
@@ -1979,8 +1979,14 @@
                     </button>
                     {% endif %}
                 </div>
-                {% if op.perf > 0 or op.avail > 0 %}
+                {% if op.oee > 0 or op.perf > 0 or op.avail > 0 %}
                 <div style="display: flex; gap: 10px; margin-top: 6px; font-size: 10px;">
+                    {% if op.oee > 0 %}
+                    <div style="flex: 1;">
+                        <span style="color: #94a3b8;">OEE:</span>
+                        <span style="color: #059669; font-weight: 700;">{{ op.oee|floatformat:1 }}%</span>
+                    </div>
+                    {% endif %}
                     {% if op.perf > 0 %}
                     <div style="flex: 1;">
                         <span style="color: #94a3b8;">Rend:</span>
@@ -2272,15 +2278,43 @@
                 const reason = marker.getAttribute('data-reason');
                 const detail = marker.getAttribute('data-detalle') || '';
                 const operator = marker.getAttribute('data-operario');
-                const oee = marker.getAttribute('data-oee');
-                const perf = marker.getAttribute('data-performance');
-                const avail = marker.getAttribute('data-availability');
+                const oeeAttr = marker.getAttribute('data-oee');
+                const perfAttr = marker.getAttribute('data-performance');
+                const availAttr = marker.getAttribute('data-availability');
                 const qty = marker.getAttribute('data-qty');
                 
                 const boxId = marker.getAttribute('data-id');
-                // Lookup ops from global safe object (solo para referencia, no para override)
                 let activeOps = machineOperatorsData[boxId] || [];
 
+                // ─── CARD EXTERIOR: espejo directo desde Backend ───
+                var operarioObj = { oee_real: "0.0", rend_real: "0.0", disp_real: "0.0" };
+
+                if (activeOps.length > 0) {
+                    var opFirst = activeOps[0];
+                    operarioObj.oee_real = opFirst.oee_real !== undefined ? parseFloat(opFirst.oee_real).toFixed(1) : "0.0";
+                    operarioObj.rend_real = opFirst.rend_real !== undefined ? parseFloat(opFirst.rend_real).toFixed(1) : "0.0";
+                    var dispVal = parseFloat(opFirst.disponibilidad) || 0;
+                    operarioObj.disp_real = (dispVal <= 1.0 ? dispVal * 100 : dispVal).toFixed(1);
+                } else {
+                    var activeOpsAttr = marker.getAttribute('data-active-ops');
+                    var activeOpsFromAttr = [];
+                    try { activeOpsFromAttr = JSON.parse(activeOpsAttr || '[]'); } catch(e) { activeOpsFromAttr = []; }
+
+                    if (activeOpsFromAttr.length > 0) {
+                        var opFirst = activeOpsFromAttr[0];
+                        operarioObj.oee_real = opFirst.oee_real !== undefined ? parseFloat(opFirst.oee_real).toFixed(1) : "0.0";
+                        operarioObj.rend_real = opFirst.rend_real !== undefined ? parseFloat(opFirst.rend_real).toFixed(1) : "0.0";
+                        var dispVal = parseFloat(opFirst.disponibilidad) || 0;
+                        operarioObj.disp_real = (dispVal <= 1.0 ? dispVal * 100 : dispVal).toFixed(1);
+                    } else {
+                        var perfNum = parseFloat(perfAttr) || 0;
+                        var availNum = parseFloat(availAttr) || 0;
+                        var oeeNum = parseFloat(oeeAttr) || 0;
+                        operarioObj.rend_real = perfNum > 0 ? perfNum.toFixed(1) : "0.0";
+                        operarioObj.disp_real = availNum > 0 ? availNum.toFixed(1) : "0.0";
+                        operarioObj.oee_real = oeeNum > 0 ? oeeNum.toFixed(1) : "0.0";
+                    }
+                }
 
                 let displayStatus = status;
                 if (status === 'RUNNING') displayStatus = 'ONLINE / PRODUCCIÓN';
@@ -2324,14 +2358,18 @@
                             <span class="tooltip-label">Artículo:</span>
                             <span class="tooltip-value" style="font-size: 11px;">${detail}</span>
                         </div>
-                        <div class="tooltip-kpi-grid">
+                        <div class="tooltip-kpi-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+                            <div class="tooltip-kpi-item">
+                                <span class="tooltip-kpi-label">OEE</span>
+                                <span class="tooltip-kpi-value" style="color:${getKPIColor(operarioObj.oee_real)}; font-size: 14px;">${operarioObj.oee_real}%</span>
+                            </div>
                             <div class="tooltip-kpi-item">
                                 <span class="tooltip-kpi-label">Rendimiento</span>
-                                <span class="tooltip-kpi-value" style="color:${getKPIColor(perf)}">${parseFloat(perf).toFixed(2)}%</span>
+                                <span class="tooltip-kpi-value" style="color:${getKPIColor(operarioObj.rend_real)}">${operarioObj.rend_real}%</span>
                             </div>
                             <div class="tooltip-kpi-item">
                                 <span class="tooltip-kpi-label">Disponibilidad</span>
-                                <span class="tooltip-kpi-value" style="color:${getKPIColor(avail)}">${parseFloat(avail).toFixed(2)}%</span>
+                                <span class="tooltip-kpi-value" style="color:${getKPIColor(operarioObj.disp_real)}">${operarioObj.disp_real}%</span>
                             </div>
                         </div>
                     </div>
@@ -2360,10 +2398,52 @@
             return '#ef4444';
         }
 
-        // NEW: Specific Tooltip for Operator Icons - Matches Main Tooltip Style (Full Detail)
-        function showOperatorTooltip(e, name, process, article, perf, avail, opNumber) {
+        // NEW: Specific Tooltip for Operator Icons - CARD EXTERIOR (Full Detail)
+        function showOperatorTooltip(e, name, process, article, t_std, t_real, disp, cal, opNumber) {
             e.stopPropagation(); // Prevent machine tooltip
-            
+
+            // ─── CARD EXTERIOR: espejo directo desde Backend ───
+            var oeeCardExterior = "0.0";
+            var rendCardExterior = "0.0";
+            var dispCardExterior = "0.0";
+
+            let opData = null;
+            if (typeof machineOperatorsData !== 'undefined') {
+                for (const mid in machineOperatorsData) {
+                    const ops = machineOperatorsData[mid];
+                    for (let i = 0; i < ops.length; i++) {
+                        if (ops[i].name === name) {
+                            opData = ops[i];
+                            break;
+                        }
+                    }
+                    if (opData) break;
+                }
+            }
+
+            if (opData) {
+                oeeCardExterior = opData.oee_real !== undefined ? parseFloat(opData.oee_real).toFixed(1) : "0.0";
+                rendCardExterior = opData.rend_real !== undefined ? parseFloat(opData.rend_real).toFixed(1) : "0.0";
+                var dispVal = parseFloat(opData.disponibilidad) || 0;
+                dispCardExterior = (dispVal <= 1.0 ? dispVal * 100 : dispVal).toFixed(1);
+            } else {
+                // Fallback de seguridad por si no se encuentra el objeto globalmente
+                var tEstVal = parseFloat(String(t_std).replace(',', '.'))  || 0;
+                var tRealVal = parseFloat(String(t_real).replace(',', '.')) || 0;
+                var dispVal = parseFloat(String(disp).replace(',', '.'))   || 0;
+                var calVal = parseFloat(String(cal).replace(',', '.'))    || 0;
+                
+                var dispPct = dispVal <= 1.0 ? dispVal * 100 : dispVal;
+                var calPct = calVal <= 1.0 ? calVal * 100 : calVal;
+                
+                rendCardExterior = tRealVal > 0 ? ((tEstVal / tRealVal) * 100).toFixed(1) : "0.0";
+                dispCardExterior = dispPct.toFixed(1);
+                var rendNum = parseFloat(rendCardExterior);
+                if (dispPct > 0 && rendNum > 0 && calPct > 0) {
+                    oeeCardExterior = ((dispPct * rendNum * calPct) / 10000).toFixed(1);
+                }
+            }
+
             tooltip.style.display = 'block';
             tooltip.style.left = (e.clientX + 15) + 'px';
             tooltip.style.top = (e.clientY + 15) + 'px';
@@ -2398,15 +2478,19 @@
                          <span class="tooltip-label">Nro. OP:</span>
                          <span class="tooltip-value" style="color: var(--premium-gold); font-weight: 800;">${opNumber || '---'}</span>
                     </div>
-                    <!-- Footer with Stats (from Machine) -->
-                    <div class="tooltip-footer">
-                        <div class="kpi-item">
-                            <div class="kpi-label">RENDIMIENTO</div>
-                            <div class="kpi-value" style="color: ${getKPIColor(perf)}">${parseFloat(perf).toFixed(2)}%</div>
+                    <!-- Card Exterior: KPIs calculados en vivo desde tiempos crudos -->
+                    <div class="tooltip-footer" style="display: flex; gap: 8px;">
+                        <div class="kpi-item" style="flex:1;">
+                            <div class="kpi-label">OEE</div>
+                            <div class="kpi-value" style="color: ${getKPIColor(oeeCardExterior)}; font-size: 14px;">${oeeCardExterior}%</div>
                         </div>
-                        <div class="kpi-item">
+                        <div class="kpi-item" style="flex:1;">
+                            <div class="kpi-label">RENDIMIENTO</div>
+                            <div class="kpi-value" style="color: ${getKPIColor(rendCardExterior)}; font-size: 14px;">${rendCardExterior}%</div>
+                        </div>
+                        <div class="kpi-item" style="flex:1;">
                             <div class="kpi-label">DISPONIBILIDAD</div>
-                            <div class="kpi-value" style="color: ${getKPIColor(avail)}">${parseFloat(avail).toFixed(2)}%</div>
+                            <div class="kpi-value" style="color: ${getKPIColor(dispCardExterior)}; font-size: 14px;">${dispCardExterior}%</div>
                         </div>
                     </div>
                 </div>
@@ -2707,7 +2791,12 @@
             showToast(`Máquina ${marker.getAttribute('data-name')} colocada`);
         }
 
-        // Forzar visibilidad al cargar
+        // ═══════════════════════════════════════════════════════════
+        //  PARCHE DOM: Clonar datos de data-active-ops al store JS
+        //  Garantiza que machineOperatorsData siempre tenga los datos
+        //  correctos del operario aunque el template haya caído al
+        //  path {% elif m.operario %} sin active_operators.
+        // ═══════════════════════════════════════════════════════════
         document.addEventListener('DOMContentLoaded', function() {
             console.log('Premium Gold Map Loaded.');
             adjustFloorSize();
@@ -2716,6 +2805,55 @@
             
             // Iniciar Reloj Premium
             setInterval(updateClock, 1000);
+
+            // ── DOM TEXT COPY: sincronizar machineOperatorsData desde atributos HTML ──
+            document.querySelectorAll('.machine-marker').forEach(function(marker) {
+                var boxId = marker.getAttribute('data-id');
+                if (!boxId) return;
+
+                // Si el store JS ya tiene datos para esta máquina, no hacer nada
+                if (machineOperatorsData[boxId] && machineOperatorsData[boxId].length > 0) return;
+
+                // Leer el atributo data-active-ops que Django renderizó directamente en el HTML
+                var activeOpsRaw = marker.getAttribute('data-active-ops') || '[]';
+                var activeOpsParsed = [];
+                try { activeOpsParsed = JSON.parse(activeOpsRaw); } catch(e) { activeOpsParsed = []; }
+
+                if (activeOpsParsed.length > 0) {
+                    // Volcar al store JS para que el tooltip de la máquina lo encuentre
+                    machineOperatorsData[boxId] = activeOpsParsed;
+                    console.log('[DOM COPY] machineOperatorsData[' + boxId + '] rellenado desde data-active-ops:', activeOpsParsed.length, 'operario(s)');
+                }
+
+                // También: si hay un .operator-indicator sin onmousemove, asignarle el handler
+                var indicators = marker.querySelectorAll('.operator-indicator:not([data-handler-set])');
+                indicators.forEach(function(ind) {
+                    var opsToUse = (machineOperatorsData[boxId] && machineOperatorsData[boxId].length > 0)
+                        ? machineOperatorsData[boxId]
+                        : activeOpsParsed;
+
+                    if (opsToUse.length > 0) {
+                        var opInfo = opsToUse[0];
+                        var opName  = opInfo.name  || marker.getAttribute('data-operario') || 'Operario';
+                        var tEst    = parseFloat(opInfo.tiempo_estandar_computado)  || 0;
+                        var tReal   = parseFloat(opInfo.tiempo_real_operativo)       || 0;
+                        var disp    = parseFloat(opInfo.disponibilidad)              || 0;
+                        var cal     = parseFloat(opInfo.calidad)                     || 1;
+                        var proc    = opInfo.process  || marker.getAttribute('data-reason') || '---';
+                        var art     = opInfo.article  || marker.getAttribute('data-detalle') || '---';
+                        var opNum   = opInfo.op_number || marker.getAttribute('data-id-orden') || '---';
+
+                        ind.setAttribute('data-handler-set', '1');
+                        ind.style.cursor = 'pointer';
+                        ind.addEventListener('mousemove', function(e) {
+                            showOperatorTooltip(e, opName, proc, art, tEst, tReal, disp, cal, opNum);
+                        });
+                        ind.addEventListener('mouseleave', function(e) { hideTooltip(e); });
+                    }
+                    ind.setAttribute('data-handler-set', '1'); // marcar aunque no haya datos
+                });
+            });
+            // ── FIN DOM TEXT COPY ──
         });
 
         function updateClock() {
@@ -3061,57 +3199,90 @@
                 .then(data => {
                     if (data.machines) {
                         data.machines.forEach(m => {
-                            // Update Marker
-                            const marker = document.getElementById(`machine-${m.id}`);
-                            if (marker) {
-                                // Update classes
-                                marker.classList.remove('status-running', 'status-stopped', 'status-repair', 'status-wait', 'status-break', 'status-offline');
-                                marker.classList.add(`status-${m.status.toLowerCase()}`);
-                                
-                                // Update data attributes
-                                marker.setAttribute('data-status', m.status);
-                                marker.setAttribute('data-reason', m.proceso);
-                                marker.setAttribute('data-detalle', m.detalle);
-                                marker.setAttribute('data-operario', m.operario || 'S/A');
-                                marker.setAttribute('data-oee', m.oee || 0);
-                                marker.setAttribute('data-performance', m.performance || 0);
-                                marker.setAttribute('data-availability', m.availability || 0);
-                                marker.setAttribute('data-qty', Math.round(m.qty || 0));
-                                marker.setAttribute('data-downtime', m.downtime_mins || 0); // Update Heatmap Data
-                                
-                                // Update Label if needed (optional)
-                                                                // Update Operator Indicator
-                                 let group = marker.querySelector('.operator-group');
-                                 const isInactive = ['STOPPED', 'OFFLINE'].includes(m.status);
+                                // Update Marker
+                                const marker = document.getElementById(`machine-${m.id}`);
+                                if (marker) {
+                                    // Update classes
+                                    marker.classList.remove('status-running', 'status-stopped', 'status-repair', 'status-wait', 'status-break', 'status-offline');
+                                    marker.classList.add(`status-${m.status.toLowerCase()}`);
+                                    
+                                    // Update data attributes
+                                    marker.setAttribute('data-status', m.status);
+                                    marker.setAttribute('data-reason', m.proceso);
+                                    marker.setAttribute('data-detalle', m.detalle);
+                                    marker.setAttribute('data-operario', m.operario || 'S/A');
+                                    marker.setAttribute('data-oee', m.oee || 0);
+                                    marker.setAttribute('data-performance', m.performance || 0);
+                                    marker.setAttribute('data-availability', m.availability || 0);
+                                    marker.setAttribute('data-qty', Math.round(m.qty || 0));
+                                    marker.setAttribute('data-downtime', m.downtime_mins || 0); // Update Heatmap Data
+                                    
+                                    // ── FORZAR ACTUALIZACIÓN DEL STORE GLOBAL ──
+                                    if (m.active_operators_js) {
+                                        var opsParsed = [];
+                                        try {
+                                            opsParsed = typeof m.active_operators_js === 'string' ? JSON.parse(m.active_operators_js) : m.active_operators_js;
+                                        } catch(e) {}
+                                        machineOperatorsData[m.id] = opsParsed;
+                                        marker.setAttribute('data-active-ops', typeof m.active_operators_js === 'string' ? m.active_operators_js : JSON.stringify(m.active_operators_js));
+                                    }
 
-                                 if (m.active_operators && m.active_operators.length > 0 && !isInactive) {
-                                     if (!group) {
-                                         group = document.createElement('div');
-                                         group.className = 'operator-group';
-                                         const iconContainer = marker.querySelector('.machine-icon-container') || marker;
-                                         iconContainer.appendChild(group);
-                                     }
-                                     
-                                     // Quick comparison or just Redraw
-                                     group.innerHTML = '';
-                                     m.active_operators.forEach(([opName, opInfo], idx) => {
-                                         const indicator = document.createElement('div');
-                                         indicator.className = 'operator-indicator';
-                                         indicator.style.zIndex = 100 + idx;
-                                         indicator.innerHTML = '<i class="fa-solid fa-user-check"></i>';
-                                         indicator.onmousemove = (e) => showOperatorTooltip(e, opName, opInfo.process, opInfo.article, opInfo.perf, opInfo.avail);
-                                         indicator.onmouseleave = (e) => hideTooltip(e);
-                                         group.appendChild(indicator);
-                                     });
-                                 } else if (m.operario && m.operario !== 'S/A' && !isInactive) {
-                                     // Fallback para operario único (retrocompatibilidad)
-                                     if (!group) {
-                                         group = document.createElement('div');
-                                         group.className = 'operator-group';
-                                         const iconContainer = marker.querySelector('.machine-icon-container') || marker;
-                                         iconContainer.appendChild(group);
-                                     }
-                                     group.innerHTML = `<div class="operator-indicator" title="Operario: ${m.operario}"><i class="fa-solid fa-user-check"></i></div>`;
+                                    // Update Operator Indicator
+                                     let group = marker.querySelector('.operator-group');
+                                     const isInactive = ['STOPPED', 'OFFLINE'].includes(m.status);
+
+                                     if (m.active_operators && m.active_operators.length > 0 && !isInactive) {
+                                         if (!group) {
+                                             group = document.createElement('div');
+                                             group.className = 'operator-group';
+                                             const iconContainer = marker.querySelector('.machine-icon-container') || marker;
+                                             iconContainer.appendChild(group);
+                                         }
+                                         
+                                         // Quick comparison or just Redraw
+                                         group.innerHTML = '';
+                                          m.active_operators.forEach(([opName, opInfo], idx) => {
+                                              const indicator = document.createElement('div');
+                                              indicator.className = 'operator-indicator';
+                                              indicator.style.zIndex = 100 + idx;
+                                              indicator.innerHTML = '<i class="fa-solid fa-user-check"></i>';
+                                              var tEstOp = parseFloat(opInfo.tiempo_estandar_computado) || 0;
+                                              var tRealOp = parseFloat(opInfo.tiempo_real_operativo) || 0;
+                                              var dispOp = parseFloat(opInfo.disponibilidad) || 0;
+                                              var calOp = parseFloat(opInfo.calidad) || 1;
+                                              indicator.onmousemove = (e) => showOperatorTooltip(e, opName, opInfo.process, opInfo.article, tEstOp, tRealOp, dispOp, calOp, opInfo.op_number);
+                                              indicator.onmouseleave = (e) => hideTooltip(e);
+                                              group.appendChild(indicator);
+                                          });
+                                  } else if (m.operario && m.operario !== 'S/A' && !isInactive) {
+                                      if (!group) {
+                                          group = document.createElement('div');
+                                          group.className = 'operator-group';
+                                          const iconContainer = marker.querySelector('.machine-icon-container') || marker;
+                                          iconContainer.appendChild(group);
+                                      }
+                                      // Intentar obtener datos detallados del operador desde machineOperatorsData
+                                      var opsFromStore = machineOperatorsData[m.id] || [];
+                                      if (opsFromStore.length > 0) {
+                                          group.innerHTML = '';
+                                          opsFromStore.forEach(function(opInfo, idx) {
+                                              var ind = document.createElement('div');
+                                              ind.className = 'operator-indicator';
+                                              ind.style.zIndex = 100 + idx;
+                                              ind.innerHTML = '<i class="fa-solid fa-user-check"></i>';
+                                              var tEstOp = parseFloat(opInfo.tiempo_estandar_computado) || 0;
+                                              var tRealOp = parseFloat(opInfo.tiempo_real_operativo) || 0;
+                                              var dispOp = parseFloat(opInfo.disponibilidad) || 0;
+                                              var calOp = parseFloat(opInfo.calidad) || 1;
+                                              ind.onmousemove = function(e) {
+                                                  showOperatorTooltip(e, opInfo.name || m.operario, opInfo.process, opInfo.article, tEstOp, tRealOp, dispOp, calOp, opInfo.op_number);
+                                              };
+                                              ind.onmouseleave = function(e) { hideTooltip(e); };
+                                              group.appendChild(ind);
+                                          });
+                                      } else {
+                                          group.innerHTML = '<div class="operator-indicator" title="Operario: ' + m.operario + '"><i class="fa-solid fa-user-check"></i></div>';
+                                      }
                                  } else if (group) {
                                      group.remove();
                                  }

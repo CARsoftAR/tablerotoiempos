@@ -53,7 +53,7 @@
 <body>
     <h1>Reporte Diario de Producción</h1>
     <div class="header-info">
-        Generado el: {% now "d/m/Y H:i" %} | Análisis de Fecha: <strong>{{ fecha|date:"d/m/Y" }}</strong>
+        Generado el: {% now "d/m/Y H:i" %} | Análisis de Fecha: <strong>{% if is_range %}{{ fecha|date:"d/m/Y" }} al {{ fecha_fin|date:"d/m/Y" }}{% else %}{{ fecha|date:"d/m/Y" }}{% endif %}</strong>
     </div>
 
     <div class="kpi-box">
