@@ -67,6 +67,9 @@ class MaquinaConfig(models.Model):
         ('AGUJEREADORA', 'Agujereadora (Rectángulo)'),
         ('ROBOT', 'Robot (Círculo)'),
         ('PRENSA', 'Prensa (Rectángulo)'),
+        ('BANCO SOLDADURA', 'Banco Soldadura (Rectángulo)'),
+        ('BANCO TRABAJO', 'Banco Trabajo (Rectángulo)'),
+        ('BANCO PULIDO', 'Banco Pulido (Rectángulo)'),
     ]
     tipo_maquina = models.CharField(max_length=20, choices=TIPO_MAQUINA_CHOICES, default='GENERICO', verbose_name="Tipo de Máquina")
     
