@@ -751,47 +751,61 @@
         .legend-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; }
 
         /* PREMIUM OPERATOR INDICATOR GROUP */
+        /* IMPORTANTE: .operator-group es hermano directo del .machine-icon-container
+           dentro de .machine-marker (que tiene position:absolute).
+           De este modo, el position:absolute del grupo se ancla al marker correcto
+           y NO se ve afectado por el flexbox del icon-container. */
         .operator-group {
             position: absolute;
-            top: -15px;
+            top: -16px;
             left: 50%;
             transform: translateX(-50%);
             display: flex;
+            flex-direction: row;
             align-items: center;
             justify-content: center;
-            z-index: 100;
-            pointer-events: none; /* Allow clicks to pass to machine, but chilren have pointer events */
+            gap: 4px;                  /* separa cada círculo */
+            z-index: 110;
+            pointer-events: none;      /* el grupo no bloquea; cada hijo re-activa */
+            white-space: nowrap;       /* evita que los círculos salten de fila */
         }
 
         .operator-indicator {
-            width: 24px !important;
-            height: 24px !important;
-            min-width: 24px !important;
-            min-height: 24px !important;
+            width: 22px;
+            height: 22px;
+            min-width: 22px;
+            min-height: 22px;
             background: var(--premium-gold);
             color: #000;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 12px;
-            box-shadow: 0 0 15px var(--premium-gold-glow);
+            font-size: 11px;
+            box-shadow: 0 0 12px var(--premium-gold-glow);
             border: 2px solid #fff;
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            margin-right: 2px;
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+                        box-shadow 0.2s ease;
             pointer-events: auto;
             position: relative;
             flex-shrink: 0;
-            aspect-ratio: 1 / 1;
-            /* Force circular shape and avoid distortion from parent flex/transform */
-            transform-style: preserve-3d;
-            backface-visibility: hidden;
+            cursor: pointer;
         }
-        .operator-indicator:last-child { margin-right: 0; }
+
+        /* Cuando hay más de 3 operarios reducir un poco para no salir del nodo */
+        .operator-group:has(.operator-indicator:nth-child(4)) .operator-indicator {
+            width: 18px;
+            height: 18px;
+            min-width: 18px;
+            min-height: 18px;
+            font-size: 9px;
+            gap: 2px;
+        }
         
         .operator-indicator:hover {
-            transform: scale(1.3) translateY(-5px);
-            z-index: 200 !important;
+            transform: scale(1.35) translateY(-4px);
+            box-shadow: 0 0 20px var(--premium-gold-glow);
+            z-index: 200;
         }
 
         /* PREMIUM SCROLLBAR */
@@ -1642,27 +1656,28 @@
                      data-active-ops='{{ m.active_operators_js|safe }}'
                      onmousedown="onMarkerMouseDown(event, this)">
                     
+                    <!-- ══ OPERARIOS: hermano del icon-container, anclado al marker ══ -->
+                    {% if m.active_operators %}
+                        <div class="operator-group" title="{% for op_name, op_info in m.active_operators %}{{ op_name }}{% if not forloop.last %} · {% endif %}{% endfor %}">
+                            {% for op_name, op_info in m.active_operators %}
+                            <div class="operator-indicator"
+                                 onmousemove="showOperatorTooltip(event, '{{ op_name|escapejs }}', '{{ op_info.process|escapejs }}', '{{ op_info.article|escapejs }}', '{{ op_info.tiempo_estandar_computado|default:0 }}', '{{ op_info.tiempo_real_operativo|default:0 }}', '{{ op_info.disponibilidad|default:0 }}', '{{ op_info.calidad|default:1 }}', '{{ op_info.op_number|escapejs }}')"
+                                 onmouseleave="hideTooltip(event)"
+                                 onclick="copyToClipboard('{{ op_info.op_number }}', event)">
+                                <i class="fa-solid fa-user-check"></i>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% elif m.operario and m.operario != 'S/A' and m.status != 'STOPPED' and m.status != 'OFFLINE' %}
+                        <div class="operator-group" title="{{ m.operario }}">
+                            <div class="operator-indicator"
+                                 onclick="copyToClipboard('{{ m.current_order }}', event)">
+                                <i class="fa-solid fa-user-check"></i>
+                            </div>
+                        </div>
+                    {% endif %}
+
                     <div class="machine-icon-container">
-                        <!-- Operator Indicator Group -->
-                         {% if m.active_operators %}
-                            <div class="operator-group">
-                                {% for op_name, op_info in m.active_operators %}
-                                 <div class="operator-indicator" 
-                                      style="z-index: {{ 100|add:forloop.counter0 }}; cursor: pointer;" 
-                                     onmousemove="showOperatorTooltip(event, '{{ op_name|escapejs }}', '{{ op_info.process|escapejs }}', '{{ op_info.article|escapejs }}', '{{ op_info.tiempo_estandar_computado|default:0 }}', '{{ op_info.tiempo_real_operativo|default:0 }}', '{{ op_info.disponibilidad|default:0 }}', '{{ op_info.calidad|default:1 }}', '{{ op_info.op_number|escapejs }}')"
-                                      onmouseleave="hideTooltip(event)"
-                                      onclick="copyToClipboard('{{ op_info.op_number }}', event)">
-                                    <i class="fa-solid fa-user-check"></i>
-                                 </div>
-                                {% endfor %}
-                            </div>
-                        {% elif m.operario and m.operario != 'S/A' and m.status != 'STOPPED' and m.status != 'OFFLINE' %}
-                             <div class="operator-group">
-                                <div class="operator-indicator" title="Operario: {{ m.operario }}" style="cursor: pointer;" onclick="copyToClipboard('{{ m.current_order }}', event)">
-                                    <i class="fa-solid fa-user-check"></i>
-                                </div>
-                            </div>
-                        {% endif %}
 
                         {% if m.type == 'CNC' %}
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1747,7 +1762,7 @@
                     </div>
 
                     <div class="machine-label" style="font-size: {{ m.label_size|default:10 }}px;">{{ m.name }}</div>
-                </div>
+                    </div><!-- /machine-icon-container -->
             {% endfor %}
         </div>
     </div>
@@ -1823,11 +1838,23 @@
                                 <div class="machine-status-dot" style="background: {% if m.status == 'RUNNING' %}#10b981{% elif m.status == 'REPAIR' %}#f59e0b{% elif m.status == 'WAIT' %}#facc15{% elif m.status == 'BREAK' %}#3b82f6{% else %}#ef4444{% endif %}; box-shadow: 0 0 8px {% if m.status == 'RUNNING' %}rgba(16,185,129,0.4){% elif m.status == 'REPAIR' %}rgba(245,158,11,0.4){% elif m.status == 'WAIT' %}rgba(250,204,21,0.4){% elif m.status == 'BREAK' %}rgba(59,130,246,0.4){% else %}rgba(239,68,68,0.4){% endif %};"></div>
                             </div>
                             
-                            <!-- Clean Operator Line -->
+                            <!-- Operator Line: múltiples si active_operators, único si solo m.operario -->
+                            {% if m.active_operators|length > 1 %}
+                                <div style="display:flex; flex-direction:column; gap:3px; margin-bottom:4px;">
+                                    {% for op_name, op_info in m.active_operators %}
+                                    <div style="font-size:11px; color:var(--premium-gold); display:flex; align-items:center; gap:5px; font-weight: 700;">
+                                        <span style="background:var(--premium-gold); color:#000; font-size:8px; font-weight:800; border-radius:3px; padding:1px 4px; line-height:1.2;">{{ forloop.counter }}</span>
+                                        <i class="fa-solid fa-user-check" style="font-size:9px; opacity:0.8;"></i>
+                                        <span>{{ op_name|truncatechars:22 }}</span>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
                             <div style="font-size:12px; color:var(--premium-gold); display:flex; align-items:center; gap:6px; margin-bottom:4px; font-weight: 700;">
                                 <i class="fa-solid fa-user-gear" style="font-size:10px; opacity:0.7;"></i>
                                 <span>{{ m.operario|default:"Sin Operario"|truncatechars:25 }}</span>
                             </div>
+                            {% endif %}
                             
                             <!-- Clean Detail Line -->
                             <div style="font-size:11px; color:#cbd5e1; line-height:1.4; opacity:0.6; display:flex; align-items:center; gap:4px;">
@@ -2372,16 +2399,51 @@
                     tooltip.style.top = (e.clientY - rect.height - 20) + 'px';
                 }
 
+                // --- MULTI-OPERARIO: construir lista dinámica desde activeOps[] ---
+                let operariosHtml = '';
+                if (activeOps.length > 1) {
+                    // Múltiples operarios activos → mostrarlos como lista numerada
+                    const liItems = activeOps.map((op, idx) => {
+                        const opNameStr = op.name || operator;
+                        const opOrderStr = op.op_number || marker.getAttribute('data-id-orden') || '---';
+                        return `<div style="display:flex; align-items:center; gap:6px; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                    <span style="background:var(--premium-gold); color:#000; font-size:9px; font-weight:800; border-radius:3px; padding:1px 4px; min-width:14px; text-align:center;">${idx + 1}</span>
+                                    <span style="flex:1; font-size:12px; color:#f1f5f9; font-weight:600;">${opNameStr}</span>
+                                    <span style="font-size:10px; color:var(--premium-gold); font-weight:700;">OP:${opOrderStr}</span>
+                                </div>`;
+                    }).join('');
+                    operariosHtml = `
+                        <div class="tooltip-row" style="flex-direction:column; align-items:flex-start; gap:4px;">
+                            <span class="tooltip-label" style="display:flex; align-items:center; gap:5px;">
+                                <i class="fa-solid fa-users" style="color:var(--premium-gold); font-size:10px;"></i>
+                                Operarios activos (${activeOps.length}):
+                            </span>
+                            <div style="width:100%; padding-left:4px;">${liItems}</div>
+                        </div>`;
+                } else if (activeOps.length === 1) {
+                    // Un solo operario con datos ricos
+                    const op0 = activeOps[0];
+                    operariosHtml = `
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Operario:</span>
+                            <span class="tooltip-value">${op0.name || operator}</span>
+                        </div>`;
+                } else {
+                    // Fallback al dato único del atributo HTML
+                    operariosHtml = `
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Operario:</span>
+                            <span class="tooltip-value">${operator}</span>
+                        </div>`;
+                }
+
                 tooltip.innerHTML = `
                     <div class="tooltip-header">
                         <div class="tooltip-title">${name}</div>
                         <div class="tooltip-status" style="background:${getBgColor(status)}; color: ${status === 'WAIT' ? '#000' : '#fff'}">${displayStatus}</div>
                     </div>
                     <div class="tooltip-body">
-                        <div class="tooltip-row">
-                            <span class="tooltip-label">Operario:</span>
-                            <span class="tooltip-value">${operator}</span>
-                        </div>
+                        ${operariosHtml}
                         <div class="tooltip-row">
                             <span class="tooltip-label">Proceso:</span>
                             <span class="tooltip-value">${reason}</span>
@@ -2828,10 +2890,13 @@
         }
 
         // ═══════════════════════════════════════════════════════════
-        //  PARCHE DOM: Clonar datos de data-active-ops al store JS
-        //  Garantiza que machineOperatorsData siempre tenga los datos
-        //  correctos del operario aunque el template haya caído al
-        //  path de elif m.operario sin active_operators.
+        //  SINCRONIZACIÓN DOM → JS: Clonar datos de data-active-ops
+        //  al store machineOperatorsData como mecanismo de respaldo.
+        //  Este bloque garantiza que si una máquina fue activada en
+        //  runtime (sin refresh) o si el JSON inicial vino vacío, el
+        //  store JS quede igualmente poblado desde el atributo HTML.
+        //  La lógica principal de múltiples operarios está en el
+        //  bucle Django (nodo físico) y en el tooltip JS que itera activeOps[].
         // ═══════════════════════════════════════════════════════════
         document.addEventListener('DOMContentLoaded', function() {
             console.log('Premium Gold Map Loaded.');
@@ -3259,69 +3324,100 @@
                                         try {
                                             opsParsed = typeof m.active_operators_js === 'string' ? JSON.parse(m.active_operators_js) : m.active_operators_js;
                                         } catch(e) {}
-                                        machineOperatorsData[m.id] = opsParsed;
-                                        marker.setAttribute('data-active-ops', typeof m.active_operators_js === 'string' ? m.active_operators_js : JSON.stringify(m.active_operators_js));
+                                        if (opsParsed.length > 0) {
+                                            machineOperatorsData[m.id] = opsParsed;
+                                            marker.setAttribute('data-active-ops', typeof m.active_operators_js === 'string' ? m.active_operators_js : JSON.stringify(m.active_operators_js));
+                                        }
                                     }
 
-                                    // Update Operator Indicator
-                                     let group = marker.querySelector('.operator-group');
-                                     const isInactive = ['STOPPED', 'OFFLINE'].includes(m.status);
+                                    // ── UPDATE OPERATOR INDICATORS (multi-circle) ──
+                                    // El .operator-group es HERMANO DIRECTO del marker (no del icon-container).
+                                    // Se inyecta/actualiza aquí directamente en el marker.
+                                    let group = marker.querySelector('.operator-group');
+                                    const isInactive = ['STOPPED', 'OFFLINE'].includes(m.status);
 
-                                     if (m.active_operators && m.active_operators.length > 0 && !isInactive) {
-                                         if (!group) {
-                                             group = document.createElement('div');
-                                             group.className = 'operator-group';
-                                             const iconContainer = marker.querySelector('.machine-icon-container') || marker;
-                                             iconContainer.appendChild(group);
-                                         }
-                                         
-                                         // Quick comparison or just Redraw
-                                         group.innerHTML = '';
-                                          m.active_operators.forEach(([opName, opInfo], idx) => {
-                                              const indicator = document.createElement('div');
-                                              indicator.className = 'operator-indicator';
-                                              indicator.style.zIndex = 100 + idx;
-                                              indicator.innerHTML = '<i class="fa-solid fa-user-check"></i>';
-                                              var tEstOp = parseFloat(opInfo.tiempo_estandar_computado) || 0;
-                                              var tRealOp = parseFloat(opInfo.tiempo_real_operativo) || 0;
-                                              var dispOp = parseFloat(opInfo.disponibilidad) || 0;
-                                              var calOp = parseFloat(opInfo.calidad) || 1;
-                                              indicator.onmousemove = (e) => showOperatorTooltip(e, opName, opInfo.process, opInfo.article, tEstOp, tRealOp, dispOp, calOp, opInfo.op_number);
-                                              indicator.onmouseleave = (e) => hideTooltip(e);
-                                              group.appendChild(indicator);
-                                          });
-                                  } else if (m.operario && m.operario !== 'S/A' && !isInactive) {
-                                      if (!group) {
-                                          group = document.createElement('div');
-                                          group.className = 'operator-group';
-                                          const iconContainer = marker.querySelector('.machine-icon-container') || marker;
-                                          iconContainer.appendChild(group);
-                                      }
-                                      // Intentar obtener datos detallados del operador desde machineOperatorsData
-                                      var opsFromStore = machineOperatorsData[m.id] || [];
-                                      if (opsFromStore.length > 0) {
-                                          group.innerHTML = '';
-                                          opsFromStore.forEach(function(opInfo, idx) {
-                                              var ind = document.createElement('div');
-                                              ind.className = 'operator-indicator';
-                                              ind.style.zIndex = 100 + idx;
-                                              ind.innerHTML = '<i class="fa-solid fa-user-check"></i>';
-                                              var tEstOp = parseFloat(opInfo.tiempo_estandar_computado) || 0;
-                                              var tRealOp = parseFloat(opInfo.tiempo_real_operativo) || 0;
-                                              var dispOp = parseFloat(opInfo.disponibilidad) || 0;
-                                              var calOp = parseFloat(opInfo.calidad) || 1;
-                                              ind.onmousemove = function(e) {
-                                                  showOperatorTooltip(e, opInfo.name || m.operario, opInfo.process, opInfo.article, tEstOp, tRealOp, dispOp, calOp, opInfo.op_number);
-                                              };
-                                              ind.onmouseleave = function(e) { hideTooltip(e); };
-                                              group.appendChild(ind);
-                                          });
-                                      } else {
-                                          group.innerHTML = '<div class="operator-indicator" title="Operario: ' + m.operario + '"><i class="fa-solid fa-user-check"></i></div>';
-                                      }
-                                 } else if (group) {
-                                     group.remove();
-                                 }
+                                    // Determinar la lista final de operarios a mostrar
+                                    let opsToRender = [];
+                                    if (m.active_operators && m.active_operators.length > 0) {
+                                        // active_operators viene como array de [name, info] desde la API
+                                        opsToRender = m.active_operators.map(function(entry) {
+                                            // entry puede ser [opName, opInfo] (tupla) o un objeto
+                                            if (Array.isArray(entry)) {
+                                                return { name: entry[0], info: entry[1] };
+                                            }
+                                            return { name: entry.name, info: entry };
+                                        });
+                                    } else if (!isInactive && m.operario && m.operario !== 'S/A') {
+                                        // Fallback: usar el store JS
+                                        var opsFromStore = machineOperatorsData[m.id] || [];
+                                        if (opsFromStore.length > 0) {
+                                            opsToRender = opsFromStore.map(function(opInfo) {
+                                                return { name: opInfo.name || m.operario, info: opInfo };
+                                            });
+                                        } else {
+                                            // Fallback: leer del atributo HTML data-active-ops
+                                            var opsFromAttr = marker.getAttribute('data-active-ops');
+                                            if (opsFromAttr) {
+                                                try {
+                                                    var opsParsedFromAttr = JSON.parse(opsFromAttr);
+                                                    if (opsParsedFromAttr.length > 0) {
+                                                        opsToRender = opsParsedFromAttr.map(function(opInfo) {
+                                                            return { name: opInfo.name || m.operario, info: opInfo };
+                                                        });
+                                                    }
+                                                } catch(e) {}
+                                            }
+                                            if (opsToRender.length === 0) {
+                                                opsToRender = [{ name: m.operario, info: {} }];
+                                            }
+                                        }
+                                    }
+
+                                    if (opsToRender.length > 0 && !isInactive) {
+                                        if (!group) {
+                                            group = document.createElement('div');
+                                            // Insertar como hijo DIRECTO del marker (antes del icon-container)
+                                            const iconContainer = marker.querySelector('.machine-icon-container');
+                                            marker.insertBefore(group, iconContainer || marker.firstChild);
+                                        }
+                                        group.className = 'operator-group';
+
+                                        // Actualizar el title del grupo con todos los nombres
+                                        group.title = opsToRender.map(function(o) { return o.name; }).join(' · ');
+
+                                        // Redibujar solo si cambió la cantidad (evitar repaint innecesario)
+                                        const currentCount = group.querySelectorAll('.operator-indicator').length;
+                                        if (currentCount !== opsToRender.length) {
+                                            group.innerHTML = '';
+                                            opsToRender.forEach(function(op) {
+                                                var opName = op.name;
+                                                var opInfo = op.info || {};
+                                                var tEstOp = parseFloat(opInfo.tiempo_estandar_computado) || 0;
+                                                var tRealOp = parseFloat(opInfo.tiempo_real_operativo) || 0;
+                                                var dispOp = parseFloat(opInfo.disponibilidad) || 0;
+                                                var calOp = parseFloat(opInfo.calidad) || 1;
+
+                                                var ind = document.createElement('div');
+                                                ind.className = 'operator-indicator';
+                                                ind.title = opName;
+                                                ind.innerHTML = '<i class="fa-solid fa-user-check"></i>';
+                                                ind.onmousemove = function(e) {
+                                                    showOperatorTooltip(e, opName,
+                                                        opInfo.process || '', opInfo.article || '',
+                                                        tEstOp, tRealOp, dispOp, calOp,
+                                                        opInfo.op_number || '---');
+                                                };
+                                                ind.onmouseleave = function(e) { hideTooltip(e); };
+                                                ind.onclick = function(e) {
+                                                    e.stopPropagation();
+                                                    copyToClipboard(opInfo.op_number || '', e);
+                                                };
+                                                group.appendChild(ind);
+                                            });
+                                        }
+                                    } else if (group) {
+                                        group.remove();
+                                    }
                             }
                             
                             // Update Sidebar Item

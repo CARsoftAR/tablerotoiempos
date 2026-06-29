@@ -445,6 +445,17 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 if reg.get('id_orden') and str(reg['id_orden']).strip() not in ['', '0', 'None', '---']:
                     data['current_order'] = str(reg['id_orden']).strip()
                 if uid: data['latest_operator'] = nombres_operarios.get(uid, f"Operario {uid}")
+                # Poblar active_operators para el frontend multi-operario
+                if uid and uid != 'None':
+                    op_name = nombres_operarios.get(uid, f"Operario {uid}")
+                    if op_name not in data['active_operators']:
+                        data['active_operators'][op_name] = {
+                            'uid': uid,
+                            'process': data.get('latest_obs', '---'),
+                            'article': data.get('latest_article', '---'),
+                            'name': op_name,
+                            'op_number': str(data.get('current_order', '---')),
+                        }
                 if art_v: data['latest_article'] = art_v
                 
                 # REGLA DEFINITIVA DE ESTADO ONLINE:
