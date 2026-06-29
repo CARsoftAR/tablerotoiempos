@@ -3313,182 +3313,172 @@
             fetch(window.location.pathname + '?format=json')
                 .then(r => r.json())
                 .then(data => {
+                    // Construir lookup table por ID de máquina
+                    var machinesById = {};
                     if (data.machines) {
-                        data.machines.forEach(m => {
-                                // Update Marker
-                                const marker = document.getElementById(`machine-${m.id}`);
-                                if (marker) {
-                                    // Update classes
-                                    marker.classList.remove('status-running', 'status-stopped', 'status-repair', 'status-wait', 'status-break', 'status-offline');
-                                    marker.classList.add(`status-${m.status.toLowerCase()}`);
-                                    
-                                    // Update data attributes
-                                    marker.setAttribute('data-status', m.status);
-                                    marker.setAttribute('data-reason', m.proceso);
-                                    marker.setAttribute('data-detalle', m.detalle);
-                                    marker.setAttribute('data-operario', m.operario || 'S/A');
-                                    marker.setAttribute('data-oee', m.oee || 0);
-                                    marker.setAttribute('data-performance', m.performance || 0);
-                                    marker.setAttribute('data-availability', m.availability || 0);
-                                    marker.setAttribute('data-qty', Math.round(m.qty || 0));
-                                    marker.setAttribute('data-downtime', m.downtime_mins || 0); // Update Heatmap Data
-                                    
-                                    // ── FORZAR ACTUALIZACIÓN DEL STORE GLOBAL ──
-                                    if (m.active_operators_js) {
-                                        var opsParsed = [];
-                                        try {
-                                            opsParsed = typeof m.active_operators_js === 'string' ? JSON.parse(m.active_operators_js) : m.active_operators_js;
-                                        } catch(e) {}
-                                        // Actualizar SIEMPRE (incluso si vacío) para limpiar operarios fantasmas
-                                        machineOperatorsData[m.id] = opsParsed;
-                                        marker.setAttribute('data-active-ops', typeof m.active_operators_js === 'string' ? m.active_operators_js : JSON.stringify(m.active_operators_js));
-                                        marker.setAttribute('data-ops-explicit', '1');
-                                    } else {
-                                        marker.setAttribute('data-ops-explicit', '0');
-                                    }
-
-                                    // ── UPDATE OPERATOR INDICATORS (multi-circle) ──
-                                    // El .operator-group es HERMANO DIRECTO del marker (no del icon-container).
-                                    // Se inyecta/actualiza aquí directamente en el marker.
-                                    let group = marker.querySelector('.operator-group');
-                                    const isInactive = ['STOPPED', 'OFFLINE'].includes(m.status);
-
-                                    // Determinar la lista final de operarios a mostrar
-                                    let opsToRender = [];
-                                    if (m.active_operators && m.active_operators.length > 0) {
-                                        // active_operators viene como array de [name, info] desde la API
-                                        opsToRender = m.active_operators.map(function(entry) {
-                                            // entry puede ser [opName, opInfo] (tupla) o un objeto
-                                            if (Array.isArray(entry)) {
-                                                return { name: entry[0], info: entry[1] };
-                                            }
-                                            return { name: entry.name, info: entry };
-                                        });
-                                    } else if (!isInactive && m.operario && m.operario !== 'S/A') {
-                                        // Fallback: usar el store JS
-                                        var opsFromStore = machineOperatorsData[m.id] || [];
-                                        if (opsFromStore.length > 0) {
-                                            opsToRender = opsFromStore.map(function(opInfo) {
+                        data.machines.forEach(function(m) { machinesById[m.id] = m; });
+                    }
+                    
+                    // Map-First: iterar TODOS los marcadores del DOM
+                    document.querySelectorAll('.machine-marker').forEach(function(marker) {
+                        var mId = marker.getAttribute('data-id') || marker.getAttribute('data-machine-code');
+                        var m = machinesById[mId];
+                        
+                        // ── LIMPIEZA INVERSA: si el backend omitió esta máquina ──
+                        if (!m) {
+                            var group = marker.querySelector('.operator-group');
+                            if (group) { group.innerHTML = ''; group.remove(); }
+                            return;
+                        }
+                        
+                        // ── ACTUALIZAR DATOS DE LA MÁQUINA ──
+                        marker.classList.remove('status-running', 'status-stopped', 'status-repair', 'status-wait', 'status-break', 'status-offline');
+                        marker.classList.add('status-' + m.status.toLowerCase());
+                        
+                        marker.setAttribute('data-status', m.status);
+                        marker.setAttribute('data-reason', m.proceso);
+                        marker.setAttribute('data-detalle', m.detalle);
+                        marker.setAttribute('data-operario', m.operario || 'S/A');
+                        marker.setAttribute('data-oee', m.oee || 0);
+                        marker.setAttribute('data-performance', m.performance || 0);
+                        marker.setAttribute('data-availability', m.availability || 0);
+                        marker.setAttribute('data-qty', Math.round(m.qty || 0));
+                        marker.setAttribute('data-downtime', m.downtime_mins || 0);
+                        
+                        // ── FORZAR ACTUALIZACIÓN DEL STORE GLOBAL ──
+                        if (m.active_operators_js) {
+                            var opsParsed = [];
+                            try {
+                                opsParsed = typeof m.active_operators_js === 'string' ? JSON.parse(m.active_operators_js) : m.active_operators_js;
+                            } catch(e) {}
+                            machineOperatorsData[m.id] = opsParsed;
+                            marker.setAttribute('data-active-ops', typeof m.active_operators_js === 'string' ? m.active_operators_js : JSON.stringify(m.active_operators_js));
+                            marker.setAttribute('data-ops-explicit', '1');
+                        } else {
+                            marker.setAttribute('data-ops-explicit', '0');
+                        }
+                        
+                        // ── UPDATE OPERATOR INDICATORS (multi-circle) ──
+                        let group = marker.querySelector('.operator-group');
+                        const isInactive = ['STOPPED', 'OFFLINE'].indexOf(m.status) !== -1;
+                        
+                        let opsToRender = [];
+                        if (m.active_operators && m.active_operators.length > 0) {
+                            opsToRender = m.active_operators.map(function(entry) {
+                                if (Array.isArray(entry)) {
+                                    return { name: entry[0], info: entry[1] };
+                                }
+                                return { name: entry.name, info: entry };
+                            });
+                        } else if (!isInactive && m.operario && m.operario !== 'S/A') {
+                            var opsFromStore = machineOperatorsData[m.id] || [];
+                            if (opsFromStore.length > 0) {
+                                opsToRender = opsFromStore.map(function(opInfo) {
+                                    return { name: opInfo.name || m.operario, info: opInfo };
+                                });
+                            } else {
+                                var opsFromAttr = marker.getAttribute('data-active-ops');
+                                if (opsFromAttr) {
+                                    try {
+                                        var opsParsedFromAttr = JSON.parse(opsFromAttr);
+                                        if (opsParsedFromAttr.length > 0) {
+                                            opsToRender = opsParsedFromAttr.map(function(opInfo) {
                                                 return { name: opInfo.name || m.operario, info: opInfo };
                                             });
-                                        } else {
-                                            // Fallback: leer del atributo HTML data-active-ops
-                                            var opsFromAttr = marker.getAttribute('data-active-ops');
-                                            if (opsFromAttr) {
-                                                try {
-                                                    var opsParsedFromAttr = JSON.parse(opsFromAttr);
-                                                    if (opsParsedFromAttr.length > 0) {
-                                                        opsToRender = opsParsedFromAttr.map(function(opInfo) {
-                                                            return { name: opInfo.name || m.operario, info: opInfo };
-                                                        });
-                                                    }
-                                                } catch(e) {}
-                                            }
-                                            // No crear fantasmas si el servidor confirmó explícitamente 0 operarios
-                                            var isExplicitlyEmpty = marker.getAttribute('data-ops-explicit') === '1';
-                                            if (opsToRender.length === 0 && !isExplicitlyEmpty) {
-                                                opsToRender = [{ name: m.operario, info: {} }];
-                                            }
                                         }
-                                    }
-
-                                    if (opsToRender.length > 0 && !isInactive) {
-                                        if (!group) {
-                                            group = document.createElement('div');
-                                            // Insertar como hijo DIRECTO del marker (antes del icon-container)
-                                            const iconContainer = marker.querySelector('.machine-icon-container');
-                                            marker.insertBefore(group, iconContainer || marker.firstChild);
-                                        }
-                                        group.className = 'operator-group';
-
-                                        // Actualizar el title del grupo con todos los nombres
-                                        group.title = opsToRender.map(function(o) { return o.name; }).join(' · ');
-
-                                        // Redibujar solo si cambió la cantidad (evitar repaint innecesario)
-                                        const currentCount = group.querySelectorAll('.operator-indicator').length;
-                                        if (currentCount !== opsToRender.length) {
-                                            group.innerHTML = '';
-                                            opsToRender.forEach(function(op) {
-                                                var opName = op.name;
-                                                var opInfo = op.info || {};
-                                                var tEstOp = parseFloat(opInfo.tiempo_estandar_computado) || 0;
-                                                var tRealOp = parseFloat(opInfo.tiempo_real_operativo) || 0;
-                                                var dispOp = parseFloat(opInfo.disponibilidad) || 0;
-                                                var calOp = parseFloat(opInfo.calidad) || 1;
-
-                                                var ind = document.createElement('div');
-                                                ind.className = 'operator-indicator';
-                                                ind.title = opName;
-                                                ind.setAttribute('data-opname', opName);
-                                                ind.setAttribute('data-process', opInfo.process || '');
-                                                ind.setAttribute('data-article', opInfo.article || '');
-                                                ind.setAttribute('data-tstd', tEstOp);
-                                                ind.setAttribute('data-treal', tRealOp);
-                                                ind.setAttribute('data-disp', dispOp);
-                                                ind.setAttribute('data-cal', calOp);
-                                                ind.setAttribute('data-opnumber', opInfo.op_number || '---');
-                                                ind.innerHTML = '<i class="fa-solid fa-user-check"></i>';
-                                                ind.onmousemove = function(e) {
-                                                    var t = e.currentTarget;
-                                                    showOperatorTooltip(e,
-                                                        t.getAttribute('data-opname') || '',
-                                                        t.getAttribute('data-process') || '',
-                                                        t.getAttribute('data-article') || '',
-                                                        parseFloat(t.getAttribute('data-tstd')) || 0,
-                                                        parseFloat(t.getAttribute('data-treal')) || 0,
-                                                        parseFloat(t.getAttribute('data-disp')) || 0,
-                                                        parseFloat(t.getAttribute('data-cal')) || 1,
-                                                        t.getAttribute('data-opnumber') || '---'
-                                                    );
-                                                };
-                                                ind.onmouseleave = function(e) { hideTooltip(e); };
-                                                ind.onclick = function(e) {
-                                                    e.stopPropagation();
-                                                    copyToClipboard(ind.getAttribute('data-opnumber') || '', e);
-                                                };
-                                                group.appendChild(ind);
-                                            });
-                                        }
-                                    } else if (group) {
-                                        group.remove();
-                                    }
+                                    } catch(e) {}
+                                }
+                                var isExplicitlyEmpty = marker.getAttribute('data-ops-explicit') === '1';
+                                if (opsToRender.length === 0 && !isExplicitlyEmpty) {
+                                    opsToRender = [{ name: m.operario, info: {} }];
+                                }
                             }
+                        }
+                        
+                        if (opsToRender.length > 0 && !isInactive) {
+                            if (!group) {
+                                group = document.createElement('div');
+                                var iconContainer = marker.querySelector('.machine-icon-container');
+                                marker.insertBefore(group, iconContainer || marker.firstChild);
+                            }
+                            group.className = 'operator-group';
+                            group.title = opsToRender.map(function(o) { return o.name; }).join(' · ');
                             
-                            // Update Sidebar Item
-                            const sidebarItem = document.getElementById(`sidebar-item-${m.id}`);
-                            if (sidebarItem) {
-                                const dot = sidebarItem.querySelector('.machine-status-dot');
-                                
-                                let color = '#ef4444'; // default red
-                                let shadow = 'rgba(239,68,68,0.4)';
-                                
-                                if (m.status === 'RUNNING') { color = '#10b981'; shadow = 'rgba(16,185,129,0.4)'; }
-                                else if (m.status === 'REPAIR') { color = '#f59e0b'; shadow = 'rgba(245,158,11,0.4)'; }
-                                else if (m.status === 'WAIT') { color = '#facc15'; shadow = 'rgba(250,204,21,0.4)'; }
-                                else if (m.status === 'BREAK') { color = '#3b82f6'; shadow = 'rgba(59,130,246,0.4)'; }
-                                
-                                if (dot) {
-                                    dot.style.background = color;
-                                    dot.style.boxShadow = `0 0 8px ${shadow}`;
-                                }
-                                
-                                // Update Operator Text
-                                const opDiv = sidebarItem.querySelector('.fa-user-gear').parentNode;
-                                if (opDiv) {
-                                     const span = opDiv.querySelector('span');
-                                     if (span) span.textContent = (m.operario || 'Sin Operario').substring(0, 25);
-                                }
-                                
-                                // Update Detail Text
-                                const detDiv = sidebarItem.querySelector('.fa-microchip').parentNode;
-                                if (detDiv) {
-                                     const span = detDiv.querySelector('span');
-                                     if (span) span.textContent = (m.detalle || 'Sin Actividad').substring(0, 45);
-                                }
+                            var currentCount = group.querySelectorAll('.operator-indicator').length;
+                            if (currentCount !== opsToRender.length) {
+                                group.innerHTML = '';
+                                opsToRender.forEach(function(op) {
+                                    var opName = op.name;
+                                    var opInfo = op.info || {};
+                                    var tEstOp = parseFloat(opInfo.tiempo_estandar_computado) || 0;
+                                    var tRealOp = parseFloat(opInfo.tiempo_real_operativo) || 0;
+                                    var dispOp = parseFloat(opInfo.disponibilidad) || 0;
+                                    var calOp = parseFloat(opInfo.calidad) || 1;
+                                    
+                                    var ind = document.createElement('div');
+                                    ind.className = 'operator-indicator';
+                                    ind.title = opName;
+                                    ind.setAttribute('data-opname', opName);
+                                    ind.setAttribute('data-process', opInfo.process || '');
+                                    ind.setAttribute('data-article', opInfo.article || '');
+                                    ind.setAttribute('data-tstd', tEstOp);
+                                    ind.setAttribute('data-treal', tRealOp);
+                                    ind.setAttribute('data-disp', dispOp);
+                                    ind.setAttribute('data-cal', calOp);
+                                    ind.setAttribute('data-opnumber', opInfo.op_number || '---');
+                                    ind.innerHTML = '<i class="fa-solid fa-user-check"></i>';
+                                    ind.onmousemove = function(e) {
+                                        var t = e.currentTarget;
+                                        showOperatorTooltip(e,
+                                            t.getAttribute('data-opname') || '',
+                                            t.getAttribute('data-process') || '',
+                                            t.getAttribute('data-article') || '',
+                                            parseFloat(t.getAttribute('data-tstd')) || 0,
+                                            parseFloat(t.getAttribute('data-treal')) || 0,
+                                            parseFloat(t.getAttribute('data-disp')) || 0,
+                                            parseFloat(t.getAttribute('data-cal')) || 1,
+                                            t.getAttribute('data-opnumber') || '---'
+                                        );
+                                    };
+                                    ind.onmouseleave = function(e) { hideTooltip(e); };
+                                    ind.onclick = function(e) {
+                                        e.stopPropagation();
+                                        copyToClipboard(ind.getAttribute('data-opnumber') || '', e);
+                                    };
+                                    group.appendChild(ind);
+                                });
                             }
-                        });
-                        console.log('Map data refreshed.');
-                    }
+                        } else if (group) {
+                            group.remove();
+                        }
+                        
+                        // ── SIDEBAR ──
+                        var sidebarItem = document.getElementById('sidebar-item-' + m.id);
+                        if (sidebarItem) {
+                            var dot = sidebarItem.querySelector('.machine-status-dot');
+                            var color = '#ef4444';
+                            var shadow = 'rgba(239,68,68,0.4)';
+                            if (m.status === 'RUNNING') { color = '#10b981'; shadow = 'rgba(16,185,129,0.4)'; }
+                            else if (m.status === 'REPAIR') { color = '#f59e0b'; shadow = 'rgba(245,158,11,0.4)'; }
+                            else if (m.status === 'WAIT') { color = '#facc15'; shadow = 'rgba(250,204,21,0.4)'; }
+                            else if (m.status === 'BREAK') { color = '#3b82f6'; shadow = 'rgba(59,130,246,0.4)'; }
+                            if (dot) {
+                                dot.style.background = color;
+                                dot.style.boxShadow = '0 0 8px ' + shadow;
+                            }
+                            var opDiv = sidebarItem.querySelector('.fa-user-gear');
+                            if (opDiv) {
+                                var span = opDiv.parentNode.querySelector('span');
+                                if (span) span.textContent = (m.operario || 'Sin Operario').substring(0, 25);
+                            }
+                            var detDiv = sidebarItem.querySelector('.fa-microchip');
+                            if (detDiv) {
+                                var span = detDiv.parentNode.querySelector('span');
+                                if (span) span.textContent = (m.detalle || 'Sin Actividad').substring(0, 45);
+                            }
+                        }
+                    });
+                    console.log('Map data refreshed.');
                 })
                 .catch(e => console.error('Refresh error:', e));
         }, 30000);
