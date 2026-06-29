@@ -3357,7 +3357,7 @@
                         }
                         
                         // ── RENDER VÍA innerHTML (NUNCA remove()) ──
-                        let group = marker.querySelector('.operator-group');
+                        group = marker.querySelector('.operator-group');
                         if (!group) {
                             group = document.createElement('div');
                             group.className = 'operator-group';
@@ -3397,27 +3397,6 @@
                             });
                             group.innerHTML = htmlParts.join('');
                             group.title = names.join(' · ');
-                            
-                            group.querySelectorAll('.operator-indicator').forEach(function(ind) {
-                                ind.onmousemove = function(e) {
-                                    var t = e.currentTarget;
-                                    showOperatorTooltip(e,
-                                        t.getAttribute('data-opname') || '',
-                                        t.getAttribute('data-process') || '',
-                                        t.getAttribute('data-article') || '',
-                                        parseFloat(t.getAttribute('data-tstd')) || 0,
-                                        parseFloat(t.getAttribute('data-treal')) || 0,
-                                        parseFloat(t.getAttribute('data-disp')) || 0,
-                                        parseFloat(t.getAttribute('data-cal')) || 1,
-                                        t.getAttribute('data-opnumber') || '---'
-                                    );
-                                };
-                                ind.onmouseleave = function(e) { hideTooltip(e); };
-                                ind.onclick = function(e) {
-                                    e.stopPropagation();
-                                    copyToClipboard(ind.getAttribute('data-opnumber') || '', e);
-                                };
-                            });
                         } else {
                             group.innerHTML = '';
                             group.removeAttribute('title');
@@ -3456,6 +3435,33 @@
                 })
                 .catch(e => console.error('Refresh error:', e));
         }, 30000);
+
+        // ── DELEGACIÓN DE EVENTOS PARA .operator-indicator (elementos dinámicos) ──
+        document.addEventListener('click', function(e) {
+            var indicator = e.target.closest('.operator-indicator');
+            if (indicator) {
+                e.stopPropagation();
+                copyToClipboard(indicator.getAttribute('data-opnumber') || '', e);
+            }
+        });
+
+        document.addEventListener('mousemove', function(e) {
+            var indicator = e.target.closest('.operator-indicator');
+            if (indicator) {
+                showOperatorTooltip(e,
+                    indicator.getAttribute('data-opname') || '',
+                    indicator.getAttribute('data-process') || '',
+                    indicator.getAttribute('data-article') || '',
+                    parseFloat(indicator.getAttribute('data-tstd')) || 0,
+                    parseFloat(indicator.getAttribute('data-treal')) || 0,
+                    parseFloat(indicator.getAttribute('data-disp')) || 0,
+                    parseFloat(indicator.getAttribute('data-cal')) || 1,
+                    indicator.getAttribute('data-opnumber') || '---'
+                );
+            } else if (tooltip.style.display !== 'none') {
+                hideTooltip(e);
+            }
+        });
 
         // --- HACER PANELES FLOTANTES ARRASTRABLES ---
         function makeDraggable(panel, handle) {
