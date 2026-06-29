@@ -2928,13 +2928,13 @@
 
                 // También: si hay un .operator-indicator sin onmousemove, asignarle el handler
                 var indicators = marker.querySelectorAll('.operator-indicator:not([data-handler-set])');
-                indicators.forEach(function(ind) {
+                indicators.forEach(function(ind, idx) {
                     var opsToUse = (machineOperatorsData[boxId] && machineOperatorsData[boxId].length > 0)
                         ? machineOperatorsData[boxId]
                         : activeOpsParsed;
 
                     if (opsToUse.length > 0) {
-                        var opInfo = opsToUse[0];
+                        var opInfo = opsToUse[idx] || opsToUse[0];
                         var opName  = opInfo.name  || marker.getAttribute('data-operario') || 'Operario';
                         var tEst    = parseFloat(opInfo.tiempo_estandar_computado)  || 0;
                         var tReal   = parseFloat(opInfo.tiempo_real_operativo)       || 0;
