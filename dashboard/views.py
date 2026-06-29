@@ -565,6 +565,25 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 kpi_por_maquina[mid_online]['latest_is_active'] = True
                 kpi_por_maquina[mid_online]['is_found_online'] = True
 
+    # DEDUPLICACIÓN DE OPERARIOS: Un operario solo puede estar activo en su última máquina.
+    # Si un operario aparece en active_operators de una máquina distinta a su latest_machine,
+    # se elimina de esa máquina para evitar "operarios fantasma" en el mapa.
+    for uid, per in kpi_por_personal.items():
+        real_machine = per.get('latest_machine', '')
+        op_name = per.get('nombre_personal', '')
+        if not op_name:
+            continue
+        if not real_machine:
+            for mid_key, m_data in kpi_por_maquina.items():
+                if op_name in m_data.get('active_operators', {}):
+                    del m_data['active_operators'][op_name]
+            continue
+        for mid_key, m_data in kpi_por_maquina.items():
+            if op_name not in m_data.get('active_operators', {}):
+                continue
+            if mid_key != real_machine:
+                del m_data['active_operators'][op_name]
+
     # POST-PROCESSING: Sincronizar KPIs del TOOLTIP DEL OPERARIO con sus KPIs Personales Globales
     # Esto asegura que el tooltip del ícono del operario muestre sus estadísticas reales del día.
     # Los KPIs de la MÁQUINA permanecen sin cambios (son de la máquina, no del operario).
