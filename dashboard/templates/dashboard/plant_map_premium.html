@@ -2926,7 +2926,7 @@
                     console.log('[DOM COPY] machineOperatorsData[' + boxId + '] rellenado desde data-active-ops:', activeOpsParsed.length, 'operario(s)');
                 }
 
-                // También: si hay un .operator-indicator sin onmousemove, asignarle el handler
+                // Inyectar data-* attributes y handler único que lea de dataset
                 var indicators = marker.querySelectorAll('.operator-indicator:not([data-handler-set])');
                 indicators.forEach(function(ind, idx) {
                     var opsToUse = (machineOperatorsData[boxId] && machineOperatorsData[boxId].length > 0)
@@ -2935,21 +2935,36 @@
 
                     if (opsToUse.length > 0) {
                         var opInfo = opsToUse[idx] || opsToUse[0];
-                        var opName  = opInfo.name  || marker.getAttribute('data-operario') || 'Operario';
-                        var tEst    = parseFloat(opInfo.tiempo_estandar_computado)  || 0;
-                        var tReal   = parseFloat(opInfo.tiempo_real_operativo)       || 0;
-                        var disp    = parseFloat(opInfo.disponibilidad)              || 0;
-                        var cal     = parseFloat(opInfo.calidad)                     || 1;
-                        var proc    = opInfo.process  || marker.getAttribute('data-reason') || '---';
-                        var art     = opInfo.article  || marker.getAttribute('data-detalle') || '---';
-                        var opNum   = opInfo.op_number || marker.getAttribute('data-id-orden') || '---';
+                        ind.setAttribute('data-opname', opInfo.name || marker.getAttribute('data-operario') || 'Operario');
+                        ind.setAttribute('data-process', opInfo.process || marker.getAttribute('data-reason') || '');
+                        ind.setAttribute('data-article', opInfo.article || marker.getAttribute('data-detalle') || '');
+                        ind.setAttribute('data-tstd', parseFloat(opInfo.tiempo_estandar_computado) || 0);
+                        ind.setAttribute('data-treal', parseFloat(opInfo.tiempo_real_operativo) || 0);
+                        ind.setAttribute('data-disp', parseFloat(opInfo.disponibilidad) || 0);
+                        ind.setAttribute('data-cal', parseFloat(opInfo.calidad) || 1);
+                        ind.setAttribute('data-opnumber', opInfo.op_number || marker.getAttribute('data-id-orden') || '---');
 
                         ind.setAttribute('data-handler-set', '1');
                         ind.style.cursor = 'pointer';
-                        ind.addEventListener('mousemove', function(e) {
-                            showOperatorTooltip(e, opName, proc, art, tEst, tReal, disp, cal, opNum);
-                        });
-                        ind.addEventListener('mouseleave', function(e) { hideTooltip(e); });
+                        // Reemplazar handler inline por uno que lea exclusivamente de data-*
+                        ind.onmousemove = function(e) {
+                            var t = e.currentTarget;
+                            showOperatorTooltip(e,
+                                t.getAttribute('data-opname') || '',
+                                t.getAttribute('data-process') || '',
+                                t.getAttribute('data-article') || '',
+                                parseFloat(t.getAttribute('data-tstd')) || 0,
+                                parseFloat(t.getAttribute('data-treal')) || 0,
+                                parseFloat(t.getAttribute('data-disp')) || 0,
+                                parseFloat(t.getAttribute('data-cal')) || 1,
+                                t.getAttribute('data-opnumber') || '---'
+                            );
+                        };
+                        ind.onmouseleave = function(e) { hideTooltip(e); };
+                        ind.onclick = function(e) {
+                            e.stopPropagation();
+                            copyToClipboard(ind.getAttribute('data-opnumber') || '', e);
+                        };
                     }
                     ind.setAttribute('data-handler-set', '1'); // marcar aunque no haya datos
                 });
@@ -3400,17 +3415,32 @@
                                                 var ind = document.createElement('div');
                                                 ind.className = 'operator-indicator';
                                                 ind.title = opName;
+                                                ind.setAttribute('data-opname', opName);
+                                                ind.setAttribute('data-process', opInfo.process || '');
+                                                ind.setAttribute('data-article', opInfo.article || '');
+                                                ind.setAttribute('data-tstd', tEstOp);
+                                                ind.setAttribute('data-treal', tRealOp);
+                                                ind.setAttribute('data-disp', dispOp);
+                                                ind.setAttribute('data-cal', calOp);
+                                                ind.setAttribute('data-opnumber', opInfo.op_number || '---');
                                                 ind.innerHTML = '<i class="fa-solid fa-user-check"></i>';
                                                 ind.onmousemove = function(e) {
-                                                    showOperatorTooltip(e, opName,
-                                                        opInfo.process || '', opInfo.article || '',
-                                                        tEstOp, tRealOp, dispOp, calOp,
-                                                        opInfo.op_number || '---');
+                                                    var t = e.currentTarget;
+                                                    showOperatorTooltip(e,
+                                                        t.getAttribute('data-opname') || '',
+                                                        t.getAttribute('data-process') || '',
+                                                        t.getAttribute('data-article') || '',
+                                                        parseFloat(t.getAttribute('data-tstd')) || 0,
+                                                        parseFloat(t.getAttribute('data-treal')) || 0,
+                                                        parseFloat(t.getAttribute('data-disp')) || 0,
+                                                        parseFloat(t.getAttribute('data-cal')) || 1,
+                                                        t.getAttribute('data-opnumber') || '---'
+                                                    );
                                                 };
                                                 ind.onmouseleave = function(e) { hideTooltip(e); };
                                                 ind.onclick = function(e) {
                                                     e.stopPropagation();
-                                                    copyToClipboard(opInfo.op_number || '', e);
+                                                    copyToClipboard(ind.getAttribute('data-opnumber') || '', e);
                                                 };
                                                 group.appendChild(ind);
                                             });
