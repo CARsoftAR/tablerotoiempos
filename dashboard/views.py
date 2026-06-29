@@ -1850,8 +1850,7 @@ def obtener_auditoria(request):
     analysis_detailed += f"<span class='text-sky-400 font-bold uppercase'>2. CÁLCULO DE LA EFICIENCIA ({oee:.1f}%)</span>\n"
     analysis_detailed += f"    • Disponibilidad ({availability:.1f}%): {(total_prod_mins_serie)/60.0:.2f} hrs trabajadas / {total_disp_mins_serie/60.0:.2f} hrs de turno.\n"
     analysis_detailed += f"    • Rendimiento ({performance:.1f}%): {total_std_mins/60.0:.2f} hrs estándar / {total_prod_mins_serie/60.0:.2f} hrs operativas.\n"
-    analysis_detailed += f"    • Calidad ({quality:.1f}%): {total_qty:.1f} buenas / {total_piezas_p:.1f} totales.\n"
-    analysis_detailed += f"    • OEE Final: {oee:.1f}%.\n\n"
+    analysis_detailed += f"    • OEE Final ({oee:.1f}%): {availability:.1f}% (Disp) × {performance:.1f}% (Rend) × {quality:.1f}% (Cal) = {oee:.1f}%.\n\n"
 
     rating = "EXCELENTE" if oee >= 100 else "MUY BUENO" if oee >= 85 else "BUENO" if oee >= 70 else "REGULAR" if oee >= 50 else "A REVISAR"
     analysis_detailed += f"<div class='mt-6 p-4 bg-white/5 border border-white/10 rounded-xl text-center'>\n"

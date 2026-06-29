@@ -137,17 +137,17 @@
                 <span class="text-slate-400 font-extrabold uppercase tracking-[0.3em] text-[8px] group-hover:text-blue-400 transition-colors">Rendimiento</span>
             </div>
 
-            <!-- Quality Gauge -->
+            <!-- OEE Global Gauge -->
             <div class="flex flex-col items-center group">
                 <div class="relative w-44 h-[5.5rem] overflow-hidden mb-2">
                     <div class="absolute w-44 h-44 rounded-full border-[10px] border-white/5 box-border"></div>
-                    <div class="absolute w-44 h-44 rounded-full border-[10px] border-emerald-400 box-border origin-center shadow-[0_0_20px_rgba(52,211,153,0.3)]" 
-                            style="clip-path: polygon(0 0, 100% 0, 100% 50%, 0 50%); transform: rotate(calc(1.8deg * {% if resumen_activo.avg_quality > 100 %}100{% else %}{{ resumen_activo.avg_quality }}{% endif %} - 180deg));"></div>
+                    <div class="absolute w-44 h-44 rounded-full border-[10px] border-amber-400 box-border origin-center shadow-[0_0_20px_rgba(251,191,36,0.3)]" 
+                            style="clip-path: polygon(0 0, 100% 0, 100% 50%, 0 50%); transform: rotate(calc(1.8deg * {% if resumen_activo.promedio_oee > 100 %}100{% else %}{{ resumen_activo.promedio_oee }}{% endif %} - 180deg));"></div>
                     <div class="absolute bottom-0 w-full text-center">
-                        <span class="text-3xl font-black text-white font-tech">{{ resumen_activo.avg_quality }}<span class="text-xs text-slate-500 ml-1">%</span></span>
+                        <span class="text-3xl font-black text-white font-tech">{{ resumen_activo.promedio_oee }}<span class="text-xs text-slate-500 ml-1">%</span></span>
                     </div>
                 </div>
-                <span class="text-slate-400 font-extrabold uppercase tracking-[0.3em] text-[8px] group-hover:text-emerald-400 transition-colors">Calidad</span>
+                <span class="text-slate-400 font-extrabold uppercase tracking-[0.3em] text-[8px] group-hover:text-amber-400 transition-colors">OEE GLOBAL</span>
             </div>
         </div>
     </div>
@@ -671,7 +671,7 @@
                 
                 // 2. Inyectar Reportes de Texto
                 document.getElementById('analysis-content').innerHTML = data.analysis_conversational || "Análisis no disponible.";
-                document.getElementById('metrics-content').innerHTML = (data.analysis_detailed || "Métricas no disponibles.").replace(/    • Calidad \([^)]+%\): .+? totales\.\n?/g, '');
+                document.getElementById('metrics-content').innerHTML = data.analysis_detailed || "Métricas no disponibles.";
             }
         } catch (e) { 
             console.error('Error Crítico en Auditoría:', e);
