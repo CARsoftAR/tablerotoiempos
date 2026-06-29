@@ -69,8 +69,7 @@
                 <th width="15%" class="text-center">OEE</th>
                 <th width="15%" class="text-center">Disponibilidad</th>
                 <th width="15%" class="text-center">Rendimiento</th>
-                <th width="15%" class="text-center">Calidad</th>
-                <th width="10%">Prod.</th>
+                <th width="25%">Prod.</th>
             </tr>
         </thead>
         <tbody>
@@ -80,11 +79,10 @@
                 <td class="text-center font-bold" style="color: #1e3a8a;">{{ op.oee }}%</td>
                 <td class="text-center">{{ op.availability }}%</td>
                 <td class="text-center">{{ op.performance }}%</td>
-                <td class="text-center">{{ op.quality }}%</td>
                 <td class="text-right">{{ op.actual_qty|floatformat:0 }}</td>
             </tr>
             {% empty %}
-            <tr><td colspan="6" class="text-center">No hay datos de operarios para este periodo.</td></tr>
+            <tr><td colspan="5" class="text-center">No hay datos de operarios para este periodo.</td></tr>
             {% endfor %}
         </tbody>
     </table>
