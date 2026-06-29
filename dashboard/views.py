@@ -2290,57 +2290,73 @@ def generar_reporte_pdf(request):
     date_param = request.GET.get('date')
     start_param = request.GET.get('start_date')
     end_param = request.GET.get('end_date')
-    # Forzamos view personnel para aislar datos solo de empleados
+    tipo = request.GET.get('tipo', 'personal')
     request_copy = request.GET.copy()
-    request_copy['view'] = 'personnel'
+    if tipo == 'maquinas':
+        request_copy['view'] = 'machines'
+    else:
+        request_copy['view'] = 'personnel'
     request.GET = request_copy
     
     context = dashboard_produccion(request, return_context=True, force_date=date_param, force_start=start_param, force_end=end_param, force_format='clock')
     
-    operario_id = request.GET.get('operario_id')
-    
     if not isinstance(context, dict):
         return HttpResponse("Error al generar datos del reporte", status=500)
 
-    operators = context.get('kpis_personal', [])
-    if operario_id:
-        operators = [op for op in operators if str(op['id']) == str(operario_id)]
-    
-    # Global OEE Average (basado en el promedio de los operarios activos)
-    active_operators = [op for op in operators if op['is_active_production'] or op['horas_prod'] > 0]
-    total_oee = sum([op['oee'] for op in active_operators])
-    count_active = len(active_operators)
-    global_oee = total_oee / count_active if count_active > 0 else 0
-    
-    # Listado completo de Operarios (ordenado por OEE)
-    operators_sorted = sorted(operators, key=lambda x: x['oee'], reverse=True)
-    
-    for op in operators_sorted:
-        oee_val = float(op.get('oee', 0))
-        if oee_val >= 85:
-            op['clasificacion'] = "CLASE A / EXCELENTE"
-            op['clasificacion_color'] = "#059669"
-        elif oee_val >= 60:
-            op['clasificacion'] = "ESTÁNDAR"
-            op['clasificacion_color'] = "#d97706"
-        else:
-            op['clasificacion'] = "CRÍTICO / A REVISAR"
-            op['clasificacion_color'] = "#dc2626"
-            
-        avail = op.get('availability', 0.0)
-        prod = op.get('horas_prod', 0.0)
-        op['horas_disp'] = round(prod / (avail / 100 + 0.0001), 2) if avail > 0 else 0.0
-        op['total_pz'] = op.get('actual_qty', 0) + op.get('rejected_qty', 0)
+    if tipo == 'maquinas':
+        machines = context.get('cards_data', [])
+        machines_sorted = sorted(machines, key=lambda x: float(x.get('oee', 0)), reverse=True)
+        total_oee = sum(float(m.get('oee', 0)) for m in machines_sorted)
+        count = len(machines_sorted)
+        global_oee = total_oee / count if count > 0 else 0
+        pdf_context = {
+            'tipo_reporte': tipo,
+            'fecha': context.get('fecha_target'),
+            'fecha_fin': context.get('fecha_fin_target'),
+            'is_range': context.get('is_range', False),
+            'global_oee': round(global_oee, 2),
+            'top_operators': machines_sorted,
+            'is_individual': False,
+        }
+    else:
+        operario_id = request.GET.get('operario_id')
+        operators = context.get('kpis_personal', [])
+        if operario_id:
+            operators = [op for op in operators if str(op['id']) == str(operario_id)]
+        
+        active_operators = [op for op in operators if op.get('is_active_production') or op.get('horas_prod', 0) > 0]
+        total_oee = sum([op['oee'] for op in active_operators])
+        count_active = len(active_operators)
+        global_oee = total_oee / count_active if count_active > 0 else 0
+        
+        operators_sorted = sorted(operators, key=lambda x: x['oee'], reverse=True)
+        
+        for op in operators_sorted:
+            oee_val = float(op.get('oee', 0))
+            if oee_val >= 85:
+                op['clasificacion'] = "CLASE A / EXCELENTE"
+                op['clasificacion_color'] = "#059669"
+            elif oee_val >= 60:
+                op['clasificacion'] = "ESTÁNDAR"
+                op['clasificacion_color'] = "#d97706"
+            else:
+                op['clasificacion'] = "CRÍTICO / A REVISAR"
+                op['clasificacion_color'] = "#dc2626"
+                
+            avail = op.get('availability', 0.0)
+            prod = op.get('horas_prod', 0.0)
+            op['horas_disp'] = round(prod / (avail / 100 + 0.0001), 2) if avail > 0 else 0.0
+            op['total_pz'] = op.get('actual_qty', 0) + op.get('rejected_qty', 0)
 
-    
-    pdf_context = {
-        'fecha': context.get('fecha_target'),
-        'fecha_fin': context.get('fecha_fin_target'),
-        'is_range': context.get('is_range', False),
-        'global_oee': round(global_oee, 2),
-        'top_operators': operators_sorted,
-        'is_individual': bool(operario_id),
-    }
+        pdf_context = {
+            'tipo_reporte': tipo,
+            'fecha': context.get('fecha_target'),
+            'fecha_fin': context.get('fecha_fin_target'),
+            'is_range': context.get('is_range', False),
+            'global_oee': round(global_oee, 2),
+            'top_operators': operators_sorted,
+            'is_individual': bool(operario_id),
+        }
     
     template_path = 'dashboard/reporte_pdf.html'
     template = get_template(template_path)

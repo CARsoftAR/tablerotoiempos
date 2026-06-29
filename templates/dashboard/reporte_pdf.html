@@ -61,6 +61,33 @@
         <strong>{{ global_oee }}%</strong>
     </div>
 
+    {% if tipo_reporte == "maquinas" %}
+    <h2>Listado de Máquinas (Top Eficiencia)</h2>
+    <table>
+        <thead>
+            <tr>
+                <th width="30%">Máquina</th>
+                <th width="18%" class="text-center">OEE</th>
+                <th width="18%" class="text-center">Disponibilidad</th>
+                <th width="18%" class="text-center">Rendimiento</th>
+                <th width="16%">Prod.</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for m in top_operators %}
+            <tr>
+                <td>{{ m.name }}</td>
+                <td class="text-center font-bold" style="color: #1e3a8a;">{{ m.oee }}%</td>
+                <td class="text-center">{{ m.availability }}%</td>
+                <td class="text-center">{{ m.performance }}%</td>
+                <td class="text-right">{{ m.actual_qty|floatformat:0 }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center">No hay datos de máquinas para este periodo.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
     <h2>{% if is_individual %}Detalle del Operario{% else %}Listado de Operarios (Top Eficiencia){% endif %}</h2>
     <table>
         <thead>
@@ -86,6 +113,7 @@
             {% endfor %}
         </tbody>
     </table>
+    {% endif %}
 
     {% if is_individual and top_operators %}
     {% with op=top_operators.0 %}
