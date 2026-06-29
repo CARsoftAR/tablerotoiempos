@@ -671,7 +671,7 @@
                 
                 // 2. Inyectar Reportes de Texto
                 document.getElementById('analysis-content').innerHTML = data.analysis_conversational || "Análisis no disponible.";
-                document.getElementById('metrics-content').innerHTML = data.analysis_detailed || "Métricas no disponibles.";
+                document.getElementById('metrics-content').innerHTML = (data.analysis_detailed || "Métricas no disponibles.").replace(/    • Calidad \([^)]+%\): .+? totales\.\n?/g, '');
             }
         } catch (e) { 
             console.error('Error Crítico en Auditoría:', e);
