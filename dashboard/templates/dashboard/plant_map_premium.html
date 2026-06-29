@@ -3339,10 +3339,12 @@
                                         try {
                                             opsParsed = typeof m.active_operators_js === 'string' ? JSON.parse(m.active_operators_js) : m.active_operators_js;
                                         } catch(e) {}
-                                        if (opsParsed.length > 0) {
-                                            machineOperatorsData[m.id] = opsParsed;
-                                            marker.setAttribute('data-active-ops', typeof m.active_operators_js === 'string' ? m.active_operators_js : JSON.stringify(m.active_operators_js));
-                                        }
+                                        // Actualizar SIEMPRE (incluso si vacío) para limpiar operarios fantasmas
+                                        machineOperatorsData[m.id] = opsParsed;
+                                        marker.setAttribute('data-active-ops', typeof m.active_operators_js === 'string' ? m.active_operators_js : JSON.stringify(m.active_operators_js));
+                                        marker.setAttribute('data-ops-explicit', '1');
+                                    } else {
+                                        marker.setAttribute('data-ops-explicit', '0');
                                     }
 
                                     // ── UPDATE OPERATOR INDICATORS (multi-circle) ──
@@ -3382,7 +3384,9 @@
                                                     }
                                                 } catch(e) {}
                                             }
-                                            if (opsToRender.length === 0) {
+                                            // No crear fantasmas si el servidor confirmó explícitamente 0 operarios
+                                            var isExplicitlyEmpty = marker.getAttribute('data-ops-explicit') === '1';
+                                            if (opsToRender.length === 0 && !isExplicitlyEmpty) {
                                                 opsToRender = [{ name: m.operario, info: {} }];
                                             }
                                         }
