@@ -3321,13 +3321,14 @@
                     
                     // Map-First: iterar TODOS los marcadores del DOM
                     document.querySelectorAll('.machine-marker').forEach(function(marker) {
+                        try {
                         var mId = marker.getAttribute('data-id') || marker.getAttribute('data-machine-code');
                         var m = machinesById[mId];
                         
                         // ── LIMPIEZA INVERSA: si el backend omitió esta máquina ──
                         if (!m) {
                             var group = marker.querySelector('.operator-group');
-                            if (group) { group.innerHTML = ''; group.remove(); }
+                            if (group) { group.innerHTML = ''; group.removeAttribute('title'); }
                             return;
                         }
                         
@@ -3345,7 +3346,7 @@
                         marker.setAttribute('data-qty', Math.round(m.qty || 0));
                         marker.setAttribute('data-downtime', m.downtime_mins || 0);
                         
-                        // ── FORZAR ACTUALIZACIÓN DEL STORE GLOBAL ──
+                        // ── ACTUALIZAR STORE ──
                         if (m.active_operators_js) {
                             var opsParsed = [];
                             try {
@@ -3353,103 +3354,73 @@
                             } catch(e) {}
                             machineOperatorsData[m.id] = opsParsed;
                             marker.setAttribute('data-active-ops', typeof m.active_operators_js === 'string' ? m.active_operators_js : JSON.stringify(m.active_operators_js));
-                            marker.setAttribute('data-ops-explicit', '1');
-                        } else {
-                            marker.setAttribute('data-ops-explicit', '0');
                         }
                         
-                        // ── UPDATE OPERATOR INDICATORS (multi-circle) ──
+                        // ── RENDER VÍA innerHTML (NUNCA remove()) ──
                         let group = marker.querySelector('.operator-group');
-                        const isInactive = ['STOPPED', 'OFFLINE'].indexOf(m.status) !== -1;
-                        
-                        let opsToRender = [];
-                        if (m.active_operators && m.active_operators.length > 0) {
-                            opsToRender = m.active_operators.map(function(entry) {
-                                if (Array.isArray(entry)) {
-                                    return { name: entry[0], info: entry[1] };
-                                }
-                                return { name: entry.name, info: entry };
-                            });
-                        } else if (!isInactive && m.operario && m.operario !== 'S/A') {
-                            var opsFromStore = machineOperatorsData[m.id] || [];
-                            if (opsFromStore.length > 0) {
-                                opsToRender = opsFromStore.map(function(opInfo) {
-                                    return { name: opInfo.name || m.operario, info: opInfo };
-                                });
-                            } else {
-                                var opsFromAttr = marker.getAttribute('data-active-ops');
-                                if (opsFromAttr) {
-                                    try {
-                                        var opsParsedFromAttr = JSON.parse(opsFromAttr);
-                                        if (opsParsedFromAttr.length > 0) {
-                                            opsToRender = opsParsedFromAttr.map(function(opInfo) {
-                                                return { name: opInfo.name || m.operario, info: opInfo };
-                                            });
-                                        }
-                                    } catch(e) {}
-                                }
-                                var isExplicitlyEmpty = marker.getAttribute('data-ops-explicit') === '1';
-                                if (opsToRender.length === 0 && !isExplicitlyEmpty) {
-                                    opsToRender = [{ name: m.operario, info: {} }];
-                                }
-                            }
+                        if (!group) {
+                            group = document.createElement('div');
+                            group.className = 'operator-group';
+                            var iconContainer = marker.querySelector('.machine-icon-container');
+                            marker.insertBefore(group, iconContainer || marker.firstChild);
                         }
                         
-                        if (opsToRender.length > 0 && !isInactive) {
-                            if (!group) {
-                                group = document.createElement('div');
-                                var iconContainer = marker.querySelector('.machine-icon-container');
-                                marker.insertBefore(group, iconContainer || marker.firstChild);
-                            }
-                            group.className = 'operator-group';
-                            group.title = opsToRender.map(function(o) { return o.name; }).join(' · ');
+                        const isInactive = ['STOPPED', 'OFFLINE'].indexOf(m.status) !== -1;
+                        var activeOps = (m.active_operators && m.active_operators.length > 0) ? m.active_operators : null;
+                        
+                        if (!isInactive && activeOps) {
+                            var htmlParts = [];
+                            var names = [];
+                            activeOps.forEach(function(entry) {
+                                var opInfo = Array.isArray(entry) ? entry[1] : entry;
+                                var opName = Array.isArray(entry) ? entry[0] : entry.name;
+                                names.push(opName);
+                                
+                                var tEstOp = parseFloat(opInfo.tiempo_estandar_computado) || 0;
+                                var tRealOp = parseFloat(opInfo.tiempo_real_operativo) || 0;
+                                var dispOp = parseFloat(opInfo.disponibilidad) || 0;
+                                var calOp = parseFloat(opInfo.calidad) || 1;
+                                var opNumber = opInfo.op_number || '---';
+                                var process = (opInfo.process || '').replace(/"/g, '&quot;');
+                                var article = (opInfo.article || '').replace(/"/g, '&quot;');
+                                
+                                htmlParts.push('<div class="operator-indicator" title="' + opName.replace(/"/g, '&quot;') + '"' +
+                                    ' data-opname="' + opName.replace(/"/g, '&quot;') + '"' +
+                                    ' data-process="' + process + '"' +
+                                    ' data-article="' + article + '"' +
+                                    ' data-tstd="' + tEstOp + '"' +
+                                    ' data-treal="' + tRealOp + '"' +
+                                    ' data-disp="' + dispOp + '"' +
+                                    ' data-cal="' + calOp + '"' +
+                                    ' data-opnumber="' + opNumber.replace(/"/g, '&quot;') + '"' +
+                                    ' style="cursor:pointer"><i class="fa-solid fa-user-check"></i></div>');
+                            });
+                            group.innerHTML = htmlParts.join('');
+                            group.title = names.join(' · ');
                             
-                            var currentCount = group.querySelectorAll('.operator-indicator').length;
-                            if (currentCount !== opsToRender.length) {
-                                group.innerHTML = '';
-                                opsToRender.forEach(function(op) {
-                                    var opName = op.name;
-                                    var opInfo = op.info || {};
-                                    var tEstOp = parseFloat(opInfo.tiempo_estandar_computado) || 0;
-                                    var tRealOp = parseFloat(opInfo.tiempo_real_operativo) || 0;
-                                    var dispOp = parseFloat(opInfo.disponibilidad) || 0;
-                                    var calOp = parseFloat(opInfo.calidad) || 1;
-                                    
-                                    var ind = document.createElement('div');
-                                    ind.className = 'operator-indicator';
-                                    ind.title = opName;
-                                    ind.setAttribute('data-opname', opName);
-                                    ind.setAttribute('data-process', opInfo.process || '');
-                                    ind.setAttribute('data-article', opInfo.article || '');
-                                    ind.setAttribute('data-tstd', tEstOp);
-                                    ind.setAttribute('data-treal', tRealOp);
-                                    ind.setAttribute('data-disp', dispOp);
-                                    ind.setAttribute('data-cal', calOp);
-                                    ind.setAttribute('data-opnumber', opInfo.op_number || '---');
-                                    ind.innerHTML = '<i class="fa-solid fa-user-check"></i>';
-                                    ind.onmousemove = function(e) {
-                                        var t = e.currentTarget;
-                                        showOperatorTooltip(e,
-                                            t.getAttribute('data-opname') || '',
-                                            t.getAttribute('data-process') || '',
-                                            t.getAttribute('data-article') || '',
-                                            parseFloat(t.getAttribute('data-tstd')) || 0,
-                                            parseFloat(t.getAttribute('data-treal')) || 0,
-                                            parseFloat(t.getAttribute('data-disp')) || 0,
-                                            parseFloat(t.getAttribute('data-cal')) || 1,
-                                            t.getAttribute('data-opnumber') || '---'
-                                        );
-                                    };
-                                    ind.onmouseleave = function(e) { hideTooltip(e); };
-                                    ind.onclick = function(e) {
-                                        e.stopPropagation();
-                                        copyToClipboard(ind.getAttribute('data-opnumber') || '', e);
-                                    };
-                                    group.appendChild(ind);
-                                });
-                            }
-                        } else if (group) {
-                            group.remove();
+                            group.querySelectorAll('.operator-indicator').forEach(function(ind) {
+                                ind.onmousemove = function(e) {
+                                    var t = e.currentTarget;
+                                    showOperatorTooltip(e,
+                                        t.getAttribute('data-opname') || '',
+                                        t.getAttribute('data-process') || '',
+                                        t.getAttribute('data-article') || '',
+                                        parseFloat(t.getAttribute('data-tstd')) || 0,
+                                        parseFloat(t.getAttribute('data-treal')) || 0,
+                                        parseFloat(t.getAttribute('data-disp')) || 0,
+                                        parseFloat(t.getAttribute('data-cal')) || 1,
+                                        t.getAttribute('data-opnumber') || '---'
+                                    );
+                                };
+                                ind.onmouseleave = function(e) { hideTooltip(e); };
+                                ind.onclick = function(e) {
+                                    e.stopPropagation();
+                                    copyToClipboard(ind.getAttribute('data-opnumber') || '', e);
+                                };
+                            });
+                        } else {
+                            group.innerHTML = '';
+                            group.removeAttribute('title');
                         }
                         
                         // ── SIDEBAR ──
@@ -3477,6 +3448,9 @@
                                 if (span) span.textContent = (m.detalle || 'Sin Actividad').substring(0, 45);
                             }
                         }
+                    } catch(e) {
+                        console.error('Error refrescando máquina', marker.getAttribute('data-id'), e);
+                    }
                     });
                     console.log('Map data refreshed.');
                 })
