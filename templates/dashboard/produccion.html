@@ -292,7 +292,7 @@
     </div>
 
     <!-- Detailed Metrics Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <!-- Availability Card -->
         <div class="bg-slate-800 rounded-lg overflow-hidden border border-slate-700 shadow-xl">
             <div class="bg-teal-600 px-4 py-2 font-bold text-white tracking-wide flex justify-between items-center text-sm">
@@ -331,27 +331,6 @@
                 </div>
                 <div class="relative h-2 rounded-full bg-slate-900 border border-slate-700 overflow-hidden mt-4">
                     <div class="absolute top-0 left-0 h-full bg-lime-400 shadow-[0_0_10px_rgba(163,230,53,0.5)] transition-all duration-1000" style="width: {% if resumen_activo.avg_performance > 100 %}100{% else %}{{ resumen_activo.avg_performance }}{% endif %}%"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Quality Card -->
-        <div class="bg-slate-800 rounded-lg overflow-hidden border border-slate-700 shadow-xl">
-            <div class="bg-amber-600 px-4 py-2 font-bold text-white tracking-wide flex justify-between items-center text-sm">
-                <span>Calidad</span>
-                <span class="text-white/90">{{ resumen_activo.avg_quality }}%</span>
-            </div>
-            <div class="p-6 space-y-4">
-                <div class="flex justify-between items-end">
-                    <span class="text-slate-400 text-sm font-medium">Cant. Real</span>
-                    <span class="text-white font-bold text-lg">{{ resumen_activo.global_actual_qty }}</span>
-                </div>
-                <div class="flex justify-between items-end">
-                    <span class="text-slate-400 text-sm font-medium">Reproceso</span>
-                    <span class="text-white font-bold text-lg">{{ resumen_activo.global_rejected_qty }}</span>
-                </div>
-                <div class="relative h-2 rounded-full bg-slate-900 border border-slate-700 overflow-hidden mt-4">
-                    <div class="absolute top-0 left-0 h-full bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)] transition-all duration-1000" style="width: {{ resumen_activo.avg_quality }}%"></div>
                 </div>
             </div>
         </div>
