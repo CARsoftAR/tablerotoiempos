@@ -1,0 +1,433 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Configuración de IA - ABBAMAT{% endblock %}
+
+{% block content %}
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100;300;400;700;900&display=swap');
+
+    :root {
+        --premium-gold: #d4af37;
+        --gold-bright: #ffd700;
+        --dark-bg: #050505;
+        --glass-bg: rgba(255, 255, 255, 0.03);
+        --glass-border: rgba(255, 255, 255, 0.08);
+        --font-brand: 'Outfit', sans-serif;
+    }
+
+    body {
+        background-color: var(--dark-bg);
+        font-family: var(--font-brand);
+    }
+
+    .premium-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 40px 20px;
+    }
+
+    .header-section {
+        position: relative;
+        padding: 50px;
+        background: linear-gradient(135deg, rgba(30, 30, 30, 0.5) 0%, rgba(10, 10, 10, 0.8) 100%);
+        border: 1px solid var(--glass-border);
+        border-radius: 40px;
+        margin-bottom: 40px;
+        backdrop-filter: blur(20px);
+        overflow: hidden;
+    }
+
+    .header-section h1 {
+        font-size: 3rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: -0.05em;
+        margin: 0;
+        background: linear-gradient(to bottom, #fff 0%, #aaa 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    .header-section h1 span {
+        background: linear-gradient(to bottom, var(--gold-bright), var(--premium-gold));
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    .premium-card {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 35px;
+        padding: 40px;
+        backdrop-filter: blur(10px);
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .premium-card:hover {
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(212, 175, 55, 0.2);
+    }
+
+    .label-premium {
+        display: block;
+        font-size: 10px;
+        font-weight: 900;
+        text-transform: uppercase;
+        color: var(--premium-gold);
+        margin-bottom: 12px;
+        letter-spacing: 0.2em;
+        margin-left: 5px;
+    }
+
+    .input-premium {
+        width: 100%;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--glass-border);
+        border-radius: 18px;
+        padding: 18px 25px;
+        color: #fff;
+        font-family: var(--font-brand);
+        font-weight: 600;
+        transition: all 0.3s;
+    }
+
+    .input-premium:focus {
+        outline: none;
+        border-color: var(--premium-gold);
+        background: rgba(255, 255, 255, 0.08);
+        box-shadow: 0 0 20px rgba(212, 175, 55, 0.1);
+    }
+
+    .select-premium {
+        width: 100%;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--glass-border);
+        border-radius: 18px;
+        padding: 18px 25px;
+        color: #fff;
+        font-family: var(--font-brand);
+        font-weight: 600;
+        transition: all 0.3s;
+        appearance: none;
+        cursor: pointer;
+    }
+
+    .select-premium:focus {
+        outline: none;
+        border-color: var(--premium-gold);
+        background: rgba(255, 255, 255, 0.08);
+    }
+
+    .select-premium option {
+        background: #1a1a1a;
+        color: #fff;
+    }
+
+    .btn-save {
+        width: 100%;
+        padding: 22px;
+        border-radius: 20px;
+        background: var(--premium-gold);
+        color: #000;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+        border: none;
+        cursor: pointer;
+        transition: all 0.3s;
+        box-shadow: 0 10px 30px rgba(212, 175, 55, 0.2);
+    }
+
+    .btn-save:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 20px 40px rgba(212, 175, 55, 0.4);
+        background: var(--gold-bright);
+    }
+
+    /* Toggle Switch */
+    .switch {
+        position: relative;
+        display: inline-block;
+        width: 60px;
+        height: 30px;
+    }
+
+    .switch input { opacity: 0; width: 0; height: 0; }
+
+    .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background-color: rgba(255, 255, 255, 0.1);
+        transition: .4s;
+        border-radius: 34px;
+        border: 1px solid var(--glass-border);
+    }
+
+    .slider:before {
+        position: absolute;
+        content: "";
+        height: 22px; width: 22px;
+        left: 4px; bottom: 3px;
+        background-color: #666;
+        transition: .4s;
+        border-radius: 50%;
+    }
+
+    input:checked + .slider { background-color: rgba(212, 175, 55, 0.2); border-color: var(--premium-gold); }
+    input:checked + .slider:before { transform: translateX(28px); background-color: var(--premium-gold); }
+
+    .provider-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        border-radius: 12px;
+        font-size: 10px;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+    }
+
+    .config-card {
+        transition: opacity 0.3s ease;
+    }
+
+    .success-toast {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        background: rgba(5, 5, 5, 0.95);
+        border: 1px solid rgba(212, 175, 55, 0.3);
+        border-radius: 20px;
+        padding: 20px 30px;
+        backdrop-filter: blur(20px);
+        box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+        animation: slideIn 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+    }
+
+    @keyframes slideIn {
+        from { opacity: 0; transform: translateX(100px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+</style>
+
+<div class="premium-container animate-in fade-in duration-1000">
+
+    {% if success %}
+    <div class="success-toast" id="success-toast">
+        <div class="flex items-center gap-3">
+            <span class="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                <i class="fas fa-check text-emerald-400 text-sm"></i>
+            </span>
+            <div>
+                <p class="text-white font-bold text-sm">Configuración guardada</p>
+                <p class="text-slate-500 text-[10px] font-semibold">El proveedor de IA se actualizó correctamente.</p>
+            </div>
+            <button onclick="document.getElementById('success-toast').remove()" class="text-slate-600 hover:text-white ml-4">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+    <script>setTimeout(() => { const t = document.getElementById('success-toast'); if(t) t.remove(); }, 5000);</script>
+    {% endif %}
+
+    <div class="header-section">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1>CONFIGURACIÓN <span>DE IA</span></h1>
+                <p class="text-white/40 font-medium">Proveedores de inteligencia artificial para el chat de planta</p>
+            </div>
+            <div class="hidden md:flex items-center gap-4 bg-white/5 p-4 rounded-3xl border border-white/5">
+                {% if active %}
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span class="text-[9px] font-black uppercase tracking-widest text-emerald-500">{{ active.get_provider_display }} Activo</span>
+                {% else %}
+                <span class="w-2 h-2 rounded-full bg-red-500"></span>
+                <span class="text-[9px] font-black uppercase tracking-widest text-red-500">Sin Configurar</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div class="lg:col-span-2">
+            <div class="premium-card">
+                <div class="flex items-center gap-3 mb-8">
+                    <div class="w-12 h-12 rounded-2xl bg-amber-400/10 flex items-center justify-center">
+                        <i class="fas fa-robot text-amber-400 text-xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-black text-white uppercase tracking-tight">Proveedor de IA</h3>
+                        <p class="text-[10px] text-slate-500 font-semibold">Configura el motor de inteligencia artificial del chat de planta</p>
+                    </div>
+                </div>
+
+                <form method="POST">
+                    {% csrf_token %}
+
+                    <div class="space-y-8">
+                        <!-- Provider Selector -->
+                        <div>
+                            <label class="label-premium"><i class="fas fa-cloud mr-1"></i> Proveedor</label>
+                            <select name="provider" id="provider-select" class="select-premium">
+                                <option value="gemini" {% if active and active.provider == 'gemini' %}selected{% endif %}>Google Gemini</option>
+                                <option value="openai" {% if active and active.provider == 'openai' %}selected{% endif %}>OpenAI (ChatGPT)</option>
+                                <option value="anthropic" {% if active and active.provider == 'anthropic' %}selected{% endif %}>Anthropic Claude</option>
+                            </select>
+                        </div>
+
+                        <!-- API Key -->
+                        <div id="api-key-group">
+                            <label class="label-premium"><i class="fas fa-key mr-1"></i> API Key</label>
+                            <input type="password" name="api_key" class="input-premium"
+                                   placeholder="Ingresa la API Key..."
+                                   value="{% if active %}{{ active.api_key }}{% endif %}">
+                        </div>
+
+                        <!-- Model Name -->
+                        <div id="model-name-group">
+                            <label class="label-premium"><i class="fas fa-tag mr-1"></i> Modelo</label>
+                            <input type="text" name="model_name" class="input-premium" id="model-name-input"
+                                   placeholder="gemini-1.5-flash"
+                                   value="{% if active %}{{ active.model_name }}{% endif %}">
+                            <p class="text-[10px] text-slate-600 font-semibold mt-2 ml-2" id="model-hint">
+                                Ej: gemini-1.5-flash, gpt-4o, claude-3-haiku-20240307
+                            </p>
+                        </div>
+
+                        <!-- Activate Toggle -->
+                        <div class="flex items-center justify-between p-6 rounded-2xl bg-white/5 border border-white/5">
+                            <div>
+                                <span class="text-sm font-bold text-white">Activar proveedor</span>
+                                <p class="text-[10px] text-slate-500 font-semibold">Al activarlo, este será el motor usado por el chat de IA</p>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" name="activate" {% if active %}checked{% endif %}>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+
+                        <button type="submit" class="btn-save">
+                            <i class="fas fa-save mr-2"></i> Guardar Configuración
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Sidebar: Current Config & Help -->
+        <div class="space-y-6">
+            <div class="premium-card">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="w-10 h-10 rounded-2xl bg-emerald-400/10 flex items-center justify-center">
+                        <i class="fas fa-info-circle text-emerald-400"></i>
+                    </div>
+                    <h3 class="text-sm font-black text-white uppercase tracking-tight">Estado Actual</h3>
+                </div>
+                {% if active %}
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Proveedor</span>
+                        <span class="provider-badge bg-amber-400/10 text-amber-400 border border-amber-400/20">
+                            <i class="fas fa-check-circle text-[8px]"></i> {{ active.get_provider_display }}
+                        </span>
+                    </div>
+                    <div class="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Modelo</span>
+                        <span class="text-xs text-white font-bold">{{ active.model_name }}</span>
+                    </div>
+                    <div class="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">API Key</span>
+                        <span class="text-xs text-slate-500 font-mono">{{ active.api_key|slice:":8" }}...{{ active.api_key|slice:"-4:" }}</span>
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-center py-8">
+                    <div class="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-exclamation-triangle text-red-400 text-2xl"></i>
+                    </div>
+                    <p class="text-sm text-slate-400 font-semibold">No hay proveedor activo</p>
+                    <p class="text-[10px] text-slate-600 mt-1">Configura y activa un proveedor para habilitar el chat de IA.</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="premium-card">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="w-10 h-10 rounded-2xl bg-amber-400/10 flex items-center justify-center">
+                        <i class="fas fa-lightbulb text-amber-400"></i>
+                    </div>
+                    <h3 class="text-sm font-black text-white uppercase tracking-tight">Modelos Sugeridos</h3>
+                </div>
+                <div class="space-y-3">
+                    <div class="p-3 rounded-xl bg-white/5 border border-white/5 provider-model" data-provider="gemini">
+                        <div class="text-xs font-bold text-white">Gemini</div>
+                        <div class="text-[9px] text-slate-500">gemini-1.5-flash</div>
+                    </div>
+                    <div class="p-3 rounded-xl bg-white/5 border border-white/5 provider-model" data-provider="openai">
+                        <div class="text-xs font-bold text-white">OpenAI</div>
+                        <div class="text-[9px] text-slate-500">gpt-4o</div>
+                    </div>
+                    <div class="p-3 rounded-xl bg-white/5 border border-white/5 provider-model" data-provider="anthropic">
+                        <div class="text-xs font-bold text-white">Anthropic</div>
+                        <div class="text-[9px] text-slate-500">claude-3-haiku-20240307</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const providerSelect = document.getElementById('provider-select');
+        const modelInput = document.getElementById('model-name-input');
+        const modelHint = document.getElementById('model-hint');
+
+        const modelDefaults = {
+            'gemini': 'gemini-1.5-flash',
+            'openai': 'gpt-4o',
+            'anthropic': 'claude-3-haiku-20240307'
+        };
+
+        const modelHints = {
+            'gemini': 'Ej: gemini-1.5-flash, gemini-1.5-pro, gemini-2.0-flash',
+            'openai': 'Ej: gpt-4o, gpt-4o-mini, gpt-4-turbo',
+            'anthropic': 'Ej: claude-3-haiku-20240307, claude-3-sonnet-20240229, claude-3-opus-20240229'
+        };
+
+        function updateModelSuggestions(provider) {
+            if (!modelInput.value || modelInput.value === modelDefaults[provider]) {
+                modelInput.value = modelDefaults[provider];
+            }
+            modelHint.textContent = modelHints[provider];
+
+            document.querySelectorAll('.provider-model').forEach(el => {
+                if (el.dataset.provider === provider) {
+                    el.style.borderColor = 'rgba(212, 175, 55, 0.4)';
+                    el.style.background = 'rgba(212, 175, 55, 0.1)';
+                } else {
+                    el.style.borderColor = 'var(--glass-border)';
+                    el.style.background = 'rgba(255, 255, 255, 0.05)';
+                }
+            });
+        }
+
+        providerSelect.addEventListener('change', function() {
+            updateModelSuggestions(this.value);
+        });
+
+        // Initialize
+        if (providerSelect.value) {
+            updateModelSuggestions(providerSelect.value);
+        }
+    });
+</script>
+{% endblock %}

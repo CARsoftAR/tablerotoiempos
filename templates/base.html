@@ -133,6 +133,10 @@
                 <i class="fas fa-shield-alt w-5 text-center group-hover:scale-110 transition-transform"></i>
                 <span class="text-sm font-bold tracking-wide">Seguridad</span>
             </a>
+            <a href="{% url 'ai_configuration' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all group {% if 'ai_configuration' in request.resolver_match.url_name %}bg-white/10 border border-white/10 text-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.15)]{% else %}text-slate-400 hover:bg-white/5 hover:text-white{% endif %}">
+                <i class="fas fa-robot w-5 text-center group-hover:scale-110 transition-transform"></i>
+                <span class="text-sm font-bold tracking-wide">IA Config</span>
+            </a>
         </nav>
 
         <div class="p-4 border-t border-white/5">
@@ -776,7 +780,7 @@
                     </button>
                 </div>
                 <div class="text-[9px] text-slate-600 font-bold uppercase tracking-widest mt-2 pl-14 flex justify-between">
-                    <span>Gemini 1.5 Enabled</span>
+                    <span>IA Auditor Activo</span>
                     <span class="text-amber-500/50">Ctrl+V para pegar</span>
                 </div>
             </div>
@@ -1011,7 +1015,7 @@
             </div>
             <!-- Footer -->
             <div class="p-4 border-t border-white/10 bg-white/5 text-center shrink-0">
-                <span class="text-[10px] text-slate-600 font-black uppercase tracking-widest">Generado por Gemini 1.5</span>
+                <span class="text-[10px] text-slate-600 font-black uppercase tracking-widest">Generado por IA</span>
             </div>
         </div>
     </div>

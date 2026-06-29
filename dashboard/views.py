@@ -3672,6 +3672,38 @@ from django.views.decorators.csrf import csrf_exempt
 import json
 
 @csrf_exempt
+def ai_configuration_view(request):
+    from .models import AIProviderConfig
+    configs = AIProviderConfig.objects.all()
+    success = False
+
+    if request.method == 'POST':
+        provider = request.POST.get('provider')
+        api_key = request.POST.get('api_key', '').strip()
+        model_name = request.POST.get('model_name', '').strip()
+        activate = request.POST.get('activate') == 'on'
+
+        AIProviderConfig.objects.update(is_active=False)
+
+        obj, created = AIProviderConfig.objects.update_or_create(
+            provider=provider,
+            defaults={
+                'api_key': api_key or None,
+                'model_name': model_name or AIProviderConfig._meta.get_field('model_name').default,
+                'is_active': activate,
+            }
+        )
+        success = True
+        return redirect('ai_configuration')
+
+    active = configs.filter(is_active=True).first()
+    return render(request, 'dashboard/ai_configuration.html', {
+        'configs': configs,
+        'active': active,
+        'success': success,
+    })
+
+
 def chat_ia_api(request):
     """ API para interacción con el Auditor de IA de Planta """
     if request.method == 'POST':

@@ -263,3 +263,22 @@ class OperarioConfig(models.Model):
 
     def __str__(self):
         return f"{self.nombre} ({self.legajo})"
+
+
+class AIProviderConfig(models.Model):
+    PROVIDER_CHOICES = [
+        ('gemini', 'Google Gemini'),
+        ('openai', 'OpenAI (ChatGPT)'),
+        ('anthropic', 'Anthropic Claude'),
+    ]
+    provider = models.CharField(max_length=20, choices=PROVIDER_CHOICES, default='gemini', unique=True)
+    api_key = models.CharField(max_length=255, blank=True, null=True)
+    model_name = models.CharField(max_length=100, default='gemini-1.5-flash')
+    is_active = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = 'ai_provider_config'
+        verbose_name = 'Configuración de Proveedor IA'
+
+    def __str__(self):
+        return f"{self.get_provider_display()} ({self.model_name})"

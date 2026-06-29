@@ -57,5 +57,8 @@ urlpatterns = [
     
     # AI Chat API
     path('api/chat-ia/', views.chat_ia_api, name='chat_ia_api'),
+
+    # AI Provider Configuration
+    path('configuracion-ia/', views.ai_configuration_view, name='ai_configuration'),
 ]
 

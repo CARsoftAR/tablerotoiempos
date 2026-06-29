@@ -6,17 +6,33 @@ from django.utils import timezone
 from django.db.models import Sum, Q
 from .models import VTMan, MaquinaConfig, OperarioConfig
 
-# --- CONFIGURACION GEMINI ---
-GEMINI_API_KEY = "AIzaSyDzCZm2WEnKKfdqUtNy2iA1J7K2a3kRPWA"
 
-# MODELO LISTADO DISPONIBLE: gemini-flash-latest
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={GEMINI_API_KEY}"
+# --- CONFIGURACION DINÁMICA DE IA ---
+def get_active_ai_config():
+    """Retorna la configuración activa de IA desde la BD, o None."""
+    from .models import AIProviderConfig
+    try:
+        cfg = AIProviderConfig.objects.filter(is_active=True).first()
+        if cfg and cfg.api_key:
+            return cfg
+    except Exception:
+        pass
+    return None
 
 def call_gemini(prompt, images_b64=None):
     """
-    Llama a la API REST de Gemini 1.5 Flash con lógica de reintento.
+    Llama a la API REST de Gemini con lógica de reintento.
     Soporta múltiples imágenes.
+    Usa configuración dinámica desde la BD.
     """
+    cfg = get_active_ai_config()
+    if not cfg or cfg.provider != 'gemini':
+        return "Error: Gemini no está configurado. Ve a Configuración > IA Config."
+
+    api_key = cfg.api_key
+    model = cfg.model_name or 'gemini-1.5-flash'
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+
     import time
     parts = [{"text": prompt}]
     
@@ -51,7 +67,7 @@ def call_gemini(prompt, images_b64=None):
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            response = requests.post(GEMINI_URL, headers={'Content-Type': 'application/json'}, json=payload, timeout=25)
+            response = requests.post(url, headers={'Content-Type': 'application/json'}, json=payload, timeout=25)
             
             if response.status_code == 200:
                 result = response.json()
@@ -87,6 +103,156 @@ def call_gemini(prompt, images_b64=None):
             return f"Error de conexión con el Auditor de IA: {str(e)}"
     
     return "No se pudo obtener respuesta de la IA después de varios intentos."
+
+
+def call_openai(prompt, images_b64=None):
+    """
+    Llama a la API de OpenAI (GPT) con lógica de reintento.
+    """
+    cfg = get_active_ai_config()
+    if not cfg or cfg.provider != 'openai':
+        return "Error: OpenAI no está configurado. Ve a Configuración > IA Config."
+
+    import time
+    model = cfg.model_name or 'gpt-4o'
+    headers = {
+        'Authorization': f'Bearer {cfg.api_key}',
+        'Content-Type': 'application/json'
+    }
+
+    messages = [{"role": "user", "content": [{"type": "text", "text": prompt}]}]
+
+    if images_b64:
+        if not isinstance(images_b64, list):
+            images_b64 = [images_b64]
+        for img_b64 in images_b64:
+            if not img_b64:
+                continue
+            clean_b64 = img_b64
+            if "base64," in clean_b64:
+                clean_b64 = clean_b64.split("base64,")[1]
+            messages[0]["content"].append({
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{clean_b64}"}
+            })
+
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": 0.4,
+        "max_tokens": 4096,
+    }
+
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = requests.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=25
+            )
+            if response.status_code == 200:
+                result = response.json()
+                return result['choices'][0]['message']['content']
+            elif response.status_code in [429, 503]:
+                if attempt < max_retries - 1:
+                    time.sleep((attempt + 1) * 2)
+                    continue
+                return "OpenAI está saturado. Reintenta en unos segundos."
+            else:
+                return f"Error OpenAI (HTTP {response.status_code})"
+        except Exception as e:
+            if attempt < max_retries - 1:
+                time.sleep(1)
+                continue
+            return f"Error de conexión con OpenAI: {str(e)}"
+    return "No se pudo obtener respuesta de OpenAI."
+
+
+def call_anthropic(prompt, images_b64=None):
+    """
+    Llama a la API de Anthropic Claude con lógica de reintento.
+    """
+    cfg = get_active_ai_config()
+    if not cfg or cfg.provider != 'anthropic':
+        return "Error: Anthropic Claude no está configurado. Ve a Configuración > IA Config."
+
+    import time
+    model = cfg.model_name or 'claude-3-haiku-20240307'
+    headers = {
+        'x-api-key': cfg.api_key,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json'
+    }
+
+    content = [{"type": "text", "text": prompt}]
+    if images_b64:
+        if not isinstance(images_b64, list):
+            images_b64 = [images_b64]
+        for img_b64 in images_b64:
+            if not img_b64:
+                continue
+            clean_b64 = img_b64
+            if "base64," in clean_b64:
+                clean_b64 = clean_b64.split("base64,")[1]
+            content.append({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/jpeg",
+                    "data": clean_b64
+                }
+            })
+
+    payload = {
+        "model": model,
+        "max_tokens": 4096,
+        "temperature": 0.4,
+        "messages": [{"role": "user", "content": content}]
+    }
+
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = requests.post(
+                "https://api.anthropic.com/v1/messages",
+                headers=headers,
+                json=payload,
+                timeout=25
+            )
+            if response.status_code == 200:
+                result = response.json()
+                return result['content'][0]['text']
+            elif response.status_code in [429, 503]:
+                if attempt < max_retries - 1:
+                    time.sleep((attempt + 1) * 2)
+                    continue
+                return "Anthropic está saturado. Reintenta en unos segundos."
+            else:
+                return f"Error Anthropic (HTTP {response.status_code})"
+        except Exception as e:
+            if attempt < max_retries - 1:
+                time.sleep(1)
+                continue
+            return f"Error de conexión con Anthropic: {str(e)}"
+    return "No se pudo obtener respuesta de Anthropic."
+
+
+def call_ai(prompt, images_b64=None):
+    """Dispatcher: llama al proveedor activo."""
+    cfg = get_active_ai_config()
+    if not cfg:
+        return "⚠️ El asistente IA no está configurado. Ve a Configuración > IA Config para activar un proveedor."
+
+    if cfg.provider == 'gemini':
+        return call_gemini(prompt, images_b64)
+    elif cfg.provider == 'openai':
+        return call_openai(prompt, images_b64)
+    elif cfg.provider == 'anthropic':
+        return call_anthropic(prompt, images_b64)
+    return f"Proveedor '{cfg.provider}' no soportado."
+
 
 def get_ai_analysis(query, context_url="", images_data=None):
     """
@@ -162,14 +328,14 @@ def get_ai_analysis(query, context_url="", images_data=None):
         """
         
         # Feedback visual de que está pensando (manejado en frontend, aquí solo procesamos)
-        gemini_response = call_gemini(system_prompt, images_data)
+        ai_response = call_ai(system_prompt, images_data)
         
         # Post-procesamiento ligero para convertir Markdown a HTML básico si es necesario, 
         # o confiamos en que el frontend renderice markdown (idealmente).
         # El frontend actual espera HTML básico (<br>, <b>).
         # Vamos a convertir saltos de línea a <br> y ** a <b> para compatibilidad legacy.
         
-        formatted_response = gemini_response.replace('\n', '<br>').replace('**', '<b>').replace('##', '<br><b>')
+        formatted_response = ai_response.replace('\n', '<br>').replace('**', '<b>').replace('##', '<br><b>')
         
         return formatted_response
 
