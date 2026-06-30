@@ -270,6 +270,23 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         qty = reg['cantidad_producida'] or 0.0
         raw_std = reg['tiempo_cotizado'] or 0.0
         
+        # DIAGNÓSTICO: cambiar DEBUG_MID por el ID de la máquina problema
+        DEBUG_MID = None  # ej: "MACXX"
+        if DEBUG_MID and mid == DEBUG_MID:
+            import json as _j
+            print(f"\n========= REGISTRO CRUDO {mid} =========")
+            print(f"id_orden: {reg.get('id_orden')}")
+            print(f"articulod: {reg.get('articulod')}")
+            print(f"operacion: {reg.get('operacion')}")
+            print(f"observaciones: {reg.get('observaciones')}")
+            print(f"id_concepto: {reg.get('id_concepto')}")
+            print(f"hora_inicio: {reg.get('hora_inicio')}")
+            print(f"hora_fin: {reg.get('hora_fin')}")
+            print(f"tiempo_minutos: {reg.get('tiempo_minutos')}")
+            print(f"tiempo_cotizado: {reg.get('tiempo_cotizado')}")
+            print(f"cantidad_producida: {reg.get('cantidad_producida')}")
+            print("========================================\n")
+        
         # CONFIRMADO POR DIAGNÓSTICO: tiempo_cotizado SIEMPRE está en HORAS en la DB.
         # MAC40: raw=4.136 hs -> 248 min (ERP dice 4.14 hs = 248 min) ✓
         # MAC18: raw=6.300 hs -> 378 min (ERP dice 6.00 hs)            ✓
@@ -564,6 +581,21 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
             if mid_online in kpi_por_maquina:
                 kpi_por_maquina[mid_online]['latest_is_active'] = True
                 kpi_por_maquina[mid_online]['is_found_online'] = True
+
+    # DIAGNÓSTICO POST-PROCESAMIENTO: cambiar DEBUG_MID por el ID de la máquina problema
+    DEBUG_MID = None  # ej: "MACXX"
+    if DEBUG_MID and DEBUG_MID in kpi_por_maquina:
+        d = kpi_por_maquina[DEBUG_MID]
+        print(f"\n========= ESTADO FINAL {DEBUG_MID} =========")
+        print(f"latest_obs:     {d.get('latest_obs')}")
+        print(f"latest_article: {d.get('latest_article')}")
+        print(f"current_order:  {d.get('current_order')}")
+        print(f"latest_operator:{d.get('latest_operator')}")
+        print(f"is_found_online:{d.get('is_found_online')}")
+        print(f"latest_is_active:{d.get('latest_is_active')}")
+        print(f"tiempo_operativo:{d.get('tiempo_operativo')}")
+        print(f"total registros procesados: {sum(1 for r in registros_data if str(r.get('id_maquina','')).strip() == DEBUG_MID)}")
+        print("==========================================\n")
 
     # DEDUPLICACIÓN DE OPERARIOS: Un operario solo puede estar activo en su última máquina.
     # Si un operario aparece en active_operators de una máquina distinta a su latest_machine,
@@ -3743,6 +3775,12 @@ def chat_ia_api(request):
             response = get_ai_analysis(query, context_url=context_url, images_data=images_data)
             return JsonResponse({'status': 'success', 'response': response})
         except Exception as e:
+            print("========= DETALLE REAL DEL ERROR 404 =========")
+            print(f"Tipo de excepción: {type(e)}")
+            print(f"Mensaje: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            print("==============================================")
             return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
     return JsonResponse({'status': 'error', 'message': 'Solo peticiones POST'}, status=405)
 

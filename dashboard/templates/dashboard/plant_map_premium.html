@@ -816,7 +816,7 @@
 
         .system-time-widget {
             position: fixed;
-            top: 85px;
+            top: 75px;
             left: 20px;
             background: rgba(15, 23, 42, 0.8);
             backdrop-filter: blur(10px);
@@ -1658,7 +1658,7 @@
                     
                     <!-- ══ OPERARIOS: hermano del icon-container, anclado al marker ══ -->
                     {% if m.active_operators %}
-                        <div class="operator-group" title="{% for op_name, op_info in m.active_operators %}{{ op_name }}{% if not forloop.last %} · {% endif %}{% endfor %}">
+                        <div class="operator-group">
                             {% for op_name, op_info in m.active_operators %}
                             <div class="operator-indicator"
                                  onmousemove="showOperatorTooltip(event, '{{ op_name|escapejs }}', '{{ op_info.process|escapejs }}', '{{ op_info.article|escapejs }}', '{{ op_info.tiempo_estandar_computado|default:0 }}', '{{ op_info.tiempo_real_operativo|default:0 }}', '{{ op_info.disponibilidad|default:0 }}', '{{ op_info.calidad|default:1 }}', '{{ op_info.op_number|escapejs }}')"
@@ -1669,7 +1669,7 @@
                             {% endfor %}
                         </div>
                     {% elif m.operario and m.operario != 'S/A' and m.status != 'STOPPED' and m.status != 'OFFLINE' %}
-                        <div class="operator-group" title="{{ m.operario }}">
+                        <div class="operator-group">
                             <div class="operator-indicator"
                                  onclick="copyToClipboard('{{ m.current_order }}', event)">
                                 <i class="fa-solid fa-user-check"></i>
@@ -3384,8 +3384,8 @@
                                 var process = (opInfo.process || '').replace(/"/g, '&quot;');
                                 var article = (opInfo.article || '').replace(/"/g, '&quot;');
                                 
-                                htmlParts.push('<div class="operator-indicator" title="' + opName.replace(/"/g, '&quot;') + '"' +
-                                    ' data-opname="' + opName.replace(/"/g, '&quot;') + '"' +
+htmlParts.push('<div class="operator-indicator"' +
+                                     ' data-opname="' + opName.replace(/"/g, '&quot;') + '"' +
                                     ' data-process="' + process + '"' +
                                     ' data-article="' + article + '"' +
                                     ' data-tstd="' + tEstOp + '"' +
@@ -3396,7 +3396,7 @@
                                     ' style="cursor:pointer"><i class="fa-solid fa-user-check"></i></div>');
                             });
                             group.innerHTML = htmlParts.join('');
-                            group.title = names.join(' · ');
+                            group.removeAttribute('title');
                         } else {
                             group.innerHTML = '';
                             group.removeAttribute('title');

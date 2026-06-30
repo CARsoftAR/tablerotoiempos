@@ -31,7 +31,7 @@ def call_gemini(prompt, images_b64=None):
 
     api_key = cfg.api_key
     model = cfg.model_name or 'gemini-1.5-flash'
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1/models/{model}:generateContent?key={api_key}"
 
     import time
     parts = [{"text": prompt}]
@@ -94,6 +94,10 @@ def call_gemini(prompt, images_b64=None):
                     return "La IA de Google está saturada en este momento. Por favor, reintenta en unos segundos."
             
             else:
+                print("========= RESPUESTA CRUDA DEL SERVIDOR =========")
+                print(f"Status Code: {response.status_code}")
+                print(f"Response Text: {response.text}")
+                print("================================================")
                 return f"Error en el servicio de IA (HTTP {response.status_code})"
                 
         except Exception as e:
