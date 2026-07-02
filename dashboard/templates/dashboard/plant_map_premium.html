@@ -863,6 +863,7 @@
             position: fixed;
             left: 20px;
             bottom: 30px;
+            width: 350px;
             background: rgba(15, 23, 42, 0.95);
             backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -1616,7 +1617,7 @@
             <button class="btn" id="btnFullscreen" onclick="toggleFullscreen()"><i class="fa-solid fa-expand"></i> FULLSCREEN</button>
             <button class="btn" id="btnDesign" onclick="toggleDesignMode()">DISEÑO</button>
             <button class="btn" id="btnToggleSidebar" onclick="toggleSidebar()">PANEL</button>
-            <button class="btn" onclick="location.reload()"><i class="fa-solid fa-rotate"></i></button>
+            <button class="btn" id="btnRefresh" onclick="location.reload()"><i class="fa-solid fa-rotate"></i></button>
         </div>
     </div>
 
@@ -2010,6 +2011,7 @@
             </button>
         </div>
         
+        <div id="unassigned-items-container" style="width: 100%;">
         {% if unassigned_operators %}
             {% for op in unassigned_operators %}
             <div class="unassigned-operator-item">
@@ -2066,6 +2068,7 @@
                 Todos los operadores están asignados
             </div>
         {% endif %}
+        </div>
     </div>
     <!-- PANEL DE TRAZABILIDAD -->
     <div id="tracePanel" class="trace-panel">
@@ -2970,6 +2973,59 @@
                 });
             });
             // ── FIN DOM TEXT COPY ──
+
+            // ══ CLEANUP DE SEGURIDAD: Limpiar tarjetas con operario fantasma ══
+            // Si el backend dice que no hay operario activo (data-operario=S/A,
+            // data-active-ops vacío, o status STOPPED/OFFLINE), forzamos
+            // el borrado de cualquier dato visual de operario que haya quedado.
+            document.querySelectorAll('.machine-marker').forEach(function(marker) {
+                var status = marker.getAttribute('data-status') || '';
+                var operario = marker.getAttribute('data-operario') || '';
+                var activeOps = marker.getAttribute('data-active-ops') || '[]';
+                var hasActiveOps = false;
+                try {
+                    var parsed = JSON.parse(activeOps);
+                    hasActiveOps = Array.isArray(parsed) && parsed.length > 0;
+                } catch(e) {}
+
+                var sinOperario = (operario === '' || operario === 'S/A' || operario === 'N/A');
+                var inactivo = (status === 'STOPPED' || status === 'OFFLINE');
+
+                if (sinOperario || inactivo || !hasActiveOps) {
+                    // Vaciar el grupo de operarios
+                    var group = marker.querySelector('.operator-group');
+                    if (group) { group.innerHTML = ''; group.removeAttribute('title'); }
+
+                    // Resetear atributos data-*
+                    marker.setAttribute('data-operario', 'S/A');
+                    marker.setAttribute('data-active-ops', '[]');
+                    marker.setAttribute('data-id-orden', '---');
+
+                    // Limpiar store JS
+                    var boxId = marker.getAttribute('data-id');
+                    if (boxId && machineOperatorsData[boxId]) {
+                        delete machineOperatorsData[boxId];
+                    }
+
+                    // Si no hay operario ni operación activa, forzar estado apagado
+                    // (a menos que esté en reparación, que tiene prioridad)
+                    if ((sinOperario || !hasActiveOps) && status !== 'REPAIR') {
+                        status = 'STOPPED';
+                        marker.setAttribute('data-status', 'STOPPED');
+                        inactivo = true;
+                    }
+
+                    // Forzar clase CSS de apagado
+                    if (inactivo) {
+                        var prefix = 'status-';
+                        var classes = marker.className.split(' ').filter(function(c) {
+                            return c.indexOf(prefix) !== 0;
+                        });
+                        marker.className = classes.join(' ').trim() + ' ' + prefix + status.toLowerCase();
+                    }
+                }
+            });
+            // ── FIN CLEANUP ──
         });
 
         function updateClock() {
@@ -3306,134 +3362,9 @@
             }
         }
         
-        // AUTO-REFRESH LOGIC (30 Seconds)
+        // AUTO-REFRESH LOGIC (30 Seconds) — usa el mismo botón manual
         setInterval(() => {
-            if (isDesignMode) return; // Don't refresh while editing
-            
-            fetch(window.location.pathname + '?format=json')
-                .then(r => r.json())
-                .then(data => {
-                    // Construir lookup table por ID de máquina
-                    var machinesById = {};
-                    if (data.machines) {
-                        data.machines.forEach(function(m) { machinesById[m.id] = m; });
-                    }
-                    
-                    // Map-First: iterar TODOS los marcadores del DOM
-                    document.querySelectorAll('.machine-marker').forEach(function(marker) {
-                        try {
-                        var mId = marker.getAttribute('data-id') || marker.getAttribute('data-machine-code');
-                        var m = machinesById[mId];
-                        
-                        // ── LIMPIEZA INVERSA: si el backend omitió esta máquina ──
-                        if (!m) {
-                            var group = marker.querySelector('.operator-group');
-                            if (group) { group.innerHTML = ''; group.removeAttribute('title'); }
-                            return;
-                        }
-                        
-                        // ── ACTUALIZAR DATOS DE LA MÁQUINA ──
-                        marker.classList.remove('status-running', 'status-stopped', 'status-repair', 'status-wait', 'status-break', 'status-offline');
-                        marker.classList.add('status-' + m.status.toLowerCase());
-                        
-                        marker.setAttribute('data-status', m.status);
-                        marker.setAttribute('data-reason', m.proceso);
-                        marker.setAttribute('data-detalle', m.detalle);
-                        marker.setAttribute('data-operario', m.operario || 'S/A');
-                        marker.setAttribute('data-oee', m.oee || 0);
-                        marker.setAttribute('data-performance', m.performance || 0);
-                        marker.setAttribute('data-availability', m.availability || 0);
-                        marker.setAttribute('data-qty', Math.round(m.qty || 0));
-                        marker.setAttribute('data-downtime', m.downtime_mins || 0);
-                        
-                        // ── ACTUALIZAR STORE ──
-                        if (m.active_operators_js) {
-                            var opsParsed = [];
-                            try {
-                                opsParsed = typeof m.active_operators_js === 'string' ? JSON.parse(m.active_operators_js) : m.active_operators_js;
-                            } catch(e) {}
-                            machineOperatorsData[m.id] = opsParsed;
-                            marker.setAttribute('data-active-ops', typeof m.active_operators_js === 'string' ? m.active_operators_js : JSON.stringify(m.active_operators_js));
-                        }
-                        
-                        // ── RENDER VÍA innerHTML (NUNCA remove()) ──
-                        group = marker.querySelector('.operator-group');
-                        if (!group) {
-                            group = document.createElement('div');
-                            group.className = 'operator-group';
-                            var iconContainer = marker.querySelector('.machine-icon-container');
-                            marker.insertBefore(group, iconContainer || marker.firstChild);
-                        }
-                        
-                        const isInactive = ['STOPPED', 'OFFLINE'].indexOf(m.status) !== -1;
-                        var activeOps = (m.active_operators && m.active_operators.length > 0) ? m.active_operators : null;
-                        
-                        if (!isInactive && activeOps) {
-                            var htmlParts = [];
-                            var names = [];
-                            activeOps.forEach(function(entry) {
-                                var opInfo = Array.isArray(entry) ? entry[1] : entry;
-                                var opName = Array.isArray(entry) ? entry[0] : entry.name;
-                                names.push(opName);
-                                
-                                var tEstOp = parseFloat(opInfo.tiempo_estandar_computado) || 0;
-                                var tRealOp = parseFloat(opInfo.tiempo_real_operativo) || 0;
-                                var dispOp = parseFloat(opInfo.disponibilidad) || 0;
-                                var calOp = parseFloat(opInfo.calidad) || 1;
-                                var opNumber = opInfo.op_number || '---';
-                                var process = (opInfo.process || '').replace(/"/g, '&quot;');
-                                var article = (opInfo.article || '').replace(/"/g, '&quot;');
-                                
-htmlParts.push('<div class="operator-indicator"' +
-                                     ' data-opname="' + opName.replace(/"/g, '&quot;') + '"' +
-                                    ' data-process="' + process + '"' +
-                                    ' data-article="' + article + '"' +
-                                    ' data-tstd="' + tEstOp + '"' +
-                                    ' data-treal="' + tRealOp + '"' +
-                                    ' data-disp="' + dispOp + '"' +
-                                    ' data-cal="' + calOp + '"' +
-                                    ' data-opnumber="' + opNumber.replace(/"/g, '&quot;') + '"' +
-                                    ' style="cursor:pointer"><i class="fa-solid fa-user-check"></i></div>');
-                            });
-                            group.innerHTML = htmlParts.join('');
-                            group.removeAttribute('title');
-                        } else {
-                            group.innerHTML = '';
-                            group.removeAttribute('title');
-                        }
-                        
-                        // ── SIDEBAR ──
-                        var sidebarItem = document.getElementById('sidebar-item-' + m.id);
-                        if (sidebarItem) {
-                            var dot = sidebarItem.querySelector('.machine-status-dot');
-                            var color = '#ef4444';
-                            var shadow = 'rgba(239,68,68,0.4)';
-                            if (m.status === 'RUNNING') { color = '#10b981'; shadow = 'rgba(16,185,129,0.4)'; }
-                            else if (m.status === 'REPAIR') { color = '#f59e0b'; shadow = 'rgba(245,158,11,0.4)'; }
-                            else if (m.status === 'WAIT') { color = '#facc15'; shadow = 'rgba(250,204,21,0.4)'; }
-                            else if (m.status === 'BREAK') { color = '#3b82f6'; shadow = 'rgba(59,130,246,0.4)'; }
-                            if (dot) {
-                                dot.style.background = color;
-                                dot.style.boxShadow = '0 0 8px ' + shadow;
-                            }
-                            var opDiv = sidebarItem.querySelector('.fa-user-gear');
-                            if (opDiv) {
-                                var span = opDiv.parentNode.querySelector('span');
-                                if (span) span.textContent = (m.operario || 'Sin Operario').substring(0, 25);
-                            }
-                            var detDiv = sidebarItem.querySelector('.fa-microchip');
-                            if (detDiv) {
-                                var span = detDiv.parentNode.querySelector('span');
-                                if (span) span.textContent = (m.detalle || 'Sin Actividad').substring(0, 45);
-                            }
-                        }
-                    } catch(e) {
-                        console.error('Error refrescando máquina', marker.getAttribute('data-id'), e);
-                    }
-                    });
-                    console.log('Map data refreshed.');
-                })
-                .catch(e => console.error('Refresh error:', e));
+                if (!isDesignMode) document.getElementById('btnRefresh').click();
         }, 30000);
 
         // ── DELEGACIÓN DE EVENTOS PARA .operator-indicator (elementos dinámicos) ──

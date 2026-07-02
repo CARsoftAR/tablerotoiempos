@@ -225,6 +225,7 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 'latest_is_active': False,  # Inicializar siempre
                 'is_found_online': False,
                 'is_producing_now': False,
+                'latest_session_had_operator': False,
                 'active_operators': {}, # Dict {Nombre: Tarea} to prevent duplicates
                 'stats_per_op': {},     # Dict {Nombre: {real: 0.0, std: 0.0}}
                 'has_matriceria': False,
@@ -250,6 +251,7 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
     machine_orders = {} 
     kpi_por_personal = {}
     active_unassigned_ops = {} # Para mostrar detalle en tarjeta "Sin Asignar"
+    assigned_operator_uids = set() # UIDs de operarios que sí tienen máquina asignada
     
     # Acumuladores Globales (Solo para MÁQUINAS REGISTRADAS)
     global_actual_qty_reg = 0.0
@@ -381,6 +383,7 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 if is_session_active:
                     kpi_por_maquina[mid]['is_found_online'] = True
                     kpi_por_maquina[mid]['latest_is_active'] = True
+                    kpi_por_maquina[mid]['latest_session_had_operator'] = bool(uid and uid != 'None')
                     
                     # Guardar proceso real en vez de sobreescribir con MATRICERIA genérico
                     kpi_por_maquina[mid]['latest_obs'] = raw_op_d if raw_op_d else "MATRICERIA"
@@ -426,6 +429,8 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                     }
         else:
             # 2. Caso: Máquina Asignada
+            if uid and uid != 'None':
+                assigned_operator_uids.add(uid)
             if mid not in kpi_por_maquina:
                 kpi_por_maquina[mid] = {
                     'id_maquina': mid, 'nombre_maquina': nombres_maquinas.get(mid, mid),
@@ -433,7 +438,7 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                     'cantidad_producida': 0.0, 'cantidad_rechazada': 0.0, 'latest_obs': '', 
                     'latest_date': None, 'latest_activity_time': None, 'latest_operator': 'S/A', 
                     'latest_article': '---', 'current_order': '---', 'is_found_online': False, 
-                    'latest_is_active': False,
+                    'latest_is_active': False, 'latest_session_had_operator': False,
                     'active_operators': {}, 'stats_per_op': {}, 'has_matriceria': False, 
                     'tiempo_excluido_mat': 0.0, 'audit_log': []
                 }
@@ -484,9 +489,11 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
                 if is_online_record:
                     data['latest_is_active'] = True
                     data['is_found_online'] = True
+                    data['latest_session_had_operator'] = bool(uid and uid != 'None')
                 else:
                     data['latest_is_active'] = is_session_active
                     data['is_found_online'] = is_session_active
+                    data['latest_session_had_operator'] = bool(uid and uid != 'None') if is_session_active else False
 
 
             # Accumulate Machine KPIs
@@ -706,6 +713,34 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
         # Convertir decimales a float para JSON serializable si es necesario, aunque standard json de python falla con decimal
         # Asumimos float.
         m_data['active_operators_js'] = json.dumps(ops_list)
+
+    # ── CLEANUP: Limpiar datos de operario para máquinas sin sesión activa ──
+    # Cuando una máquina no tiene una sesión activa con operario en el ERP,
+    # los datos del último operario quedaban fijados (stale). Este bloque
+    # limpia latest_operator, active_operators, current_order, etc.
+    for mid_key, data in kpi_por_maquina.items():
+        if not data.get('is_found_online') or not data.get('latest_session_had_operator'):
+            data['latest_operator'] = 'S/A'
+            data['active_operators'] = {}
+            data['stats_per_op'] = {}
+            data['current_order'] = '---'
+            data['latest_article'] = '---'
+            data['latest_obs'] = ''
+            data['latest_date'] = None
+
+    # ── REBUILD: Refrescar assigned_operator_uids post‑cleanup ──
+    # Después de limpiar operarios huérfanos, recalculamos el set
+    # de operarios ASIGNADOS para que solo incluya aquellos que
+    # realmente tienen una sesión activa con operario en este momento.
+    # De lo contrario, un operario que terminó su sesión sigue
+    # figurando como "asignado" y no aparece en "SIN ASIGNAR".
+    assigned_operator_uids.clear()
+    for mid_key, data in kpi_por_maquina.items():
+        if data.get('is_found_online') and data.get('latest_session_had_operator'):
+            for op_name, op_info in data.get('active_operators', {}).items():
+                uid = op_info.get('uid')
+                if uid and uid != 'None':
+                    assigned_operator_uids.add(uid)
 
     # 3. Calcular KPIs finales
     lista_kpis = []
@@ -1126,6 +1161,10 @@ def dashboard_produccion(request, return_context=False, force_date=None, force_s
 
     # Preparar detalle de operarios sin asignar (Mantenemos disponible para los diccionarios)
     kpis_pers_dict = {str(item['id']): item for item in lista_kpis_personal}
+
+    # Filtrar operarios sin asignar: si tienen ALGUNA máquina asignada en el período, no aparecen
+    for uid_asig in assigned_operator_uids:
+        active_unassigned_ops.pop(uid_asig, None)
 
     unassigned_operators_list = []
     for uid_ua, info_ua in active_unassigned_ops.items():
@@ -1690,6 +1729,7 @@ def obtener_auditoria(request):
     view_type = request.GET.get('view', 'machines')
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date') or start_date
+    criterio_erp = request.GET.get('criterio_erp', 'false').lower() == 'true'
     
     if not uid or not start_date:
         return JsonResponse({'status': 'error', 'message': 'Faltan parámetros'})
@@ -1702,6 +1742,9 @@ def obtener_auditoria(request):
         
     start_str = d1.strftime('%Y-%m-%d')
     end_str = d2.strftime('%Y-%m-%d')
+    
+    # Lookup nombre descriptivo de máquinas
+    maquina_nombres = {m.id_maquina.strip().upper(): m.descripcion.strip() for m in Maquina.objects.all() if m.id_maquina}
     
     registros_raw = VTMan.objects.extra(
         where=["CONVERT(date, FECHA) >= %s AND CONVERT(date, FECHA) <= %s"],
@@ -1733,6 +1776,9 @@ def obtener_auditoria(request):
         qty = reg_obj.cantidad_producida or 0.0
         std_hrs = reg_obj.tiempo_cotizado or 0.0
         std_mins = std_hrs * 60.0
+        # PATRÓN B: Si el estándar total es 0 pero hay cantidad y unitario, recalcular
+        if qty > 0 and std_mins <= 0 and reg_obj.tiempo_cotizado_individual:
+            std_mins = reg_obj.tiempo_cotizado_individual * 60.0 * qty
         
         raw_id_op = str(reg_obj.id_operacion or "").strip().upper()
         raw_art_d = str(reg_obj.articulod or "").upper()
@@ -1776,20 +1822,30 @@ def obtener_auditoria(request):
                 has_mat_audit = True
             else:
                 has_special_tasks = True
-
+        
+        # PATRÓN A: Criterio ERP — si cantidad es 0, el estándar es 0 (sin excepción)
+        if criterio_erp and qty <= 0:
+            this_std = 0.0
+        # PATRÓN A (bis): Tareas indirectas — forzar 0 para TAREAS GENERALES y DESCANSO
+        if criterio_erp and any(k in full_audit_text for k in ['TAREAS GENERALES', 'DESCANSO']):
+            this_std = 0.0
+        
         h_inicio = reg_obj.hora_inicio
         h_fin = reg_obj.hora_fin
-
+        
         audit_log.append({
             'inicio': h_inicio.strftime('%H:%M:%S') if h_inicio else '--:--:--',
             'fin': h_fin.strftime('%H:%M:%S') if h_fin else '--:--:--',
             'maquina': reg_obj.id_maquina or 'S/A',
+            'nombre_maquina': maquina_nombres.get(reg_obj.id_maquina.strip().upper(), reg_obj.id_maquina or 'S/A') if reg_obj.id_maquina else 'S/A',
             'orden': reg_obj.id_orden or '---',
             'articulo': reg_obj.articulod[:40] if reg_obj.articulod else 'Sin Artículo',
             'cliente': '-',
             'cantidad': round(qty, 1),
             'tiempo': f"{round(duracion, 1)} min",
+            'tiempo_raw': round(duracion, 1),
             'estandar': f"{round(this_std, 1)} min",
+            'tiempo_standard_raw': round(this_std, 1),
             'observacion': reg_obj.observaciones or ''
         })
         
@@ -2054,7 +2110,8 @@ def obtener_auditoria(request):
         'status': 'success',
         'audit_log': audit_log,
         'analysis_conversational': analysis_conversational,
-        'analysis_detailed': analysis_detailed
+        'analysis_detailed': analysis_detailed,
+        'criterio_erp': criterio_erp
     })
 
 # --- MÓDULO DE MANTENIMIENTO ---
